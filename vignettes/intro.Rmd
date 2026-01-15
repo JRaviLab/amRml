@@ -1,8 +1,8 @@
 ---
-title: "intro"
+title: "Introduction to amRml"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{intro}
+  %\VignetteIndexEntry{Introduction to amRml}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -14,7 +14,12 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
-library(NewPackage)
-hello()
+```{r setup, eval = FALSE}
+library(amRml)
 ```
+
+## Overview
+
+`amRml` is part of a 3-package suite for predicting antimicrobial resistance (AMR) using machine learning models trained on bacterial genomic features.
+
+This vignette will be expanded with usage examples.
