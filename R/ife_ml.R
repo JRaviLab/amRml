@@ -23,9 +23,11 @@ removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
 
   feats_to_remove <- top_feat_tibble |> dplyr::pull(Variable)
 
-  if(length(feats_to_remove) == 0) {
-    stop(paste("No more feats to remove; try adjusting `percent_removal_vec`",
-      "in `runIFE()` to include a wider range between percentages."))
+  if (length(feats_to_remove) == 0) {
+    stop(paste(
+      "No more feats to remove; try adjusting `percent_removal_vec`",
+      "in `runIFE()` to include a wider range between percentages."
+    ))
   }
 
   ml_input_tibble_top_feats_removed <- ml_input_tibble |>
@@ -59,22 +61,33 @@ removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
 #' @return A tibble with IFE performance (note: this will be returned within a
 #' list along with top features removed per iteration if `return_feats = TRUE`.)
 #' @export
-runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
+runIFE <- function(
+  ml_input_tibble, by_num = TRUE, by_vi = FALSE,
   percent_removal_vec = 10 * 1:9, mix_vec = 0, return_feats = FALSE,
-  verbose = TRUE) {
-  .checkArgByNum(by_num); .checkArgByVI(by_vi)
+  verbose = TRUE
+) {
+  .checkArgByNum(by_num)
+  .checkArgByVI(by_vi)
   .checkArgPercentRemovalVec(percent_removal_vec)
-  .checkArgReturnFeats(return_feats); .checkArgVerbose(verbose)
+  .checkArgReturnFeats(return_feats)
+  .checkArgVerbose(verbose)
 
-  if(sum(c(by_num, by_vi)) != 1) {
-    stop(paste("Set either `by_num` or `by_vi` to `TRUE` and the other to",
-    "`FALSE` (not both `TRUE` or both `FALSE`)."))
+  if (sum(c(by_num, by_vi)) != 1) {
+    stop(paste(
+      "Set either `by_num` or `by_vi` to `TRUE` and the other to",
+      "`FALSE` (not both `TRUE` or both `FALSE`)."
+    ))
   }
 
   # Create empty objects to store results.
-  num_obs_vec <- c(); res_prop_vec <- c(); fit_mixture_vec <- c()
-  nmcc_vec <- c(); n_feats_removed_vec <- c(); total_feats_removed_vec <- c()
-  run_time_vec <- c(); feats_removed_list <- list()
+  num_obs_vec <- c()
+  res_prop_vec <- c()
+  fit_mixture_vec <- c()
+  nmcc_vec <- c()
+  n_feats_removed_vec <- c()
+  total_feats_removed_vec <- c()
+  run_time_vec <- c()
+  feats_removed_list <- list()
 
   total_n_feat <- getNumFeat(ml_input_tibble)
 
@@ -82,27 +95,35 @@ runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
   # (if `by_vi = TRUE`) whereas `prop_vi_top_feats_ml` is the value that goes
   # into `runMLPipeline()` and does not reflect the top features removed at each
   # step of the IFE process.
-  if(verbose) {message("Training with all features")}
+  if (verbose) {
+    message("Training with all features")
+  }
 
-  for(i in 1:(length(percent_removal_vec) + 1)) {
-    if(i == 1) {n_feats_removed <- 0}
+  for (i in 1:(length(percent_removal_vec) + 1)) {
+    if (i == 1) {
+      n_feats_removed <- 0
+    }
 
-    if(by_vi) {
+    if (by_vi) {
       # We will extract all top features at the first iteration, and these
       # will be removed one set at a time in subsequent iterations. Past the
       # first iteration, set `n_top_feats` to 1 (this is arbitrary) to minimize
       # memory cost.
-      if(i == 1) {prop_vi_top_feats_ml <- c(0, 1); n_top_feats <- NA} else {
-        prop_vi_top_feats_ml <- NA; n_top_feats <- 1
+      if (i == 1) {
+        prop_vi_top_feats_ml <- c(0, 1)
+        n_top_feats <- NA
+      } else {
+        prop_vi_top_feats_ml <- NA
+        n_top_feats <- 1
       }
     }
 
-    if(by_num) {
+    if (by_num) {
       # Get the number of top features that will be returned by the ML
       # pipeline this iteration (and removed for the next iteration).
-      if(i == 1) {
+      if (i == 1) {
         n_top_feats <- round(total_n_feat * percent_removal_vec[i] / 100)
-      } else if(i == length(percent_removal_vec) + 1) {
+      } else if (i == length(percent_removal_vec) + 1) {
         n_top_feats <- 1 # Arbitrary number for the last iteration
       } else {
         n_top_feats <-
@@ -114,22 +135,31 @@ runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
 
     ml_res <- tryCatch(runMLPipeline(ml_input_tibble,
       prop_vi_top_feats = prop_vi_top_feats_ml, n_top_feats = n_top_feats,
-      mix_vec = mix_vec, verbose = FALSE), error = function(e) {NULL})
+      mix_vec = mix_vec, verbose = FALSE
+    ), error = function(e) {
+      NULL
+    })
 
-    if(is.null(ml_res)) {break}
+    if (is.null(ml_res)) {
+      break
+    }
 
     # Add results to corresponding vectors.
-    num_obs_vec[i] <- ml_res$performance_tibble |> dplyr::select(num_obs) |>
+    num_obs_vec[i] <- ml_res$performance_tibble |>
+      dplyr::select(num_obs) |>
       as.numeric()
     res_prop_vec[i] <- ml_res$performance_tibble |>
-      dplyr::select(res_prop) |> as.numeric()
+      dplyr::select(res_prop) |>
+      as.numeric()
     fit_mixture_vec[i] <- ml_res$performance_tibble |>
-      dplyr::select(fit_mixture) |> as.numeric()
-    nmcc_vec[i] <- ml_res$performance_tibble |> dplyr::select(nmcc) |>
+      dplyr::select(fit_mixture) |>
+      as.numeric()
+    nmcc_vec[i] <- ml_res$performance_tibble |>
+      dplyr::select(nmcc) |>
       as.numeric()
     n_feats_removed_vec[i] <- n_feats_removed
 
-    if(i == 1) {
+    if (i == 1) {
       total_feats_removed_vec[i] <- 0
     } else {
       total_feats_removed_vec[i] <- n_feats_removed +
@@ -137,12 +167,15 @@ runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
     }
 
     run_time_vec[i] <- ml_res$performance_tibble |>
-      dplyr::select(run_time_sec) |> as.numeric()
+      dplyr::select(run_time_sec) |>
+      as.numeric()
 
-    if(i == (length(percent_removal_vec) + 1)) {break}
+    if (i == (length(percent_removal_vec) + 1)) {
+      break
+    }
 
-    if(by_vi) {
-      if(i == 1) {
+    if (by_vi) {
+      if (i == 1) {
         # Store results tibble from first iteration that has all top features
         # and their VI scores.
         ml_res_all <- ml_res
@@ -153,8 +186,10 @@ runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
         # iteration
         prop_vi_top_feats_actual <- c(0, percent_removal_vec[i] / 100)
       } else {
-        prop_vi_top_feats_actual <- c(percent_removal_vec[i - 1],
-          percent_removal_vec[i]) / 100
+        prop_vi_top_feats_actual <- c(
+          percent_removal_vec[i - 1],
+          percent_removal_vec[i]
+        ) / 100
       }
       cum_vi_lower <- prop_vi_top_feats_actual[1] * total_vi
       cum_vi_upper <- prop_vi_top_feats_actual[2] * total_vi
@@ -167,31 +202,42 @@ runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
     n_feat_start <- getNumFeat(ml_input_tibble)
 
     # Removal of top features
-    if(by_vi) {
-      if(verbose) {message(paste("Cumulatively removed top ",
-        percent_removal_vec[i], "% of total variable importance", sep = ""))
+    if (by_vi) {
+      if (verbose) {
+        message(paste("Cumulatively removed top ",
+          percent_removal_vec[i], "% of total variable importance",
+          sep = ""
+        ))
       }
       ml_input_tibble <- ml_input_tibble |>
         removeTopFeats(feats_to_remove_tibble)
-    } else if(by_num) {
-      if(verbose) {message(paste("Cumulatively removed top ",
-        percent_removal_vec[i], "% of all features", sep = ""))
+    } else if (by_num) {
+      if (verbose) {
+        message(paste("Cumulatively removed top ",
+          percent_removal_vec[i], "% of all features",
+          sep = ""
+        ))
       }
       feats_to_remove_tibble <- ml_res$top_feat_tibble
 
       ml_input_tibble <- ml_input_tibble |>
         removeTopFeats(feats_to_remove_tibble)
     }
-    if(return_feats) {
+    if (return_feats) {
       feats_removed_list[[paste("cum_perc_removed_", percent_removal_vec[i],
-        sep = "")]] <- dplyr::pull(feats_to_remove_tibble, Variable)
+        sep = ""
+      )]] <- dplyr::pull(feats_to_remove_tibble, Variable)
     }
 
     n_feat_end <- getNumFeat(ml_input_tibble)
     n_feats_removed <- n_feat_start - n_feat_end
   }
 
-  if(by_vi) {removal_type <- "by_vi"} else if(by_num) {removal_type <- "by_num"}
+  if (by_vi) {
+    removal_type <- "by_vi"
+  } else if (by_num) {
+    removal_type <- "by_num"
+  }
 
   # Adjust `percent_removal_vec` to appropriate length (if IFE stopped running
   # early due to encountering an error).
@@ -203,10 +249,15 @@ runIFE <- function(ml_input_tibble, by_num = TRUE, by_vi = FALSE,
     num_obs = num_obs_vec, res_prop = res_prop_vec,
     fit_mixture = fit_mixture_vec, nmcc = nmcc_vec,
     n_feats_removed = n_feats_removed_vec,
-    total_feats_removed = total_feats_removed_vec, run_time_sec = run_time_vec)
+    total_feats_removed = total_feats_removed_vec, run_time_sec = run_time_vec
+  )
 
-  if(return_feats) {
-    all_results <- list(ife_performance_tibble = ife_performance_tibble,
-      feats_removed = feats_removed_list)
-  } else {return(ife_performance_tibble)}
+  if (return_feats) {
+    all_results <- list(
+      ife_performance_tibble = ife_performance_tibble,
+      feats_removed = feats_removed_list
+    )
+  } else {
+    return(ife_performance_tibble)
+  }
 }
