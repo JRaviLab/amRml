@@ -35,7 +35,7 @@ generateMLInputs(
   parquet_duckdb_path = "results/Cje_parquet.duckdb",
   out_path = "results/",
   n_fold = 5,
-  split = c(1, 0),    # CV mode (or use split = 0 as shorthand)
+  split = c(1, 0), # CV mode (or use split = 0 as shorthand)
   min_n = 25,
   verbosity = "minimal"
 )
@@ -158,11 +158,11 @@ predictions <- predict(fit, test_data)
 
 ```{r metrics}
 # Individual metrics
-nmcc <- calculatenMCC(predictions)       # Normalized MCC (0-1 scale)
-f1 <- calculateF1(predictions)           # F1 score
-bal_acc <- calculateBalAcc(predictions)  # Balanced accuracy
-auprc <- calculateAUPRC(predictions)     # Area under PR curve
-log2_apop <- calculateLog2APOP(predictions)  # log2(AUPRC/prior)
+nmcc <- calculatenMCC(predictions) # Normalized MCC (0-1 scale)
+f1 <- calculateF1(predictions) # F1 score
+bal_acc <- calculateBalAcc(predictions) # Balanced accuracy
+auprc <- calculateAUPRC(predictions) # Area under PR curve
+log2_apop <- calculateLog2APOP(predictions) # log2(AUPRC/prior)
 
 # All metrics at once
 all_metrics <- calculateEvalMets(predictions)
@@ -200,10 +200,10 @@ IFE iteratively removes top features to identify the most predictive subset:
 ```{r ife}
 ife_results <- runIFE(
   ml_tibble,
-  by_num = TRUE,                         # Remove by number of features
-  by_vi = FALSE,                         # Or remove by variable importance
-  percent_removal_vec = 10 * 1:9,        # Remove 10%, 20%, ..., 90%
-  mix_vec = 0,                           # L2 regularization for IFE
+  by_num = TRUE, # Remove by number of features
+  by_vi = FALSE, # Or remove by variable importance
+  percent_removal_vec = 10 * 1:9, # Remove 10%, 20%, ..., 90%
+  mix_vec = 0, # L2 regularization for IFE
   return_feats = TRUE,
   verbose = TRUE
 )
