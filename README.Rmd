@@ -20,21 +20,9 @@ knitr::opts_chunk$set(
 [![CRAN status](https://www.r-pkg.org/badges/version/amRml)](https://CRAN.R-project.org/package=amRml)
 <!-- badges: end -->
 
-amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. This package trains interpretable machine learning models using multi-scale genomic features from bacterial isolates.
-
-## Overview
-
-amRml provides functions to:
-- Load and prepare ML-ready datasets from feature matrices (Parquet format)
-- Train logistic regression, random forest, and boosted tree models
-- Generate ranked feature importance lists
-- Calculate comprehensive performance metrics (nMCC, F1, balanced accuracy, AUPRC)
-- Perform iterative feature elimination (IFE) analysis
-- Run Fisher's exact tests with Benjamini-Hochberg correction as baseline comparisons
+amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. This package trains interpretable machine learning models using genomic features from bacterial isolates.
 
 ## Installation
-
-### Current (development version)
 
 ```r
 # Install from GitHub
@@ -42,17 +30,6 @@ if (!requireNamespace("remotes", quietly = TRUE))
     install.packages("remotes")
 
 remotes::install_github("JRaviLab/amR_ml")
-```
-
-### Future (Bioconductor release)
-
-Once submitted to Bioconductor, installation will be:
-
-```r
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("amRml")
 ```
 
 ## Quick start
@@ -63,340 +40,44 @@ library(amRml)
 # Load feature data from a Parquet file
 ml_data <- loadMLInputTibble("path/to/features.parquet")
 
-# Run the complete ML pipeline
+# Run the ML pipeline
 results <- runMLPipeline(
-  ml_input_tibble = ml_data,
-  model = "LR",                    # Logistic regression
-  split = c(0.6, 0.2),             # 60% train, 20% validation, 20% test
-  n_fold = 2,                      # Cross-validation folds (if no validation set)
-  n_top_feats = 20,                # Number of top features to extract
-  select_best_metric = "mcc",      # Metric for model selection
-  return_fit = TRUE                # Return fitted model object
+ ml_input_tibble = ml_data,
+  model = "LR",
+  split = c(0.6, 0.2),
+  n_top_feats = 20,
+  return_fit = TRUE
 )
 
-# View performance metrics
+# View results
 results$performance_tibble
-
-# View top features
 results$top_feat_tibble
 ```
 
-## Core functions
-
-### Main pipeline
-
-The primary entry point is `runMLPipeline()`, which orchestrates the entire ML workflow:
-
-```r
-results <- runMLPipeline(
-  ml_input_tibble,
-  model = "LR",                              # "LR", "RF", or "BT"
-  split = c(0.6, 0.2),                       # Train/validation proportions
-  n_fold = 2,                                # CV folds (when validation = 0)
-  prop_vi_top_feats = c(0, 1),               # Feature importance range
-  n_top_feats = NA,                          # Or specify exact number
-  use_pca = FALSE,                           # Use PCA dimensionality reduction
-  penalty_vec = 10^seq(-4, -1, length.out = 10),  # LR penalty values
-  mix_vec = 0:5 / 5,                         # LR mixture values (0=L2, 1=L1)
-  min_n_vec = c(2, 6, 12),                   # RF/BT min_n values
-  tree_vec = c(100, 500, 1000),              # RF/BT tree counts
-  select_best_metric = "mcc",                # "mcc", "f_meas", "pr_auc", "bal_accuracy"
-  seed = 123,
-  shuffle_labels = FALSE,                    # For baseline comparisons
-  return_tune_res = FALSE,
-  return_fit = FALSE,
-  return_pred = FALSE,
-  verbose = TRUE
-)
-```
-
-### Data preparation
-
-```r
-# Load Parquet file and convert to wide format
-ml_data <- loadMLInputTibble("features.parquet")
-
-# Split data into train/validation/test sets
-data_split <- splitMLInputTibble(ml_data, split = c(0.6, 0.2), seed = 123)
-
-# Get number of features
-n_features <- getNumFeat(ml_data)
-
-# Calculate minimum samples needed for valid ML
-min_samples <- calculateMinSamples(n_fold = 5, split = c(0.6, 0.2), res_prop = 0.3)
-
-# Shuffle labels for baseline comparison
-shuffled_data <- shuffleLabels(ml_data, seed = 123)
-```
-
-### Model building (step-by-step)
-
-For more control, you can use the individual tidymodels-based functions:
-```r
-library(rsample)
-
-# Split data
-data_split <- splitMLInputTibble(ml_data, split = c(0.6, 0.2))
-train_data <- training(data_split)
-test_data <- testing(data_split)
-
-# Build recipe (preprocessing)
-recipe <- buildRecipe(train_data, use_pca = FALSE, pca_threshold = 0.95)
-
-# Build model specification
-lr_model <- buildLRModel(multi_class = FALSE)
-# Or: rf_model <- buildRFModel()
-# Or: bt_model <- buildBTModel()
-
-# Build workflow
-wflow <- buildWflow(lr_model, recipe)
-
-# Build tuning grid
-grid <- buildTuningGrid(
-  model = "LR",
-  penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5 / 5
-)
-
-# Tune hyperparameters
-tune_res <- tuneGrid(wflow, data_split, grid, n_fold = 5)
-
-# Select and fit best model
-best_wflow <- selectBestModel(tune_res, wflow, select_best_metric = "mcc")
-fit <- fitBestModel(best_wflow, train_data)
-
-# Get fitted hyperparameters
-fit_hps <- getFitHps(fit)
-
-# Make predictions
-predictions <- predict(fit, test_data)
-```
-
-### Performance metrics
-
-```r
-# After making predictions
-predictions <- predict(fit, test_data)
-
-# Individual metrics
-nmcc <- calculatenMCC(predictions)      # Normalized MCC (0-1 scale)
-f1 <- calculateF1(predictions)          # F1 score
-bal_acc <- calculateBalAcc(predictions) # Balanced accuracy
-auprc <- calculateAUPRC(predictions)    # Area under PR curve
-log2_apop <- calculateLog2APOP(predictions)  # log2(AUPRC/prior)
-
-# All metrics at once
-all_metrics <- calculateEvalMets(predictions)
-
-# Confusion matrix
-conf_mat <- getConfusionMatrix(predictions)
-```
-
-### Feature importance
-
-```r
-# Extract top features from fitted model
-top_features <- extractTopFeats(
-  fit,
-  n_top_feats = 20,              # Exact number
-  # Or use: prop_vi_top_feats = c(0, 0.2)  # Top 20% of variable importance
-)
-
-# Feature importance columns: Variable, Importance, Sign
-# Positive Sign = associated with resistance
-# Negative Sign = associated with susceptibility
-```
-
-### Iterative feature elimination (IFE)
-
-IFE iteratively removes top features to identify the most predictive subset:
-
-```r
-# Run IFE by removing percentage of features
-ife_results <- runIFE(
-  ml_data,
-  by_num = TRUE,                         # Remove by number of features
-  by_vi = FALSE,                         # Or remove by variable importance
-  percent_removal_vec = 10 * 1:9,        # Remove 10%, 20%, ..., 90%
-  mix_vec = 0,                           # L2 regularization for IFE
-  return_feats = TRUE,                   # Return features removed at each step
-  verbose = TRUE
-)
-
-# Results include nMCC at each iteration
-ife_results$ife_performance_tibble
-ife_results$feats_removed  # If return_feats = TRUE
-```
-
-### Visualization
-
-```r
-# Precision-recall curve
-prc_plot <- plotPRC(predictions)
-
-# Variable importance plot
-vi_plot <- plotTopFeatsVI(fit, n_top_feats = 10)
-
-# Baseline comparison barplot (shuffled vs non-shuffled labels)
-baseline_plot <- getBaselineComparisonBarplot(
-  non_shuffled_results$performance_tibble,
-  shuffled_results$performance_tibble
-)
-
-# Default evaluation plot (metrics vs train proportion or CV folds)
-eval_plot <- plotDefaultEval(
-  default_eval_tibble,
-  x_default_eval = "train_prop",
-  y_default_eval = "avg_f1_score"
-)
-```
-
-### Fisher's exact tests (baseline comparison)
-
-As a non-ML baseline, run Fisher's exact tests with multiple testing correction:
-
-```r
-# Complete Fisher pipeline
-fisher_results <- runFishers(
-  matrix_path = "features.parquet",
-  Q = 0.05,                              # FDR threshold
-  alternative = "two.sided",
-  susceptible_label = "Susceptible",
-  resistant_label = "Resistant"
-)
-
-# Or step-by-step:
-ml_data <- loadMLInputTibble("features.parquet")
-encoded <- encodePhenotype(ml_data)
-fisher_res <- runFisherTests(encoded$df, encoded$target, alternative = "two.sided")
-fisher_res <- applyBenjaminiHochberg(fisher_res, Q = 0.05)
-fisher_res <- computeFeatureFreq(encoded$df, fisher_res, encoded$target)
-```
-
-## Workflow example
-
-Complete ML workflow for antimicrobial resistance prediction:
-
-```r
-library(amRml)
-
-# 1. Load and prepare data
-ml_data <- loadMLInputTibble("species_drug_features.parquet")
-message("Loaded ", nrow(ml_data), " samples with ", getNumFeat(ml_data), " features")
-
-# 2. Run ML pipeline with logistic regression
-results <- runMLPipeline(
-  ml_input_tibble = ml_data,
-  model = "LR",
-  split = c(0.6, 0.2),
-  n_top_feats = 50,
-  select_best_metric = "mcc",
-  return_fit = TRUE,
-  return_pred = TRUE
-)
-
-# 3. View results
-print(results$performance_tibble)
-print(head(results$top_feat_tibble, 20))
-
-# 4. Baseline comparison with shuffled labels
-baseline_results <- runMLPipeline(
-  ml_input_tibble = ml_data,
-  model = "LR",
-  split = c(0.6, 0.2),
-  shuffle_labels = TRUE
-)
-
-# 5. Compare real vs baseline performance
-cat("Real nMCC:", results$performance_tibble$nmcc, "\n")
-cat("Baseline nMCC:", baseline_results$performance_tibble$nmcc, "\n")
-
-# 6. Run iterative feature elimination
-ife_results <- runIFE(
-  ml_data,
-  by_num = TRUE,
-  percent_removal_vec = c(10, 25, 50, 75, 90),
-  return_feats = TRUE
-)
-
-# 7. Generate plots
-if (results$return_fit) {
-  vi_plot <- plotTopFeatsVI(results$fit, n_top_feats = 15)
-  print(vi_plot)
-}
-```
-
-## Model types
-
-| Model | Function | Description | Hyperparameters |
-|-------|----------|-------------|-----------------|
-| Logistic regression | `buildLRModel()` | Interpretable, supports L1/L2/elastic net | `penalty`, `mixture` |
-| Random forest | `buildRFModel()` | Ensemble method, robust | `trees`, `mtry`, `min_n` |
-| Boosted tree | `buildBTModel()` | Gradient boosting | `trees`, `mtry`, `min_n` |
-
-## Performance metrics
-
-| Metric | Function | Description |
-|--------|----------|-------------|
-| nMCC | `calculatenMCC()` | Normalized Matthews correlation coefficient (0-1) |
-| F1 | `calculateF1()` | Harmonic mean of precision and recall |
-| Balanced accuracy | `calculateBalAcc()` | Average of sensitivity and specificity |
-| AUPRC | `calculateAUPRC()` | Area under precision-recall curve |
-| log2(AUPRC/prior) | `calculateLog2APOP()` | Class-imbalance adjusted AUPRC |
-
-## Input data format
-
-The package expects Parquet files in long format with columns:
-- `genome_id`: Unique identifier for each isolate
-- `feature_id`: Feature name (e.g., gene, protein domain)
-- `value`: Binary presence/absence (0 or 1)
-- `genome_drug.resistant_phenotype`: "Resistant" or "Susceptible"
-
-The `loadMLInputTibble()` function converts this to wide format for ML.
-
-## Output structure
-
-`runMLPipeline()` returns a list with:
-- `performance_tibble`: Metrics including nMCC, F1, balanced accuracy, AUPRC
-- `top_feat_tibble`: Ranked features with Variable, Importance, Sign
-- `tune_res`: (optional) Tuning results
-- `fit`: (optional) Fitted model object
-- `pred`: (optional) Predictions with probabilities
-
-## Integration with amR suite
-
-amRml integrates with other amR packages:
-
-```r
-library(amRdata)
-library(amRml)
-library(amRshiny)
-
-# 1. Prepare data with amRdata
-# features <- prepare_features(...)
-
-# 2. Train models with amRml
-results <- runMLPipeline(ml_data, model = "LR")
-
-# 3. Visualize in dashboard with amRshiny
-# launchAMRDashboard()
-```
-
-## Citation
-
-If you use amRml in your research, please cite:
-
-```
-Wolfe EP^, Brenner EP^, Ravi J. (2025). amRml: Machine learning for antimicrobial
-resistance prediction. R package version 0.99.0.
-https://github.com/JRaviLab/amR_ml
-```
+## Features
+
+- **Data preparation**: Load Parquet files and prepare ML-ready datasets
+- **Model training**: Logistic regression, random forest, and boosted trees via tidymodels
+- **Evaluation**: nMCC, F1, balanced accuracy, AUPRC, and confusion matrices
+- **Feature importance**: Extract and rank predictive features
+- **Iterative feature elimination**: Identify minimal predictive feature sets
+- **Baseline comparisons**: Fisher's exact tests with Benjamini-Hochberg correction
+
+See the [package vignette](https://jravilab.github.io/amR_ml/articles/intro.html) for detailed usage.
 
 ## Related packages
 
 - [amR](https://github.com/JRaviLab/amR): Suite metapackage
 - [amRdata](https://github.com/JRaviLab/amR_data): Data curation
 - [amRshiny](https://github.com/JRaviLab/amR_shiny): Interactive dashboard
+
+## Citation
+
+```
+Wolfe EP^, Brenner EP^, Ravi J. (2025). amRml: Machine learning for antimicrobial
+resistance prediction. R package version 0.99.0.
+https://github.com/JRaviLab/amR_ml
+```
 
 ## Contributing
 
