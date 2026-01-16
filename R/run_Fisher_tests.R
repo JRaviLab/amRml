@@ -137,11 +137,11 @@ computeFeatureFreq <- function(df, df_fisher, target) {
 #' @return The Fisher test results, BH correction, and feature frequencies
 #' @export
 runFishers <- function(
-    matrix_path,
-    Q = 0.05,
-    alternative = "two.sided",
-    susceptible_label = "Susceptible",
-    resistant_label = "Resistant"
+  matrix_path,
+  Q = 0.05,
+  alternative = "two.sided",
+  susceptible_label = "Susceptible",
+  resistant_label = "Resistant"
 ) {
   # Step 1: Load and pivot the long matrix to wide
   df_wide <- loadMLInputTibble(matrix_path)
@@ -162,4 +162,3 @@ runFishers <- function(
 
   return(df_fisher)
 }
-
