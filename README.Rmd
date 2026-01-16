@@ -13,82 +13,373 @@ knitr::opts_chunk$set(
 )
 ```
 
-# NewPackage
+# amRml: machine learning for antimicrobial resistance prediction
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![CRAN status](https://www.r-pkg.org/badges/version/NewPackage)](https://CRAN.R-project.org/package=NewPackage)
-[![R-CMD-check](https://github.com/JRaviLab/NewPackage/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JRaviLab/NewPackage/actions/workflows/R-CMD-check.yaml)
+[![CRAN status](https://www.r-pkg.org/badges/version/amRml)](https://CRAN.R-project.org/package=amRml)
 <!-- badges: end -->
 
-The goal of NewPackage is to ... < *your awesome package description here!* >
+amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. This package trains interpretable machine learning models using multi-scale genomic features from bacterial isolates.
 
-## GitHub Setup
+## Overview
 
-### Repository
+amRml provides functions to:
 
-Initial Repository Configuration:
-
-* Enable Git: `usethis::use_git()`
-* Configure Remote: `usethis::use_github(organisation = "JRaviLab", private = TRUE, protocol = "https")`
-* Contributor Code of Conduct: `usethis::use_code_of_conduct(contact = "janani.ravi@cuanschutz.edu")`
-
-### GitHub Actions
-
-These functions will enable common package development GitHub Actions is desired:
-
-* R CMD Check (multiplatform): `usethis::use_github_action("check_standard")`
-* Build Pkgdown: `use_github_action("pkgdown")`
-* lint code: `use_github_action("lint")`
-* style code: `use_github_action("style")`
-
-Example GitHub Actions workflows have been incorporated into this template. Modify workflows in `.github/workflows/` or delete if these are not required.
-
-## Development
-
-* new function: `usethis::use_r("hello")`
-* add package dependency: `usethis::use_package("rlang")`
-* render documentation/update NAMESPACE: `devtools::document()`
-* load changes without install: `devtools::load_all()`
-* Local R CMD Check: `devtools::check()`
-
+- Prepare ML-ready datasets from feature matrices
+- Train interpretable logistic regression models
+- Generate ranked feature importance lists
+- Calculate comprehensive performance metrics
+- Support parallel processing across drugs and species
+- Export results for visualization in amRshiny
 
 ## Installation
 
-You can install the development version of NewPackage like so:
+### Current (development version)
 
-``` r
-# GitHub
-devtools::install_github("JRaviLab/NewPackage", auth_token = "<PersonalAccessToken>")
-# If Bioconductor Dependencies
-BiocManager::install("JRaviLab/NewPackage", auth_token = "<PersonalAccessToken>")
+```r
+# Install from GitHub
+if (!requireNamespace("remotes", quietly = TRUE))
+    install.packages("remotes")
+
+remotes::install_github("JRaviLab/amR_ml")
 ```
 
-## Example
+### Future (Bioconductor release)
 
-This is a basic example which shows you how to solve a common problem:
+Once submitted to Bioconductor, installation will be:
 
-```{r example, eval=FALSE}
-library(NewPackage)
-## basic example code
+```r
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("amRml")
 ```
 
-What is special about using `README.Rmd` instead of just `README.md`? You can include R chunks like so:
+## Quick start
 
-```{r cars}
-summary(cars)
+```r
+library(amRml)
+
+# Load feature data from amRdata
+features <- readRDS("features.rds")
+
+# Train models for a single drug
+models <- train_amr_models(
+  features = features,
+  drug = "ciprofloxacin",
+  scales = c("gene", "protein", "domain", "struct"),
+  model_type = "logistic_regression"
+)
+
+# View performance metrics
+models$performance
+
+# Extract top features
+top_features <- get_top_features(models, n = 20)
+
+# Train models across multiple drugs (parallel)
+all_models <- train_multiple_drugs(
+  features = features,
+  drugs = c("ciprofloxacin", "tetracycline", "gentamicin"),
+  parallel = TRUE,
+  n_cores = 4
+)
 ```
 
-You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this.
+## Features
 
-You can also embed plots, for example:
+### Data preparation
 
-```{r pressure, echo = FALSE}
-plot(pressure)
+The package processes feature matrices from amRdata to create ML-ready datasets:
+
+- Subset isolates with available AST data for target drug
+- Split samples into training and testing sets (stratified)
+- Handle class imbalance through balanced sampling or weighting
+- Normalize features when appropriate
+- Filter low-variance features
+
+### Model training
+
+Uses the tidymodels framework for consistent, reproducible modeling:
+
+- **Logistic regression**: Primary algorithm for interpretability
+- Separate models per molecular scale (gene, protein, domain, struct)
+- Combined multi-scale models using all features
+- Cross-validation for hyperparameter tuning
+- Support for custom model specifications
+
+### Feature importance
+
+Extracts ranked feature importance to identify resistance determinants:
+
+- Coefficient magnitudes for logistic regression
+- Permutation importance for other models (future)
+- Scale-specific rankings
+- Cross-drug comparison of features
+- Integration with visualization tools
+
+### Performance metrics
+
+Comprehensive evaluation of model predictions:
+
+- **Balanced accuracy**: Accounts for class imbalance
+- **F1 score**: Harmonic mean of precision and recall
+- **Matthews correlation coefficient (MCC)**: Overall classification quality
+- **Sensitivity and specificity**: Per-class performance
+- **Confusion matrices**: Detailed classification breakdown
+- **ROC curves**: Threshold-independent evaluation
+
+### Parallel processing
+
+Efficient training across multiple models:
+
+- Drug-level parallelization
+- Scale-level parallelization
+- Progress tracking for long-running jobs
+- Automatic resource management
+
+## Workflow example
+
+Complete ML workflow for *Campylobacter jejuni*:
+
+```r
+library(amRml)
+
+# Load features from amRdata
+features <- arrow::read_parquet("cjej_features.parquet")
+metadata <- arrow::read_parquet("cjej_metadata.parquet")
+
+# Prepare ML datasets
+ml_data <- prepare_ml_data(
+  features = features,
+  metadata = metadata,
+  drug = "ciprofloxacin",
+  test_fraction = 0.2,
+  balance_classes = TRUE
+)
+
+# Train models across all scales
+models <- train_amr_models(
+  ml_data = ml_data,
+  scales = c("gene", "protein", "domain", "struct", "combined"),
+  model_type = "logistic_regression",
+  cv_folds = 5
+)
+
+# Evaluate performance
+performance <- evaluate_models(models)
+print(performance)
+
+# Extract feature importance
+importance <- get_feature_importance(
+  models,
+  n_features = 50,
+  scale = "gene"
+)
+
+# Visualize top features
+plot_feature_importance(importance)
+
+# Compare scales
+compare_scales(models, metric = "bal_acc")
+
+# Export for dashboard
+export_results(
+  models,
+  output_dir = "model_outputs"
+)
 ```
 
-In that case, don't forget to commit and push the resulting figure files, so they display on GitHub and CRAN.
+## Model interpretability
+
+The package prioritizes interpretability through logistic regression:
+
+### Coefficient interpretation
+
+```r
+# Get model coefficients
+coefficients <- extract_coefficients(models$gene_model)
+
+# Positive coefficients indicate features associated with resistance
+# Negative coefficients indicate features associated with susceptibility
+
+# Example output:
+#   feature              coefficient   p_value
+#   gyrA_mutation        2.34          <0.001
+#   efflux_pump_ABC      1.87          <0.001
+#   porin_loss          -0.45          0.023
+```
+
+### Feature ranking
+
+```r
+# Rank features by absolute coefficient magnitude
+ranked_features <- rank_features(
+  models,
+  scale = "gene",
+  n = 20
+)
+
+# Identify consistent features across drugs
+cross_drug_features <- find_consistent_features(
+  all_models,
+  drugs = c("ciprofloxacin", "tetracycline"),
+  min_rank = 10
+)
+```
+
+## Advanced usage
+
+### Custom model specifications
+
+```r
+# Specify custom logistic regression parameters
+custom_spec <- logistic_reg(
+  penalty = 0.01,
+  mixture = 1  # LASSO regularization
+) %>%
+  set_engine("glmnet")
+
+models <- train_amr_models(
+  ml_data = ml_data,
+  model_spec = custom_spec
+)
+```
+
+### Cross-model analysis
+
+```r
+# Train models on different stratifications
+country_models <- train_stratified_models(
+  features = features,
+  metadata = metadata,
+  drug = "ciprofloxacin",
+  stratify_by = "country",
+  min_samples = 100
+)
+
+year_models <- train_stratified_models(
+  features = features,
+  metadata = metadata,
+  drug = "ciprofloxacin",
+  stratify_by = "collection_year",
+  min_samples = 50
+)
+
+# Compare temporal stability
+compare_temporal_models(year_models)
+```
+
+### Multi-drug prediction
+
+```r
+# Train models for drug classes
+drug_classes <- list(
+  fluoroquinolones = c("ciprofloxacin", "levofloxacin"),
+  tetracyclines = c("tetracycline", "doxycycline"),
+  aminoglycosides = c("gentamicin", "amikacin")
+)
+
+class_models <- train_drug_class_models(
+  features = features,
+  metadata = metadata,
+  drug_classes = drug_classes,
+  parallel = TRUE
+)
+```
+
+## Performance benchmarks
+
+Typical model performance varies by species and drug:
+
+- **Balanced accuracy**: 0.75--0.95
+- **F1 score**: 0.70--0.90
+- **MCC**: 0.50--0.85
+
+Training times depend on feature dimensions:
+- Single drug, single scale: 1--5 minutes
+- Single drug, all scales: 5--20 minutes
+- Multiple drugs (parallel): 10--60 minutes
+
+## Integration with amR suite
+
+amRml integrates seamlessly with other amR packages:
+
+```r
+library(amRdata)
+library(amRml)
+library(amRshiny)
+
+# 1. Curate data
+features <- extract_features(...)
+
+# 2. Train models (this package)
+models <- train_amr_models(
+  features = features,
+  drug = "ciprofloxacin"
+)
+
+# 3. Visualize in dashboard
+launch_dashboard(models = models)
+```
+
+## Model outputs
+
+The package generates structured outputs for downstream analysis:
+
+- `performances.tsv`: Metrics per model (balanced accuracy, F1, MCC, etc.)
+- `feature_importance.tsv`: Ranked features per model
+- `predictions.tsv`: Per-isolate predictions and probabilities
+- `confusion_matrices.rds`: Detailed classification results
+- `model_objects.rds`: Serialized model objects for reuse
+
+These outputs are formatted for direct use in amRshiny or custom analyses.
+
+## Future enhancements
+
+Post-Bioconductor submission, planned additions include:
+
+- Random forest and XGBoost algorithms
+- Regression models for MIC prediction
+- Automated feature selection pipelines
+- Ensemble model combinations
+- Enhanced cross-validation strategies
+
+## Citation
+
+If you use amRml in your research, please cite:
+
+```
+Wolfe EP\^, Brenner EP\^, Ravi J. (2025). amRml: Machine learning for antimicrobial 
+resistance prediction. R package version 0.99.0.
+https://github.com/JRaviLab/amR_ml
+```
+
+## Related packages
+
+- [amR](https://github.com/JRaviLab/amR): Suite metapackage
+- [amRdata](https://github.com/JRaviLab/amR_data): Data curation
+- [amRshiny](https://github.com/JRaviLab/amR_shiny): Interactive dashboard
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Reporting issues
+
+Report bugs and request features at: https://github.com/JRaviLab/amR_ml/issues
+
+## License
+
+BSD 3-Clause License. See [LICENSE](LICENSE) for details.
+
+## Contact
+
+**Corresponding author**: Janani Ravi (janani.ravi@cuanschutz.edu)
+
+**Lab website**: https://jravilab.github.io
 
 ## Code of Conduct
   
-  Please note that the NewPackage project is released with a [Contributor Code of Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html). By contributing to this project, you agree to abide by its terms.
+Please note that the `amRml` is released with a [Contributor Code of Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html). By contributing to this project, you agree to abide by its terms.
