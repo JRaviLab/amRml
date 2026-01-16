@@ -75,6 +75,17 @@ skip <- skipImbalancedMatrix(
 
 ## Loading ML matrices
 
+The package expects Parquet files in long (sparse) format with these columns:
+
+| Column | Description |
+|--------|-------------|
+| `genome_id` | Unique identifier for each isolate |
+| `feature_id` | Feature name (gene, protein, domain, or struct) |
+| `value` | Binary presence/absence (0 or 1) or count |
+| `genome_drug.resistant_phenotype` | "Resistant" or "Susceptible" |
+
+`loadMLInputTibble()` converts this to wide format (one row per genome, one column per feature) for ML.
+
 ```{r load-data}
 # Load a generated matrix
 ml_tibble <- loadMLInputTibble(
@@ -107,6 +118,37 @@ results <- runMLPipeline(
 results$performance_tibble
 results$top_feat_tibble
 ```
+
+### Output structure
+
+`runMLPipeline()` returns a list with:
+
+**`performance_tibble`** - model performance metrics:
+
+| Column | Description |
+|--------|-------------|
+| `num_obs` | Number of observations |
+| `res_prop` | Proportion of resistant samples |
+| `n_feat` | Number of features |
+| `model` | Model type (LR) |
+| `train_prop`, `val_prop` | Train/validation split proportions |
+| `fit_penalty`, `fit_mixture` | Fitted hyperparameters |
+| `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
+| `run_time_sec` | Runtime in seconds |
+
+**`top_feat_tibble`** - ranked feature importance:
+
+| Column | Description |
+|--------|-------------|
+| `Variable` | Feature name |
+| `Importance` | Variable importance score |
+| `Sign` | Direction of effect (POS = resistance, NEG = susceptibility) |
+
+**Optional outputs** (when `return_*` = TRUE):
+
+- `tune_res` - tuning results from grid search
+- `fit` - fitted model workflow object
+- `pred` - predictions with `.pred_class`, `.pred_Resistant`, `.pred_Susceptible`
 
 ## Step-by-step model building
 
