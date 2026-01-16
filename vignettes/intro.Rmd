@@ -78,19 +78,19 @@ The primary entry point is `runMLPipeline()`, which orchestrates the entire ML w
 ```{r run-pipeline}
 results <- runMLPipeline(
   ml_input_tibble = ml_data,
-  model = "LR",                              # "LR", "RF", or "BT"
-  split = c(0.6, 0.2),                       # Train/validation proportions
-  n_fold = 2,                                # CV folds (when validation = 0)
-  prop_vi_top_feats = c(0, 1),               # Feature importance range
-  n_top_feats = NA,                          # Or specify exact number
-  use_pca = FALSE,                           # Use PCA dimensionality reduction
-  penalty_vec = 10^seq(-4, -1, length.out = 10),  # LR penalty values
-  mix_vec = 0:5 / 5,                         # LR mixture values (0=L2, 1=L1)
-  min_n_vec = c(2, 6, 12),                   # RF/BT min_n values
-  tree_vec = c(100, 500, 1000),              # RF/BT tree counts
-  select_best_metric = "mcc",                # "mcc", "f_meas", "pr_auc", "bal_accuracy"
+  model = "LR", # "LR", "RF", or "BT"
+  split = c(0.6, 0.2), # Train/validation proportions
+  n_fold = 2, # CV folds (when validation = 0)
+  prop_vi_top_feats = c(0, 1), # Feature importance range
+  n_top_feats = NA, # Or specify exact number
+  use_pca = FALSE, # Use PCA dimensionality reduction
+  penalty_vec = 10^seq(-4, -1, length.out = 10), # LR penalty values
+  mix_vec = 0:5 / 5, # LR mixture values (0=L2, 1=L1)
+  min_n_vec = c(2, 6, 12), # RF/BT min_n values
+  tree_vec = c(100, 500, 1000), # RF/BT tree counts
+  select_best_metric = "mcc", # "mcc", "f_meas", "pr_auc", "bal_accuracy"
   seed = 123,
-  shuffle_labels = FALSE,                    # For baseline comparisons
+  shuffle_labels = FALSE, # For baseline comparisons
   return_tune_res = FALSE,
   return_fit = FALSE,
   return_pred = FALSE,
@@ -174,11 +174,11 @@ conf_mat <- getConfusionMatrix(predictions)
 
 ```{r metrics}
 # Individual metrics
-nmcc <- calculatenMCC(predictions)       # Normalized MCC (0-1 scale)
-f1 <- calculateF1(predictions)           # F1 score
-bal_acc <- calculateBalAcc(predictions)  # Balanced accuracy
-auprc <- calculateAUPRC(predictions)     # Area under PR curve
-log2_apop <- calculateLog2APOP(predictions)  # log2(AUPRC/prior)
+nmcc <- calculatenMCC(predictions) # Normalized MCC (0-1 scale)
+f1 <- calculateF1(predictions) # F1 score
+bal_acc <- calculateBalAcc(predictions) # Balanced accuracy
+auprc <- calculateAUPRC(predictions) # Area under PR curve
+log2_apop <- calculateLog2APOP(predictions) # log2(AUPRC/prior)
 
 # All metrics at once
 all_metrics <- calculateEvalMets(predictions)
@@ -198,13 +198,13 @@ all_metrics <- calculateEvalMets(predictions)
 # Extract top features from fitted model
 top_features <- extractTopFeats(
   fit,
-  n_top_feats = 20              # Exact number
+  n_top_feats = 20 # Exact number
 )
 
 # Or by proportion of variable importance
 top_features <- extractTopFeats(
   fit,
-  prop_vi_top_feats = c(0, 0.2)  # Top 20% of variable importance
+  prop_vi_top_feats = c(0, 0.2) # Top 20% of variable importance
 )
 
 # Feature importance columns: Variable, Importance, Sign
@@ -220,17 +220,17 @@ IFE iteratively removes top features to identify the most predictive subset:
 # Run IFE by removing percentage of features
 ife_results <- runIFE(
   ml_data,
-  by_num = TRUE,                         # Remove by number of features
-  by_vi = FALSE,                         # Or remove by variable importance
-  percent_removal_vec = 10 * 1:9,        # Remove 10%, 20%, ..., 90%
-  mix_vec = 0,                           # L2 regularization for IFE
-  return_feats = TRUE,                   # Return features removed at each step
+  by_num = TRUE, # Remove by number of features
+  by_vi = FALSE, # Or remove by variable importance
+  percent_removal_vec = 10 * 1:9, # Remove 10%, 20%, ..., 90%
+  mix_vec = 0, # L2 regularization for IFE
+  return_feats = TRUE, # Return features removed at each step
   verbose = TRUE
 )
 
 # Results include nMCC at each iteration
 ife_results$ife_performance_tibble
-ife_results$feats_removed  # If return_feats = TRUE
+ife_results$feats_removed # If return_feats = TRUE
 
 # Remove specific features manually
 ml_data_reduced <- removeTopFeats(ml_data, top_features)
@@ -260,8 +260,8 @@ print(vi_plot)
 # Plot performance metric vs training proportion or CV folds
 eval_plot <- plotDefaultEval(
   default_eval_tibble,
-  x_default_eval = "train_prop",    # or "n_fold"
-  y_default_eval = "avg_f1_score",  # or other metrics
+  x_default_eval = "train_prop", # or "n_fold"
+  y_default_eval = "avg_f1_score", # or other metrics
   xlab = "Training data proportion",
   ylab = "Average F1 score"
 )
@@ -286,7 +286,7 @@ As a non-ML baseline, run Fisher's exact tests with multiple testing correction:
 # Complete Fisher pipeline
 fisher_results <- runFishers(
   matrix_path = "features.parquet",
-  Q = 0.05,                              # FDR threshold
+  Q = 0.05, # FDR threshold
   alternative = "two.sided",
   susceptible_label = "Susceptible",
   resistant_label = "Resistant"
