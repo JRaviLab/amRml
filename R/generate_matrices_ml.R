@@ -698,6 +698,7 @@ skipImbalancedMatrix <- function(genome_ids,
           JOIN selected_genomes USING (genome_id)
           JOIN keep_features kf ON {fid} = kf.feature_id
           JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
+          WHERE f.resistant_classes <> 'Intermediate'   
           GROUP BY f.\"genome_drug.genome_id\", {fid}, resistant_classes
           ORDER BY f.\"genome_drug.genome_id\", {fid}
         ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
