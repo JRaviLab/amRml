@@ -72,11 +72,13 @@ See the [package vignette](https://jravilab.github.io/amR_ml/articles/intro.html
 - [amRshiny](https://github.com/JRaviLab/amR_shiny): Interactive dashboard
 
 ## Citation
+If you use `amRml` in your research, please cite:
 
 ```
-Wolfe EP^, Brenner EP^, Ravi J. (2025). amRml: Machine learning for antimicrobial
-resistance prediction. R package version 0.99.0.
-https://github.com/JRaviLab/amR_ml
+Brenner E, Ghosh A, Wolfe E, Boyer E, Vang C, Lesiyon R, Mayer D, Ravi J. (2026).
+amR: an R package suite to predict antimicrobial resistance in bacterial pathogens.
+R package version 0.99.0.
+https://github.com/JRaviLab/amR
 ```
 
 ## Contributing
