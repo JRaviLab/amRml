@@ -4,11 +4,13 @@
 utils::globalVariables(c(
   ".estimate", ".pred_Resistant", ".pred_Susceptible", ".pred_class",
   "Importance", "Sign", "Variable", "across", "adj_p_value", "antibiotic",
-  "bal_acc", "coefficient", "cum_imp", "everything", "feature_id",
-  "fit_mixture", "fit_trees", "gene", "genome_drug.resistant_phenotype",
-  "genome_id", "model", "n", "nmcc", "num_obs", "p_value", "precision",
-  "prop", "recall", "res_prop", "run_time_sec", "sig_after_bh", "train_prop",
-  "value", "where", "xlab_default_eval", "ylab_default_eval"
+  "bal_acc", "coefficient", "cum_imp", "drug_or_class", "everything",
+  "feature", "feature_id", "fit_mixture", "fit_trees", "gene",
+  "genome_drug.genome_id", "genome_drug.resistant_phenotype", "genome_id",
+  "idx_sparse", "idx_strat", "model", "n", "nmcc", "num_obs", "p_value",
+  "parts", "precision", "prefix", "prop", "recall", "res_prop",
+  "resistant_classes", "run_time_sec", "sig_after_bh", "stratification",
+  "train_prop", "value", "where", "xlab_default_eval", "ylab_default_eval"
 ))
 
 #' @importFrom dplyr all_of
@@ -45,9 +47,7 @@ utils::globalVariables(c(
 #' @importFrom rsample training
 #' @importFrom rsample validation_set
 #' @importFrom rsample vfold_cv
-#' @importFrom graphics barplot
 #' @importFrom stats coef
-#' @importFrom stats reformulate
 #' @importFrom tibble tibble
 #' @importFrom tidyr pivot_wider
 #' @importFrom tune control_grid
@@ -114,6 +114,8 @@ splitMLInputTibble <- function(
 #' buildRecipe()
 #'
 #' Specify predictors, outcome, and metadata by building a recipe.
+#' 
+#' @importFrom stats reformulate
 #'
 #' @param train_data The part of the feature data designated for ML model
 #' training. This can be the output of
@@ -236,7 +238,7 @@ buildWflow <- function(parsnip_mod, recipe) {
 #'
 #' @param model [chr]  Logistic regression ("LR"), random forest ("RF"), or
 #' boosted tree ("BT")
-#' @param penalty_vec \[num\] A vector containing `penalty` (regularization
+#' @param penalty_vec [num] A vector containing `penalty` (regularization
 #' strength) values to try (for logistic regression). It is recommended to
 #' choose values in the range 10^-4 to 10^4.
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic
@@ -245,10 +247,10 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' @param n_feat [num] Number of features in pangenome. Used to
 #' calculate `mtry` values for a subsequent grid search (for random forest or
 #' boosted tree). Output of `getNumFeat()`.
-#' @param min_n_vec \[num\] A vector containing `min_n` values (the number of data
+#' @param min_n_vec [num] A vector containing `min_n` values (the number of data
 #' points in a node required for the node to be split) to try for random forest
-#' or boosted tree. It is recommended to choose values in the range 1 to 100.
-#' @param tree_vec \[num\] A vector containing values to try for the number of
+#' or boosted tree. It is recommended to choose values \eqn{[1, 100]}.
+#' @param tree_vec [num] A vector containing values to try for the number of
 #' `trees` in random forest or boosted tree. It is recommended to choose values
 #' in the range 100 to 1000.
 #' @return A logistic regression, random forest, or boosted tree tuning grid as
@@ -613,6 +615,68 @@ calculateBalAcc <- function(test_data_plus_predictions) {
   return(bal_acc)
 }
 
+#' calculateSensitivity()
+#'
+#' Returns the sensitivity based on the AMR phenotype predictions by an ML model
+#' compared against the actual values.
+#'
+#' @inheritParams getConfusionMatrix
+#' @return sensitivity
+#' @export
+calculateSensitivity <- function(test_data_plus_predictions) {
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+        colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
+  }
+
+  sens <- test_data_plus_predictions |>
+    yardstick::sens(
+      truth = genome_drug.resistant_phenotype,
+      estimate = .pred_class
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
+    round(2)
+
+  return(sens)
+}
+
+#' calculateSpecificity()
+#'
+#' Returns the specificity score based on the AMR phenotype predictions by an ML model
+#' compared against the actual values.
+#'
+#' @inheritParams getConfusionMatrix
+#' @return specificity
+#' @export
+calculateSpecificity <- function(test_data_plus_predictions) {
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+        colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
+  }
+
+  spec <- test_data_plus_predictions |>
+    yardstick::spec(
+      truth = genome_drug.resistant_phenotype,
+      estimate = .pred_class
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
+    round(2)
+
+  return(spec)
+}
+
 #' calculateEvalMets()
 #'
 #' Returns the F1 score, area under the precision-recall curve (AUPRC), balanced
@@ -629,6 +693,8 @@ calculateEvalMets <- function(test_data_plus_predictions) {
   f1 <- calculateF1(test_data_plus_predictions)
   auprc <- calculateAUPRC(test_data_plus_predictions)
   bal_acc <- calculateBalAcc(test_data_plus_predictions)
+  sens <- calculateSensitivity(test_data_plus_predictions)
+  spec <- calculateSpecificity(test_data_plus_predictions)
   nmcc <- calculatenMCC(test_data_plus_predictions)
   log2_apop <- calculateLog2APOP(test_data_plus_predictions)
 

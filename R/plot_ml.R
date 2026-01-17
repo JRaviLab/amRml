@@ -129,6 +129,8 @@ plotDefaultEval <- function(
 #'
 #' Generates a bar plot that compares model performance with and without
 #' randomly shuffled AMR phenotype labels.
+#' 
+#' @importFrom graphics barplot
 #'
 #' @param non_shuffled_label_results Output of `runMLPipeline()`
 #' (`shuffle_labels = FALSE`)

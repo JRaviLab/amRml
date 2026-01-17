@@ -60,9 +60,9 @@ total variable importance, for example,
 \item{pca_threshold}{\link[pillar:num]{pillar::num} The proportion of total variance for which the
 principle components account}
 
-\item{penalty_vec}{[num] A vector containing \code{penalty} (regularization
+\item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
 strength) values to try (for logistic regression). It is recommended to
-choose values in the range 10^-4 to 10^4.}
+choose values \eqn{[10^-4, 10^4]}.}
 
 \item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
