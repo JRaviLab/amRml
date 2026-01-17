@@ -36,8 +36,8 @@ NULL
 #' @return Minimum total observations required so each fold (CV) or each partition (val mode) contains the rarer class at least once
 #' @keywords internal
 .calculateMinSamples <- function(n_fold, split, res_prop) {
-  .checkArgSplit(split)        # validates split per new policy
-  .checkArgResProp(res_prop)   # validates [0,1]
+  .checkArgSplit(split) # validates split per new policy
+  .checkArgResProp(res_prop) # validates [0,1]
 
   # If one class is absent entirely, we cannot model it, so we skip using Inf
   if (res_prop == 0 || res_prop == 1) {
@@ -48,21 +48,19 @@ NULL
   lowest_prop_rs <- if (res_prop <= 0.5) res_prop else (1 - res_prop)
 
   train_prop <- split[1]
-  val_prop   <- split[2]
-  test_prop  <- 1 - train_prop - val_prop
+  val_prop <- split[2]
+  test_prop <- 1 - train_prop - val_prop
 
   if (train_prop == 1 && val_prop == 0) {
     # Cross-validation mode (CV)
     .checkArgNFold(n_fold)
     # Req.: rarer_class_count / n_fold >= 1  => total_obs >= n_fold / lowest_prop_rs
     min_samples <- n_fold / lowest_prop_rs
-
   } else if (val_prop > 0 && test_prop > 0) {
     # Train-validate-test mode (splits)
     # All three partitions must be positive
     lowest_prop_tvt <- min(train_prop, val_prop, test_prop)
     min_samples <- 1 / (lowest_prop_rs * lowest_prop_tvt)
-
   } else {
     # Unsupported combinations (like a CV + separate test holdout)
     stop("Unsupported split configuration in calculateMinSamples().")
@@ -116,7 +114,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
   total_obs <- sum(phenotype_counts$count)
   res_count <- phenotype_counts$count[phenotype_counts$phenotype == "Resistant"]
-  res_prop  <- if (length(res_count) == 0) 0 else res_count / total_obs
+  res_prop <- if (length(res_count) == 0) 0 else res_count / total_obs
 
   min_samples <- .calculateMinSamples(n_fold = n_fold, split = split, res_prop = res_prop)
 
@@ -207,16 +205,16 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Feature and matrix types
   feature_types <- list(
-    genes    = list(view = "gene_count",    id_col = "gene"),
+    genes    = list(view = "gene_count", id_col = "gene"),
     proteins = list(view = "protein_count", id_col = "protein"),
-    domains  = list(view = "domain_count",  id_col = "domain"),
-    struct   = list(view = "struct",        id_col = "struct")
+    domains  = list(view = "domain_count", id_col = "domain"),
+    struct   = list(view = "struct", id_col = "struct")
   )
 
   matrix_types <- list(
-    counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
+    counts        = list(value_col = "value", filter = "variance > 0", binary_only = FALSE, label = "counts"),
     binary        = list(value_col = "present", filter = "variance > 0", binary_only = FALSE, label = "binary"),
-    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE,  label = "binary")
+    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE, label = "binary")
   )
 
   # Initialize skipped log
@@ -450,7 +448,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Set file paths based on set stratification
   matrix_path <- file.path(path, paste0("matrix_", stratify_by))
-  LOO_path    <- file.path(path, paste0("LOO_matrix_", stratify_by))
+  LOO_path <- file.path(path, paste0("LOO_matrix_", stratify_by))
 
   if (!dir.exists(matrix_path)) {
     log("info", paste0("The matrix directory ", matrix_path, " does not exist."))
@@ -484,19 +482,27 @@ skipImbalancedMatrix <- function(genome_ids,
         if (length(w) == 0) NA_integer_ else w[1]
       }),
       feature = purrr::pmap_chr(list(parts, idx_sparse), function(x, i) {
-        if (is.na(i) || i < 8) return(NA_character_)
+        if (is.na(i) || i < 8) {
+          return(NA_character_)
+        }
         paste(x[(i - 2):(i - 1)], collapse = "_")
       }),
       prefix = purrr::pmap_chr(list(parts, idx_strat), function(x, i) {
-        if (is.na(i) || i < 3) return(NA_character_)
+        if (is.na(i) || i < 3) {
+          return(NA_character_)
+        }
         paste(x[(i - 3):(i - 1)], collapse = "_")
       }),
       drug_or_class = purrr::pmap_chr(list(parts, idx_strat), function(x, i) {
-        if (is.na(i) || (i + 1) > length(x)) return(NA_character_)
+        if (is.na(i) || (i + 1) > length(x)) {
+          return(NA_character_)
+        }
         x[i + 1]
       }),
       stratification = purrr::pmap_chr(list(parts, idx_strat), function(x, i) {
-        if (is.na(i) || (i + 2) > length(x)) return(NA_character_)
+        if (is.na(i) || (i + 2) > length(x)) {
+          return(NA_character_)
+        }
         x[i + 2]
       })
     ) |>
@@ -517,7 +523,7 @@ skipImbalancedMatrix <- function(genome_ids,
   created <- character(0)
 
   for (i in seq_len(nrow(prefix_feature))) {
-    sub_prefix  <- prefix_feature$prefix[i]
+    sub_prefix <- prefix_feature$prefix[i]
     sub_feature <- prefix_feature$feature[i]
 
     group_df <- parsed_info |>
@@ -535,7 +541,9 @@ skipImbalancedMatrix <- function(genome_ids,
 
       purrr::walk(unique(group$stratification), function(leave_one_out) {
         subset <- dplyr::filter(group, stratification != leave_one_out)
-        if (nrow(subset) == 0) return(NULL)
+        if (nrow(subset) == 0) {
+          return(NULL)
+        }
 
         # Read and combine parquet files
         combined <- purrr::map(subset$file, arrow::read_parquet) |>
@@ -589,17 +597,17 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Listing feature types and DuckDB views
   feature_types <- list(
-    genes    = list(view = "gene_count",    id_col = "gene"),
+    genes    = list(view = "gene_count", id_col = "gene"),
     proteins = list(view = "protein_count", id_col = "protein"),
-    domains  = list(view = "domain_count",  id_col = "domain"),
-    struct   = list(view = "struct",        id_col = "struct")
+    domains  = list(view = "domain_count", id_col = "domain"),
+    struct   = list(view = "struct", id_col = "struct")
   )
 
   # Listing matrix types and filters
   matrix_types <- list(
-    counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
+    counts        = list(value_col = "value", filter = "variance > 0", binary_only = FALSE, label = "counts"),
     binary        = list(value_col = "present", filter = "variance > 0", binary_only = FALSE, label = "binary"),
-    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE,  label = "binary")
+    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE, label = "binary")
   )
 
   # Connect to DuckDB
@@ -616,7 +624,7 @@ skipImbalancedMatrix <- function(genome_ids,
   log("info", "Building ML matrices for MDR ...")
 
   # Genome selection logic
-  classes <- DBI::dbGetQuery(con, glue::glue('SELECT * FROM metadata')) |>
+  classes <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM metadata")) |>
     dplyr::select(genome_drug.genome_id, resistant_classes) |>
     dplyr::distinct() |>
     dplyr::group_by(resistant_classes) |>
@@ -626,7 +634,7 @@ skipImbalancedMatrix <- function(genome_ids,
     dplyr::filter(resistant_classes != "Intermediate") |>
     dplyr::pull(resistant_classes)
 
-  genome_ids <- DBI::dbGetQuery(con, glue::glue('SELECT * FROM metadata')) |>
+  genome_ids <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM metadata")) |>
     dplyr::filter(resistant_classes %in% classes) |>
     dplyr::pull(genome_drug.genome_id)
 
@@ -714,7 +722,9 @@ skipImbalancedMatrix <- function(genome_ids,
 # Normalize split (support split = 0 for pure CV)
 .normalize_split <- function(split) {
   if (length(split) == 1) {
-    if (is.numeric(split) && split == 0) return(c(1, 0))
+    if (is.numeric(split) && split == 0) {
+      return(c(1, 0))
+    }
     stop("If 'split' is not a vector, only 0 is allowed (this will enable CV).")
   }
   split
@@ -748,7 +758,7 @@ skipImbalancedMatrix <- function(genome_ids,
 #'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
 #'   out_path = "results/",
 #'   n_fold = 5,
-#'   split = 0,  # shorthand for CV mode
+#'   split = 0, # shorthand for CV mode
 #'   min_n = 25,
 #'   verbosity = "minimal"
 #' )
@@ -758,7 +768,7 @@ skipImbalancedMatrix <- function(genome_ids,
 #'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
 #'   out_path = "results/",
 #'   n_fold = 5,
-#'   split = c(1, 0),  # explicit CV mode
+#'   split = c(1, 0), # explicit CV mode
 #'   verbosity = "minimal"
 #' )
 #'
@@ -767,7 +777,7 @@ skipImbalancedMatrix <- function(genome_ids,
 #'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
 #'   out_path = "results/",
 #'   n_fold = NULL,
-#'   split = c(0.7, 0.15),  # 70% train, 15% val, 15% test
+#'   split = c(0.7, 0.15), # 70% train, 15% val, 15% test
 #'   min_n = 25,
 #'   verbosity = "debug"
 #' )
@@ -775,11 +785,10 @@ skipImbalancedMatrix <- function(genome_ids,
 #' @export
 generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
                              out_path = "results/",
-                             n_fold   = 5,
-                             split    = c(1, 0),         # Default: CV
-                             min_n    = 25,
+                             n_fold = 5,
+                             split = c(1, 0), # Default: CV
+                             min_n = 25,
                              verbosity = c("minimal", "debug")) {
-
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
@@ -801,34 +810,47 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   split <- .normalize_split(split)
 
   # Enforce mode with upstream arg checks (CV vs. train/val/test)
-  mode <- .checkArgSplitAndMode(split, n_fold)  # returns "cv" or "splits"
+  mode <- .checkArgSplitAndMode(split, n_fold) # returns "cv" or "splits"
   train_prop <- split[1]
-  val_prop   <- split[2]
-  test_prop  <- 1 - train_prop - val_prop
+  val_prop <- split[2]
+  test_prop <- 1 - train_prop - val_prop
 
   # Log resolved mode
   if (identical(mode, "cv")) {
     log("info", paste0("Selected mode: CV (n_fold = ", n_fold, "), train = 1, val = 0, test = 0"))
   } else if (identical(mode, "splits")) {
-    log("info", paste0("Selected mode: splits with validation, train = ", train_prop,
-                       ", val = ", val_prop, ", test = ", round(test_prop, 3)))
+    log("info", paste0(
+      "Selected mode: splits with validation, train = ", train_prop,
+      ", val = ", val_prop, ", test = ", round(test_prop, 3)
+    ))
   }
 
   # Proceed (propagate verbosity to downstream steps)
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split, stratify_by = "year",
-                  verbosity = verbosity)
-  .parquet2LOOMatrix(out_path, stratify_by = "year",
-                     verbosity = verbosity)
+  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+    stratify_by = "year",
+    verbosity = verbosity
+  )
+  .parquet2LOOMatrix(out_path,
+    stratify_by = "year",
+    verbosity = verbosity
+  )
 
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split, stratify_by = "country",
-                  verbosity = verbosity)
-  .parquet2LOOMatrix(out_path, stratify_by = "country",
-                     verbosity = verbosity)
+  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+    stratify_by = "country",
+    verbosity = verbosity
+  )
+  .parquet2LOOMatrix(out_path,
+    stratify_by = "country",
+    verbosity = verbosity
+  )
 
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split, stratify_by = NULL,
-                  verbosity = verbosity)
+  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+    stratify_by = NULL,
+    verbosity = verbosity
+  )
   .parquet2MDRMatrix(parquet_duckdb_path, out_path, min_n,
-                     verbosity = verbosity)
+    verbosity = verbosity
+  )
 
   log("info", "All matrices generated and saved.")
   invisible(TRUE)

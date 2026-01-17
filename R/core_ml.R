@@ -114,7 +114,7 @@ splitMLInputTibble <- function(
 #' buildRecipe()
 #'
 #' Specify predictors, outcome, and metadata by building a recipe.
-#' 
+#'
 #' @importFrom stats reformulate
 #'
 #' @param train_data The part of the feature data designated for ML model
@@ -627,7 +627,7 @@ calculateSensitivity <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
-        colnames(test_data_plus_predictions))) {
+    colnames(test_data_plus_predictions))) {
     stop(paste(
       "`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."
@@ -658,7 +658,7 @@ calculateSpecificity <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
-        colnames(test_data_plus_predictions))) {
+    colnames(test_data_plus_predictions))) {
     stop(paste(
       "`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."
