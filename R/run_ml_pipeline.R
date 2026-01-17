@@ -397,12 +397,13 @@ runMLPipeline <- function(
     all_results[["fit"]] <- fit
   }
 
-  if (return_pred) {
-    all_results[["pred"]] <- test_data_plus_predictions |>
-      dplyr::select(c(
-        genome_id, .pred_class, .pred_Resistant,
-        .pred_Susceptible, genome_drug.resistant_phenotype
-      ))
+if(return_pred) {
+      if(!multi_class){
+    all_results[["pred"]] <- test_data_plus_predictions |> 
+      dplyr::select(c(genome_id, .pred_class, .pred_Resistant, 
+        .pred_Susceptible, genome_drug.resistant_phenotype))
+  }
+   all_results[["pred"]] <- test_data_plus_predictions 
   }
 
   return(all_results)
