@@ -323,3 +323,12 @@ fisher_res <- runFisherTests(encoded$df, encoded$target, alternative = "two.side
 fisher_res <- applyBenjaminiHochberg(fisher_res, Q = 0.05)
 fisher_res <- computeFeatureFreq(encoded$df, fisher_res, encoded$target)
 ```
+
+### Plot Fisher's results
+You can label the top N features to highlight the strongest hits (default is 5) or change the BH-adjusted p-value threshold with the alpha argument
+
+```{r}
+plotFishers(fisher_results)
+plotFishers(fisher_results, alpha = 0.01, label_top_n = 5)
+
+```
