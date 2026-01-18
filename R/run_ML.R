@@ -1,4 +1,4 @@
-#' Create Machine Learning Result Directories
+#' Create machine learning result directories
 #'
 #' Creates a structured directory hierarchy for storing machine learning results
 #' including matrices, performance metrics, feature importance, models, and predictions.
@@ -118,7 +118,7 @@ createMLResultDir <- function(path,
  #    }
  # 
 
-#' Create Machine Learning Input List
+#' Create machine learning input list
 #'
 #' Parses parquet file names in the matrix directory and generates a tibble
 #' mapping input files to output paths. Handles multiple analysis modes including
@@ -499,7 +499,7 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
 #     
 # }
 
-#' Run MDR (Multi-Drug Resistance) Machine Learning Models
+#' Run MDR (multi-drug resistance) machine learning models
 #'
 #' Executes machine learning pipeline for MDR analysis using logistic regression
 #' with parallel processing via the future backend. Trains models on all MDR
@@ -508,7 +508,7 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
 #' @param path Character scalar. Base directory containing MDR matrix files.
 #' @param threads Integer. Number of parallel workers for model training. Default is 16.
 #' @param split Numeric vector of length 2. Train/validation split proportions.
-#'   Default is \code{c(0.8, 0)} (80\% train, 0\% validation, 20\% test).
+#'   Default is \code{c(0.8, 0)} (80 percent train, 0 percent validation, 20 percent test).
 #' @param n_fold Integer. Number of cross-validation folds. Default is 5.
 #' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for
 #'   variable importance feature selection. Default is \code{c(0, 1)}.
@@ -652,10 +652,10 @@ runMDRmodels <- function(path,
   invisible(NULL)
 }
 
-#' Run Machine Learning Models with Multiple Configurations
+#' Run machine learning models with multiple configurations
 #'
 #' Executes machine learning pipeline with support for stratification,
-#' Leave-One-Out (LOO), and cross-testing configurations using logistic regression
+#' leave-one-out (LOO), and cross-testing configurations using logistic regression
 #' with parallel processing. Provides flexible model training across different
 #' experimental designs.
 #'
@@ -667,7 +667,7 @@ runMDRmodels <- function(path,
 #' @param cross_test Logical. Perform cross-testing between groups. Default is \code{FALSE}.
 #' @param threads Integer. Number of parallel workers for model training. Default is 16.
 #' @param split Numeric vector of length 2. Train/validation split proportions.
-#'   Default is \code{c(0.8, 0)} (80\% train, 0\% validation, 20\% test).
+#'   Default is \code{c(0.8, 0)} (80 percent train, 0 percent validation, 20 percent test).
 #' @param n_fold Integer. Number of cross-validation folds. Default is 5.
 #' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for
 #'   variable importance feature selection. Default is \code{c(0, 1)}.

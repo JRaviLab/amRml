@@ -251,7 +251,7 @@ NULL
 #' @noRd
 #' @keywords internal
 #' @param parsnip_mod A parsnip model object, such as the output of
-#' `buildLRModel()`, `buildRFModel()`, or `buildBTModel()`
+#' `buildLRModel()` (random forest and boosted tree support planned)
 #'
 .checkArgParsnipMod <- function(parsnip_mod) {
   if (class(parsnip_mod)[2] != "model_spec") {

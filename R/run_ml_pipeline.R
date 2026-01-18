@@ -41,9 +41,9 @@ NULL
 #' @param use_pca [bool] Set to `TRUE` to use PCA instead of all features.
 #' @param pca_threshold [num] The proportion of total variance for which the
 #' principle components account
-#' @param penalty_vec [num] A vector containing `penalty` (regularization 
-#' strength) values to try (for logistic regression). It is recommended to 
-#' choose values [10^-4, 10^4].
+#' @param penalty_vec [num] A vector containing `penalty` (regularization
+#' strength) values to try (for logistic regression). Recommended range:
+#' 10^-4 to 10^4.
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1; 
 #' intermediate values correspond to elastic net.

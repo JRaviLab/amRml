@@ -35,6 +35,7 @@
 #' @importFrom rsample validation_set
 #' @importFrom rsample vfold_cv
 #' @importFrom stats coef
+#' @importFrom stats reformulate
 #' @importFrom tibble tibble
 #' @importFrom tidyr pivot_wider
 #' @importFrom tune control_grid
@@ -156,7 +157,7 @@ buildLRModel <- function(multi_class = FALSE) {
 #' Builds a `tidymodels` workflow based on an input model and recipe.
 #' 
 #' @param parsnip_mod A `parsnip` model object, such as the output of
-#' `buildLRModel()`, `buildRFModel()`, or `buildBTModel()`
+#' `buildLRModel()` (random forest and boosted tree support planned)
 #' @param recipe A recipe, such as the output of `buildRecipe()`
 #' @return A `workflow` object
 #' @export
@@ -175,21 +176,20 @@ buildWflow <- function(parsnip_mod, recipe) {
 #'
 #' @param model [chr]  Logistic regression ("LR"), random forest ("RF"), or 
 #' boosted tree ("BT")
-#' @param penalty_vec [num] A vector containing `penalty` (regularization 
-#' strength) values to try (for logistic regression). It is recommended to 
-#' choose values [10^-4, 10^4].
+#' @param penalty_vec [num] A vector containing `penalty` (regularization
+#' strength) values to try (for logistic regression). Recommended range:
+#' 10^-4 to 10^4.
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic 
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1; 
 #' intermediate values (0, 1) correspond to elastic net.
 #' @param n_feat [num] Number of features in pangenome. Used to
 #' calculate `mtry` values for a subsequent grid search (for random forest or 
 #' boosted tree). Output of `getNumFeat()`.
-#' @param min_n_vec [num] A vector containing `min_n` values (the number of data 
+#' @param min_n_vec [num] A vector containing `min_n` values (the number of data
 #' points in a node required for the node to be split) to try for random forest
-#' or boosted tree. It is recommended to choose values [1, 100].
+#' or boosted tree. Recommended range: 1 to 100.
 #' @param tree_vec [num] A vector containing values to try for the number of
-#' `trees` in random forest or boosted tree. It is recommended to choose values 
-#' [100, 1000].
+#' `trees` in random forest or boosted tree. Recommended range: 100 to 1000.
 #' @return A logistic regression, random forest, or boosted tree tuning grid as 
 #' a tibble
 #' @export

@@ -19,6 +19,7 @@
 #' @importFrom tune extract_fit_parsnip
 #' @importFrom vip vip
 #' @importFrom yardstick pr_curve
+#' @importFrom graphics barplot
 NULL
 
 #' plotPRC()

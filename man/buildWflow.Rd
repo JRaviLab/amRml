@@ -8,7 +8,7 @@ buildWflow(parsnip_mod, recipe)
 }
 \arguments{
 \item{parsnip_mod}{A \code{parsnip} model object, such as the output of
-\code{buildLRModel()}, \code{buildRFModel()}, or \code{buildBTModel()}}
+\code{buildLRModel()} (random forest and boosted tree support planned)}
 
 \item{recipe}{A recipe, such as the output of \code{buildRecipe()}}
 }
