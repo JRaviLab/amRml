@@ -34,6 +34,7 @@ Imports:
     dplyr,
     duckdb,
     ggplot2,
+    ggrepel,
     glue,
     hardhat,
     parsnip,

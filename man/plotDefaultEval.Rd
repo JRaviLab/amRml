@@ -8,8 +8,8 @@ plotDefaultEval(
   default_eval_tibble,
   x_default_eval = "train_prop",
   y_default_eval = "avg_f1_score",
-  xlab = "Train Data Proportion",
-  ylab = "Average F1 Score"
+  xlab = "Train data proportion",
+  ylab = "Average F1 score"
 )
 }
 \arguments{

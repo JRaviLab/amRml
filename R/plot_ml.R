@@ -61,7 +61,7 @@ plotTopFeatsVI <- function(fit, n_top_feats = 10) {
   vip <- fit |>
     tune::extract_fit_parsnip() |>
     vip::vip(num_features = n_top_feats) +
-    ggplot2::xlab("Top Features") +
+    ggplot2::xlab("Top features") +
     ggplot2::theme(panel.grid = ggplot2::element_blank())
 
   return(vip)
@@ -85,8 +85,8 @@ plotTopFeatsVI <- function(fit, n_top_feats = 10) {
 #' @export
 plotDefaultEval <- function(
   default_eval_tibble, x_default_eval = "train_prop",
-  y_default_eval = "avg_f1_score", xlab = "Train Data Proportion",
-  ylab = "Average F1 Score"
+  y_default_eval = "avg_f1_score", xlab = "Train data proportion",
+  ylab = "Average F1 score"
 ) {
   .checkArgTibble(default_eval_tibble)
   .checkArgXDefaultEval(x_default_eval)
@@ -125,7 +125,7 @@ plotDefaultEval <- function(
   return(default_eval_plot)
 }
 
-#' getBaselineComparisonBarplot()
+#' plotBaselineComparison()
 #'
 #' Generates a bar plot that compares model performance with and without
 #' randomly shuffled AMR phenotype labels.
@@ -138,7 +138,7 @@ plotDefaultEval <- function(
 #' (`shuffle_labels = TRUE`)
 #' @return A bar plot with balanced accuracy comparisons per antibiotic
 #' @export
-getBaselineComparisonBarplot <- function(
+plotBaselineComparison <- function(
   non_shuffled_label_results,
   shuffled_label_results
 ) {
@@ -162,18 +162,18 @@ getBaselineComparisonBarplot <- function(
   )
 
   colnames(bal_acc_matrix) <- drugs
-  rownames(bal_acc_matrix) <- c("Non-Shuffled Labels", "Shuffled Labels")
+  rownames(bal_acc_matrix) <- c("Non-shuffled labels", "Shuffled labels")
 
   baseline_comparison_barplot <- barplot(bal_acc_matrix,
     beside = TRUE,
     legend.text = TRUE, col = c("skyblue", "lightpink"),
-    ylab = "Balanced Accuracy", xlab = "Antibiotic"
+    ylab = "Balanced accuracy", xlab = "Antibiotic"
   )
 
   return(baseline_comparison_barplot)
 }
 
-#' Plot Feature Fisher's Significance 
+#' Plot top features' Fisher's significance
 #'
 #' This function visualizes all features from \code{runFishers()} ranked by
 #' BH-adjusted p-value and explicitly highlights those that pass the
