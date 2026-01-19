@@ -1,18 +1,23 @@
 Package: amRml
-Title: Train ML models to predict AMR using bacterial genomes and paired AMR phenotype metadata | pkg 2 of 3-pkg amR suite
+Title: Machile learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite
 Version: 0.99.0
 Authors@R: c(
     person("Janani", "Ravi", , "janani.ravi@cuanschutz.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-7443-925X")),
     person("Ethan", "Wolfe", , "ethan.wolfe@cuanschutz.edu", role = "ctb"),
     person("Evan", "Brenner", , "evan.brenner@cuanschutz.edu", role = "ctb"),
+    person("Abhirupa", "Ghosh", , "abhirupa.ghosh@cuanschutz.edu", role = "ctb"),
     person("David", "Mayer", , "david.mayer@cuanschutz.edu", role = "ctb")
   )
-Description: This package processes AMR data matrices from `amR_data`
-     (genomic features by genomes w/ paired AMR phenotypic labels), makes them
-     ML-ready, and trains ML models (LR). Model outputs (e.g., performances,
-     top features) can be summarized and visualized across drugs, drug classes,
-     and passed along to `amR_shiny` to spin up a dashboard to explore these results.
+Description: Comprehensive machine learning (ML) pipeline for predicting antimicrobial
+    resistance (AMR) in ESKAPE pathogens across molecular scales (gene, protein,
+    domain, structure). Implements logistic regression using tidymodels framework. Supports multi-drug resistance
+    (MDR) and cross-resistance predictions with multiple holdout strategies
+    (geographic, temporal, species). Includes model evaluation, feature importance
+    analysis, cross-scale performance comparison, and functional characterization
+    of top features. Designed to work with data from amR_data package and generate
+    results for amR_shiny visualization. Can work independently with example
+    ESKAPE pathogen datasets, too.
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 LazyData: true
