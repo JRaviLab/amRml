@@ -19,20 +19,36 @@
 #' @importFrom tune extract_fit_parsnip
 #' @importFrom vip vip
 #' @importFrom yardstick pr_curve
-#' @importFrom graphics barplot
 NULL
 
-#' plotPRC()
-#'
-#' Plots the precision-recall curve given a set of test data plus predicted AMR
-#' phenotypes.
-#'
-#' @param test_data_plus_predictions Test data (tibble) with an added column for
-#' predicted phenotype labels, such as the output of `predict()`.
-#' @return A precision-recall curve as a `ggplot2` object
-#' @export
+#' Plot a Precision-Recall Curve
+#' 
+#' Generates a precision-recall curve (PRC) for AMR phenotype prediction results.
+#' @param test_data_plus_predictions A tibble containing test data with added
+#' prediction columns, typically the output of `runMLmodels()`.
+#' 
+#' @return A `ggplot2` object showing the precision-recall curve.
+#' 
+#' @details  
+#' The function uses `yardstick::pr_curve()` to compute the PR curve and then
+#' visualizes it using `ggplot2`.
+#' 
+#' @examples
+#' \dontrun{
+#' test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+#' plotPRC(test_data_plus_predictions)
+#'  }
+#'  
+#'  @export
 plotPRC <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+test_data_plus_predictions <- test_data_plus_predictions |>
+dplyr::mutate(
+genome_drug.resistant_phenotype = factor(
+genome_drug.resistant_phenotype,
+levels = c("Resistant", "Susceptible")
+)
+)
 
   prc <- yardstick::pr_curve(
     test_data_plus_predictions,
@@ -46,113 +62,154 @@ plotPRC <- function(test_data_plus_predictions) {
   return(prc)
 }
 
-#' plotTopFeatsVI()
-#'
-#' Generates a plot showing the top features and their variable importance
-#' scores.
-#'
-#' @param fit Best model fit, such as the output of `fitBestModel()`
-#' @param n_top_feats [num] Number of top features to plot
-#' @return Variable importance plot (a `ggplot2` object)
+#' Plot a Receiver Operating Characteristic (ROC) Curve
+#' 
+#' Generates a ROC curve for AMR phenotype prediction results.
+#' 
+#' @param test_data_plus_predictions A tibble with test data and prediction
+#' columns (output of `runMLmodels()`).
+#' 
+#' @return A ROC curve plotted using `ggplot2::autoplot()`.
+#' 
 #' @export
-plotTopFeatsVI <- function(fit, n_top_feats = 10) {
-  .checkArgWflow(fit)
+plotROC <- function(test_data_plus_predictions) {
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+  test_data_plus_predictions <- test_data_plus_predictions |>
+dplyr::mutate(
+genome_drug.resistant_phenotype = factor(
+genome_drug.resistant_phenotype,
+levels = c("Resistant", "Susceptible")
+)
+)
+
+  roc <- yardstick::roc_curve(
+    test_data_plus_predictions,
+    genome_drug.resistant_phenotype, .pred_Resistant
+  ) |>
+    ggplot2::autoplot(type = "se") +
+    ggplot2::theme(panel.grid = ggplot2::element_blank())
+  
+  return(roc)
+}
+
+#' Plot a Confusion Matrix Heatmap
+#' 
+#' Produces a heatmap visualization of the confusion matrix for AMR predictions.
+#' 
+#' @param test_data_plus_predictions A tibble containing true and predicted
+#' phenotype labels.
+#' 
+#' @return A heatmap (`ggplot2` object) showing the confusion matrix.
+#' 
+#' @export
+plotCM <- function(test_data_plus_predictions) {
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+  test_data_plus_predictions <- test_data_plus_predictions |>
+    dplyr::mutate(
+      genome_drug.resistant_phenotype = factor(
+        genome_drug.resistant_phenotype,
+        levels = c("Resistant", "Susceptible")
+      ),
+      .pred_class = factor(
+        .pred_class,
+        levels = c("Resistant", "Susceptible")
+      )
+    )
+  test_data_plus_predictions |>
+yardstick::conf_mat(truth = genome_drug.resistant_phenotype,
+ estimate = .pred_class) |>
+ggplot2::autoplot(type = "heatmap")
+}
+
+#' Plot Density of Predicted Class Probabilities
+#' 
+#' Visualizes how predicted class probabilities differ between resistant and
+#' susceptible genome-drug combinations.
+#' 
+#' @param test_data_plus_predictions Tibble with prediction probabilities and
+#' true labels.
+#' 
+#' @return A ggplot2 density plot.
+#' 
+#' @export
+plotDensity <- function(test_data_plus_predictions) {
+  test_data_plus_predictions |>
+ggplot2::ggplot(ggplot2::aes(x = .pred_Resistant,
+fill = genome_drug.resistant_phenotype)) +
+ggplot2::geom_density(alpha = 0.5)
+}
+
+#' Plot Top Feature Importances
+#' 
+#' Creates a bar plot showing the most important features affecting
+#' AMR phenotype predictions.
+#' 
+#' @param topfeat A tibble containing feature importance scores
+#' (output of `runMLmodels()`).
+#' @param n_top_feats Number of top features to display (default: 10).
+#' 
+#' @return A bar plot of variable importance (`ggplot2` object).
+#' 
+#' @examples
+#' \dontrun{
+#' topfeat <- readr::read_tsv(results/ML_top_features/Sfl_drug_AMP_domains_binary_top_features.tsv)
+#' plotTopFeatsVI(topfeat)
+#'  }
+#' 
+#' @export
+plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
   .checkArgNTopFeats(n_top_feats)
 
-  vip <- fit |>
-    tune::extract_fit_parsnip() |>
-    vip::vip(num_features = n_top_feats) +
-    ggplot2::xlab("Top Features") +
-    ggplot2::theme(panel.grid = ggplot2::element_blank())
-
-  return(vip)
-}
-
-#' plotDefaultEval()
-#'
-#' Plots performance metric or runtime vs. training data proportion or number
-#' of cross-validation folds, colored by model.
-#'
-#' @param default_eval_tibble Output of `findOptimalMLDefaults()`
-#' @param x_default_eval [chr] x value of default evaluation plot: "train_prop"
-#' or "n_fold"
-#' @param y_default_eval [chr] y value of default evaluation plot. It can be
-#' "avg_runtime_sec" or one of the following performance metrics:
-#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", or "avg_nmcc"
-#' @param xlab [chr] Label for x axis
-#' @param ylab [chr] Label for y axis
-#' @return A `ggplot2` scatterplot (performance metric or runtime vs.
-#' `train_prop` or `n_fold`), colored by model
-#' @export
-plotDefaultEval <- function(
-  default_eval_tibble, x_default_eval = "train_prop",
-  y_default_eval = "avg_f1_score", xlab = "Train Data Proportion",
-  ylab = "Average F1 Score"
-) {
-  .checkArgTibble(default_eval_tibble)
-  .checkArgXDefaultEval(x_default_eval)
-  .checkArgYDefaultEval(y_default_eval)
-  .checkArgXYLabs(xlab = xlab, ylab = ylab)
-
-  if (x_default_eval == "n_fold") {
-    default_eval_tibble <- default_eval_tibble |>
-      dplyr::filter(train_prop == 0.8)
-  } else {
-    default_eval_tibble <- default_eval_tibble |>
-      dplyr::filter(train_prop != 0.8)
-  }
-
-  default_eval_plot <- ggplot2::ggplot(
-    default_eval_tibble,
-    ggplot2::aes(
-      x = unlist(default_eval_tibble[x_default_eval]),
-      y = unlist(default_eval_tibble[y_default_eval]), color = model
-    )
-  ) +
-    ggplot2::geom_line(size = 1.5) +
-    ggplot2::geom_point(size = 3) +
-    ggplot2::theme(
-      axis.line = ggplot2::element_line(linewidth = 1.5),
-      axis.ticks = ggplot2::element_line(linewidth = 1.5, colour = "black"),
-      axis.text = ggplot2::element_text(size = 16, colour = "black"),
-      axis.title = ggplot2::element_text(size = 16, face = "bold"),
-      panel.grid = ggplot2::element_blank(),
-      panel.background = ggplot2::element_blank(),
-      legend.text = ggplot2::element_text(size = 16),
-      legend.title = ggplot2::element_text(size = 16, face = "bold")
+  vip <- topfeat |> 
+    dplyr::slice_max(order_by = Importance, n = n_top_feats) |>
+    dplyr::mutate(
+      Variable = factor(Variable, levels = rev(Variable)),   # preserve order as shown in table
+      Sign = factor(Sign, levels = c("POS", "NEG"))
+    ) |> 
+    ggplot2::ggplot(ggplot2::aes(x = Importance, y = Variable, fill = Sign)) +
+    ggplot2::geom_col() +
+    ggplot2::scale_fill_manual(
+      values = c(
+        "POS" = "#c6d8d3",  
+        "NEG" = "#f6c9a1"   
+      )
     ) +
-    ggplot2::labs(x = xlab, y = ylab, color = "Model")
-
-  return(default_eval_plot)
+    ggplot2::labs(
+      x = "Importance",
+      y = "Features"
+    ) +
+    ggplot2::theme_minimal(base_size = 14) +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_text(size = 10)
+    )
+  
+ return(vip) 
 }
 
-#' getBaselineComparisonBarplot()
-#'
-#' Generates a bar plot that compares model performance with and without
-#' randomly shuffled AMR phenotype labels.
-#'
-#' @param non_shuffled_label_results Output of `runMLPipeline()`
-#' (`shuffle_labels = FALSE`)
-#' @param shuffled_label_results Output of `runMLPipeline()`
-#' (`shuffle_labels = TRUE`)
-#' @return A bar plot with balanced accuracy comparisons per antibiotic
+#' Compare Baseline Performance With and Without Shuffled Labels
+#' 
+#' Produces a bar plot comparing balanced accuracy for each antibiotic using
+#' true AMR labels vs. randomly shuffled labels.
+#' 
+#' @param non_shuffled_label_results Output of `runMLPipeline(shuffle_labels = FALSE)`
+#' @param shuffled_label_results Output of `runMLPipeline(shuffle_labels = TRUE)`
+#' 
+#' @return A base R barplot comparing balanced accuracy across models.
+#' 
 #' @export
 getBaselineComparisonBarplot <- function(
   non_shuffled_label_results,
   shuffled_label_results
 ) {
-  .checkArgTibble(non_shuffled_label_results)
-  .checkArgTibble(shuffled_label_results)
+  .checkArgTibble(non_shuffled_label_results$performance_tibble)
+  .checkArgTibble(shuffled_label_results$performance_tibble)
 
-  drugs <- non_shuffled_label_results |>
-    dplyr::select(antibiotic) |>
-    dplyr::pull()
-
-  non_shuffled_bal_acc <- non_shuffled_label_results |>
+  non_shuffled_bal_acc <- non_shuffled_label_results$performance_tibble |>
     dplyr::select(bal_acc) |>
     dplyr::pull()
 
-  shuffled_bal_acc <- shuffled_label_results |>
+  shuffled_bal_acc <- shuffled_label_results$performance_tibble |>
     dplyr::select(bal_acc) |>
     dplyr::pull()
 
@@ -160,13 +217,12 @@ getBaselineComparisonBarplot <- function(
     nrow = 2, byrow = TRUE
   )
 
-  colnames(bal_acc_matrix) <- drugs
   rownames(bal_acc_matrix) <- c("Non-Shuffled Labels", "Shuffled Labels")
 
   baseline_comparison_barplot <- barplot(bal_acc_matrix,
     beside = TRUE,
     legend.text = TRUE, col = c("skyblue", "lightpink"),
-    ylab = "Balanced Accuracy", xlab = "Antibiotic"
+    ylab = "Balanced Accuracy"
   )
 
   return(baseline_comparison_barplot)
