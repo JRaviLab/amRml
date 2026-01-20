@@ -37,6 +37,8 @@ Imports:
     DBI,
     dplyr,
     duckdb,
+    future,
+    future.apply,
     ggplot2,
     glue,
     hardhat,

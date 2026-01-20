@@ -159,23 +159,23 @@ skipImbalancedMatrix <- function(genome_ids,
                             split,
                             stratify_by = NULL,
                             verbosity = c("minimal", "debug")) {
+
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
-  # Normalize input paths
   parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
   path <- normalizePath(path)
 
-  # Evaluate any required stratification column
+  # Choose stratification column
   if (is.null(stratify_by) || !(stratify_by %in% c("year", "country"))) {
     stratify_column <- NULL
   } else if (stratify_by == "year") {
     stratify_column <- "year_bin"
-  } else { # stratify_by == "country"
+  } else {
     stratify_column <- "country_abbr"
   }
 
-  # File paths and grouping variables depend on stratification
+  # Determine matrix output directory
   if (!is.null(stratify_column) && stratify_by == "country") {
     matrix_path <- file.path(path, "matrix_country")
     grouping_variables <- list(
@@ -189,7 +189,6 @@ skipImbalancedMatrix <- function(genome_ids,
       drug_class_year = c("class_abbr", "year_bin")
     )
   } else {
-    # No stratification
     matrix_path <- file.path(path, "matrix")
     grouping_variables <- list(
       drug       = "drug_abbr",
@@ -198,12 +197,11 @@ skipImbalancedMatrix <- function(genome_ids,
     stratify_column <- NULL
   }
 
-  if (!dir.exists(matrix_path)) {
-    dir.create(matrix_path, recursive = TRUE)
-  }
+  if (!dir.exists(matrix_path)) dir.create(matrix_path, recursive = TRUE)
 
   log("info", paste0("Matrix output directory: ", matrix_path))
-  log("debug", paste0("Stratification: ", ifelse(is.null(stratify_column), "None", stratify_column)))
+  log("debug", paste0("Stratification: ",
+                      ifelse(is.null(stratify_column), "None", stratify_column)))
 
   # Feature and matrix types
   feature_types <- list(
@@ -220,209 +218,294 @@ skipImbalancedMatrix <- function(genome_ids,
   )
 
   # Initialize skipped log
-  log_path <- file.path(matrix_path, glue::glue("skipped_drugs.log"))
+  log_path <- file.path(matrix_path, "skipped_drugs.log")
   readr::write_lines("Drug\tReason\tTotal_obs\tPhenotype_distribution", log_path)
 
-  # Connect to DuckDB
-  con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
+  # Safe DBI-quoting
+  quote_condition <- function(group_cols, group_values, con) {
+    ids <- vapply(group_cols,
+                  function(col) DBI::dbQuoteIdentifier(con, col),
+                  character(1))
+    vals <- vapply(
+      group_cols,
+      function(col) {
+        val <- group_values[[col]][1]
+        DBI::dbQuoteString(con, as.character(val))
+      },
+      character(1)
+    )
 
+    paste(sprintf("%s = %s", ids, vals), collapse = " AND ")
+  }
+
+  con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+  on.exit(DBI::dbDisconnect(con0, shutdown = FALSE), add = TRUE)
+
+  bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
   log("info", paste0("Connected to DuckDB for bug: ", bug))
 
   # Iterate over grouping variables
+  all_group_definitions <- lapply(grouping_variables, function(cols) {
+    idcols <- paste0('"', cols, '"', collapse = ", ")
+    DBI::dbGetQuery(con0, sprintf("SELECT DISTINCT %s FROM metadata", idcols)) |>
+      tidyr::drop_na()
+  })
+
+  # Each group gets processed with a fresh DB connection
   for (group_type in names(grouping_variables)) {
     group_cols <- grouping_variables[[group_type]]
-    group_expr <- paste0('"', group_cols, '"', collapse = ", ")
-
-    all_groups <- DBI::dbGetQuery(con, glue::glue("SELECT DISTINCT {group_expr} FROM metadata")) |>
-      tidyr::drop_na()
+    all_groups <- all_group_definitions[[group_type]]
 
     log("debug", paste0("Found ", nrow(all_groups), " groups for type: ", group_type))
 
     for (i in seq_len(nrow(all_groups))) {
-      group_values <- all_groups[i, ]
+
+      # New connection for this group
+      con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+
+      group_values <- all_groups[i, , drop = FALSE]
       group_label <- paste(group_values, collapse = "_")
+
       log("info", paste0("Building ML matrices for ", group_type, ": ", group_label))
 
-      condition_string <- paste(
-        mapply(function(col, val) glue::glue('"', col, '" = \'{val}\''), group_cols, group_values),
-        collapse = " AND "
-      )
+      condition_string <- quote_condition(group_cols, group_values, con)
 
-      strat_filter <- if (!is.null(stratify_column)) {
-        glue::glue("AND \"{stratify_column}\" IS NOT NULL AND \"{stratify_column}\" != ''")
-      } else {
-        ""
-      }
+      # Strat filter
+      strat_filter <- if (!is.null(stratify_column))
+        sprintf("AND \"%s\" IS NOT NULL AND \"%s\" != ''", stratify_column, stratify_column)
+      else ""
 
       # Genome selection logic
       if (group_type %in% c("drug_class", "drug_class_year", "drug_class_country")) {
-        genome_ids <- DBI::dbGetQuery(con, glue::glue("
-    WITH class_phenotypes AS (
-      SELECT \"genome_drug.genome_id\" AS genome_id,
-             MAX(CASE WHEN \"genome_drug.resistant_phenotype\" = 'Resistant' THEN 1 ELSE 0 END) AS any_resistant,
-             MIN(CASE WHEN \"genome_drug.resistant_phenotype\" = 'Susceptible' THEN 1 ELSE 0 END) AS all_susceptible
-      FROM metadata
-      WHERE {condition_string}
-      GROUP BY \"genome_drug.genome_id\"
-    )
-    SELECT genome_id
-    FROM class_phenotypes
-    WHERE any_resistant = 1 OR all_susceptible = 1
-  "))[[1]]
+
+        genome_ids <- DBI::dbGetQuery(con, sprintf("
+          WITH class_phenotypes AS (
+            SELECT \"genome_drug.genome_id\" AS genome_id,
+                   MAX(CASE WHEN \"genome_drug.resistant_phenotype\" = 'Resistant'
+                            THEN 1 ELSE 0 END) AS any_resistant,
+                   MIN(CASE WHEN \"genome_drug.resistant_phenotype\" = 'Susceptible'
+                            THEN 1 ELSE 0 END) AS all_susceptible
+            FROM metadata
+            WHERE %s
+            GROUP BY \"genome_drug.genome_id\"
+          )
+          SELECT genome_id
+          FROM class_phenotypes
+          WHERE any_resistant = 1 OR all_susceptible = 1
+        ", condition_string))[[1]]
+
       } else {
-        genome_ids <- DBI::dbGetQuery(con, glue::glue("
-    SELECT DISTINCT \"genome_drug.genome_id\"
-    FROM metadata
-    WHERE {condition_string}
-      AND \"genome_drug.resistant_phenotype\" IN ('Resistant', 'Susceptible')
-      {strat_filter}
-  "))[[1]]
+        genome_ids <- DBI::dbGetQuery(con, sprintf("
+          SELECT DISTINCT \"genome_drug.genome_id\"
+          FROM metadata
+          WHERE %s
+            AND \"genome_drug.resistant_phenotype\" IN ('Resistant','Susceptible')
+            %s
+        ", condition_string, strat_filter))[[1]]
       }
 
-      phenotype_counts_all <- DBI::dbGetQuery(con, glue::glue("
-  SELECT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
-  FROM metadata
-  WHERE {condition_string}
-  GROUP BY \"genome_drug.resistant_phenotype\"
-"))
+      # Phenotype counts
+      phenotype_counts_all <- DBI::dbGetQuery(con, sprintf("
+        SELECT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
+        FROM metadata
+        WHERE %s
+        GROUP BY \"genome_drug.resistant_phenotype\"
+      ", condition_string))
 
       phenotype_summary <- paste(
-        apply(phenotype_counts_all, 1, function(row) paste0(row["phenotype"], "=", row["count"])),
+        apply(phenotype_counts_all, 1,
+              function(row) paste0(row["phenotype"], "=", row["count"])),
         collapse = "; "
       )
 
-      log("debug", paste0("Phenotype summary for ", group_label, ": ", phenotype_summary))
-      log("debug", paste0("Genome count: ", length(genome_ids)))
-
       # Apply skip logic
-      if (skipImbalancedMatrix(genome_ids, phenotype_counts_all, n_fold, split, verbosity = verbosity)) {
-        readr::write_lines(glue::glue("{group_label}\tToo few samples for CV/split\t{length(genome_ids)}\t{phenotype_summary}"), log_path, append = TRUE)
+      if (skipImbalancedMatrix(genome_ids, phenotype_counts_all, n_fold, split,
+                               verbosity = verbosity)) {
+
+        readr::write_lines(
+          sprintf("%s\tToo few samples for CV/split\t%d\t%s",
+                  group_label, length(genome_ids), phenotype_summary),
+          log_path, append = TRUE
+        )
+
+        DBI::dbDisconnect(con, shutdown = FALSE)
         next
       }
 
       if (length(genome_ids) < 40) {
-        readr::write_lines(glue::glue("{group_label}\tToo few observations\t{length(genome_ids)}\t{phenotype_summary}"), log_path, append = TRUE)
+        readr::write_lines(
+          sprintf("%s\tToo few observations\t%d\t%s",
+                  group_label, length(genome_ids), phenotype_summary),
+          log_path, append = TRUE
+        )
+
+        DBI::dbDisconnect(con, shutdown = FALSE)
         next
       }
 
-      phenotype_counts <- DBI::dbGetQuery(con, glue::glue("
-  SELECT \"genome_drug.resistant_phenotype\", COUNT(*) AS count
-  FROM metadata
-  WHERE {condition_string}
-    AND \"genome_drug.resistant_phenotype\" IN ('Resistant', 'Susceptible')
-    {strat_filter}
-  GROUP BY \"genome_drug.resistant_phenotype\"
-"))
+      phen2 <- DBI::dbGetQuery(con, sprintf("
+        SELECT \"genome_drug.resistant_phenotype\", COUNT(*) AS count
+        FROM metadata
+        WHERE %s
+          AND \"genome_drug.resistant_phenotype\" IN ('Resistant','Susceptible')
+          %s
+        GROUP BY \"genome_drug.resistant_phenotype\"
+      ", condition_string, strat_filter))
 
-      if (nrow(phenotype_counts) < 2) {
-        readr::write_lines(glue::glue("{group_label}\tOnly one phenotype class\t{length(genome_ids)}\t{phenotype_summary}"), log_path, append = TRUE)
+      if (nrow(phen2) < 2) {
+        readr::write_lines(
+          sprintf("%s\tOnly one phenotype class\t%d\t%s",
+                  group_label, length(genome_ids), phenotype_summary),
+          log_path, append = TRUE
+        )
+
+        DBI::dbDisconnect(con, shutdown = FALSE)
         next
       }
 
+      # Create selected_genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
-      DBI::dbWriteTable(con, "selected_genomes", data.frame(genome_id = genome_ids), append = TRUE)
+      DBI::dbWriteTable(con, "selected_genomes",
+                        data.frame(genome_id = genome_ids), append = TRUE)
 
       # Feature and matrix generation steps
       for (ftype in names(feature_types)) {
+
         fview <- feature_types[[ftype]]$view
-        fid <- feature_types[[ftype]]$id_col
+        fid   <- feature_types[[ftype]]$id_col
 
-        DBI::dbExecute(con, glue::glue("
-    CREATE OR REPLACE VIEW {ftype}_binary AS
-    SELECT genome_id, {fid},
-           CASE WHEN value > 0 THEN 1 ELSE 0 END AS present
-    FROM {fview}
-  "))
+        # binary view
+        DBI::dbExecute(con, sprintf("
+          CREATE OR REPLACE VIEW %s_binary AS
+          SELECT genome_id, %s,
+                 CASE WHEN value > 0 THEN 1 ELSE 0 END AS present
+          FROM %s
+        ", ftype, fid, fview))
 
+        # counts view
         if (ftype != "struct") {
-          DBI::dbExecute(con, glue::glue("
-      CREATE OR REPLACE VIEW {ftype}_counts AS
-      SELECT genome_id, {fid}, value
-      FROM {fview}
-    "))
+          DBI::dbExecute(con, sprintf("
+            CREATE OR REPLACE VIEW %s_counts AS
+            SELECT genome_id, %s, value
+            FROM %s
+          ", ftype, fid, fview))
         }
 
         for (mtype in names(matrix_types)) {
+
           binary_only <- matrix_types[[mtype]]$binary_only
           if (ftype == "struct" && !binary_only) next
 
-          mview <- glue::glue("{ftype}_{ifelse(grepl('binary', mtype), 'binary', 'counts')}")
-          value_col <- matrix_types[[mtype]]$value_col
+          mview      <- sprintf("%s_%s", ftype,
+                                ifelse(grepl("binary", mtype), "binary", "counts"))
+          value_col  <- matrix_types[[mtype]]$value_col
           filter_clause <- matrix_types[[mtype]]$filter
 
-          keep_query <- glue::glue("
-      SELECT {fid}, VAR_POP({value_col}) AS variance
-      FROM {mview}
-      JOIN selected_genomes USING (genome_id)
-      GROUP BY {fid}
-      HAVING {filter_clause}
-    ")
+          # select features with non-zero variance
+          keep_query <- sprintf("
+            SELECT %s AS feature_id, VAR_POP(%s) AS variance
+            FROM %s
+            JOIN selected_genomes USING (genome_id)
+            GROUP BY %s
+            HAVING %s
+          ", fid, value_col, mview, fid, filter_clause)
 
-          keep_features <- DBI::dbGetQuery(con, keep_query)[[fid]]
+          keep_features <- DBI::dbGetQuery(con, keep_query)[["feature_id"]]
           if (length(keep_features) == 0) {
-            log("info", paste0("All features filtered for: ", ftype, " - ", mtype, " - ", group_label))
+            log("info", paste0("All features filtered for ",
+                               ftype, " - ", mtype, " - ", group_label))
             next
           }
 
-          DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
-          DBI::dbWriteTable(con, "keep_features", data.frame(feature_id = keep_features), append = TRUE)
+          DBI::dbExecute(con,
+                         "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
+          DBI::dbWriteTable(con,
+                            "keep_features",
+                            data.frame(feature_id = keep_features),
+                            append = TRUE)
 
           mtype_label <- matrix_types[[mtype]]$label
-          long_out_path <- file.path(matrix_path, glue::glue("{bug}_{group_type}_{group_label}_{ftype}_{mtype_label}_sparse.parquet"))
 
-          strat_column_select <- if (!is.null(stratify_by)) glue::glue(", f.\"{stratify_column}\"") else ""
-          strat_column_group <- if (!is.null(stratify_by)) glue::glue(", f.\"{stratify_column}\"") else ""
+          long_out_path <- file.path(matrix_path,
+                                     sprintf("%s_%s_%s_%s_%s_sparse.parquet",
+                                             bug, group_type, group_label, ftype, mtype_label))
 
-          if (!is.null(stratify_by)) {
-            total_for_group <- DBI::dbGetQuery(con, glue::glue("
-        SELECT COUNT(DISTINCT \"genome_drug.genome_id\") AS total
-        FROM metadata
-        WHERE {condition_string}
-          AND \"genome_drug.resistant_phenotype\" IN ('Resistant', 'Susceptible')
-      "))$total
+          long_out_path_sql <- gsub("\\\\", "/", long_out_path)
 
-            dropped <- total_for_group - length(genome_ids)
-            if (dropped > 0) {
-              log("info", paste0(dropped, " genomes dropped due to missing data for ", stratify_by))
-            }
-          }
-
-          phenotype_case <- if (group_type %in% c("drug_class", "drug_class_year", "drug_class_country")) {
-            "CASE
-         WHEN MAX(CASE WHEN f.\"genome_drug.resistant_phenotype\" = 'Resistant' THEN 1 ELSE 0 END) = 1 THEN 'Resistant'
-         WHEN MIN(CASE WHEN f.\"genome_drug.resistant_phenotype\" = 'Susceptible' THEN 1 ELSE 0 END) = 1 THEN 'Susceptible'
-       END"
+          # phenotype case
+          phenotype_case <- if (group_type %in%
+                                c("drug_class", "drug_class_year", "drug_class_country")) {
+            "
+               CASE
+                  WHEN MAX(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Resistant'
+                                THEN 1 ELSE 0 END)=1 THEN 'Resistant'
+                  WHEN MIN(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Susceptible'
+                                THEN 1 ELSE 0 END)=1 THEN 'Susceptible'
+               END
+            "
           } else {
-            "MAX(CASE f.\"genome_drug.resistant_phenotype\"
-         WHEN 'Resistant' THEN 'Resistant'
-         WHEN 'Susceptible' THEN 'Susceptible'
-       END)"
+            "
+              MAX(
+                CASE f.\"genome_drug.resistant_phenotype\"
+                   WHEN 'Resistant' THEN 'Resistant'
+                   WHEN 'Susceptible' THEN 'Susceptible'
+                END
+              )
+            "
           }
 
-          DBI::dbExecute(con, glue::glue("
-      COPY (
-        SELECT f.\"genome_drug.genome_id\" AS genome_id,
-               {fid} AS feature_id,
-               MAX(CAST ({value_col} AS DOUBLE)) AS value,
-               {phenotype_case} AS \"genome_drug.resistant_phenotype\"
-               {strat_column_select}
-        FROM {mview}
-        JOIN selected_genomes USING (genome_id)
-        JOIN keep_features kf ON {fid} = kf.feature_id
-        JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
-        WHERE {condition_string}
-          AND f.\"genome_drug.resistant_phenotype\" IN ('Resistant', 'Susceptible')
-          {strat_filter}
-        GROUP BY f.\"genome_drug.genome_id\", {fid} {strat_column_group}
-        ORDER BY f.\"genome_drug.genome_id\", {fid}
-      ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
-    "))
+          strat_col_select <- if (!is.null(stratify_by))
+            sprintf(", f.\"%s\"", stratify_column) else ""
+
+          strat_col_group <- if (!is.null(stratify_by))
+            sprintf(", f.\"%s\"", stratify_column) else ""
+
+          copy_sql <- sprintf("
+            COPY (
+              SELECT
+                f.\"genome_drug.genome_id\" AS genome_id,
+                %s AS feature_id,
+                MAX(CAST(%s AS DOUBLE)) AS value,
+                %s AS \"genome_drug.resistant_phenotype\"
+                %s
+              FROM %s
+              JOIN selected_genomes USING (genome_id)
+              JOIN keep_features kf ON %s = kf.feature_id
+              JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
+              WHERE %s
+                AND f.\"genome_drug.resistant_phenotype\" IN ('Resistant','Susceptible')
+                %s
+              GROUP BY f.\"genome_drug.genome_id\", %s %s
+              ORDER BY f.\"genome_drug.genome_id\", %s
+            )
+            TO '%s'
+            (FORMAT 'parquet', COMPRESSION 'zstd')
+          ",
+                              fid, value_col, phenotype_case, strat_col_select,
+                              mview, fid, condition_string,
+                              strat_filter, fid, strat_col_group, fid,
+                              long_out_path_sql)
+
+          ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
+
+          # On copy failure, log + continue without stopping entire pipeline
+          if (inherits(ok, "try-error")) {
+            readr::write_lines(
+              sprintf("%s\tCOPY_failed\t%d\t%s",
+                      group_label, length(genome_ids), phenotype_summary),
+              log_path,
+              append = TRUE
+            )
+            log("debug", paste0("COPY failed for ", group_label, ". Continuing."))
+            next
+          }
 
           log("info", paste0("Exported matrix: ", long_out_path))
         }
       }
+
+      # Close group connection to avoid stack overflow behaviors
+      DBI::dbDisconnect(con, shutdown = FALSE)
     }
   }
 }
@@ -448,26 +531,24 @@ skipImbalancedMatrix <- function(genome_ids,
     return(invisible(tibble::tibble(created_file = character())))
   }
 
-  # Set file paths based on set stratification
-  matrix_path <- file.path(path, paste0("matrix_", stratify_by))
-  LOO_path    <- file.path(path, paste0("LOO_matrix_", stratify_by))
+  # Normalize paths to forward slashes for consistency
+  matrix_path <- gsub("\\\\", "/", file.path(path, paste0("matrix_", stratify_by)))
+  LOO_path    <- gsub("\\\\", "/", file.path(path, paste0("LOO_matrix_", stratify_by)))
 
   if (!dir.exists(matrix_path)) {
     log("info", paste0("The matrix directory ", matrix_path, " does not exist."))
     return(invisible(tibble::tibble(created_file = character())))
   }
-  if (!dir.exists(LOO_path)) {
-    dir.create(LOO_path, recursive = TRUE)
-  }
+  if (!dir.exists(LOO_path)) dir.create(LOO_path, recursive = TRUE)
 
-  # Collect existing parquet files into a list
   files <- list.files(matrix_path, pattern = "\\.parquet$", full.names = TRUE)
   if (length(files) == 0) {
-    log("info", paste0("No parquet files found in ", matrix_path, ". Nothing to do."))
+    log("info", paste0("No parquet files found in ", matrix_path))
     return(invisible(tibble::tibble(created_file = character())))
   }
+  files <- gsub("\\\\", "/", files)
 
-  log("debug", paste0("Found ", length(files), " parquet files in ", matrix_path))
+  log("debug", paste0("Found ", length(files), " parquet files."))
 
   # Parse filename structure
   parsed_info <- tibble::tibble(
@@ -500,19 +581,15 @@ skipImbalancedMatrix <- function(genome_ids,
         x[i + 2]
       })
     ) |>
-    dplyr::filter(
-      !is.na(prefix), !is.na(feature),
-      !is.na(drug_or_class), !is.na(stratification)
-    )
+    dplyr::filter(!is.na(prefix), !is.na(feature), !is.na(drug_or_class), !is.na(stratification))
 
   if (nrow(parsed_info) == 0) {
     log("info", paste0("No files matched the expected naming pattern for stratify_by = '", stratify_by, "'."))
     return(invisible(tibble::tibble(created_file = character())))
   }
 
-  log("debug", paste0("Parsed ", nrow(parsed_info), " files for LOO processing."))
+  log("debug", paste0("Parsed ", nrow(parsed_info), " files."))
 
-  # Process by (prefix, feature) group
   prefix_feature <- parsed_info |> dplyr::distinct(prefix, feature)
   created <- character(0)
 
@@ -530,30 +607,26 @@ skipImbalancedMatrix <- function(genome_ids,
 
     grouped <- split(group_df, group_df$drug_or_class)
 
-    purrr::walk(names(grouped), function(drug_or_class_name) {
-      group <- grouped[[drug_or_class_name]]
+    purrr::walk(names(grouped), function(drug_class) {
+      group <- grouped[[drug_class]]
 
       purrr::walk(unique(group$stratification), function(leave_one_out) {
         subset <- dplyr::filter(group, stratification != leave_one_out)
         if (nrow(subset) == 0) return(NULL)
 
-        # Read and combine parquet files
         combined <- purrr::map(subset$file, arrow::read_parquet) |>
           dplyr::bind_rows()
 
-        # Write the merged file
-        output_file <- file.path(
+        out_file <- gsub("\\\\", "/", file.path(
           LOO_path,
-          paste0(
-            sub_prefix, "_", stratify_by, "_",
-            drug_or_class_name, "_leaveout_", leave_one_out, "_",
-            sub_feature, "_sparse.parquet"
-          )
-        )
-        arrow::write_parquet(combined, output_file)
-        created <<- c(created, output_file)
+          paste0(sub_prefix, "_", stratify_by, "_",
+                 drug_class, "_leaveout_", leave_one_out, "_",
+                 sub_feature, "_sparse.parquet")
+        ))
+        arrow::write_parquet(combined, out_file)
+        created <<- c(created, out_file)
 
-        log("debug", paste0("Created LOO file: ", output_file))
+        log("debug", paste0("Created LOO file: ", out_file))
       })
     })
   }
@@ -578,14 +651,10 @@ skipImbalancedMatrix <- function(genome_ids,
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
-  # Normalize input paths
   parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
   path <- normalizePath(path)
-  MDR_matrix_path <- file.path(path, "MDR_matrix")
-
-  if (!dir.exists(MDR_matrix_path)) {
-    dir.create(MDR_matrix_path, recursive = TRUE)
-  }
+  MDR_matrix_path <- gsub("\\\\", "/", file.path(path, "MDR_matrix"))
+  if (!dir.exists(MDR_matrix_path)) dir.create(MDR_matrix_path, recursive = TRUE)
 
   # Listing feature types and DuckDB views
   feature_types <- list(
@@ -594,7 +663,6 @@ skipImbalancedMatrix <- function(genome_ids,
     domains  = list(view = "domain_count",  id_col = "domain"),
     struct   = list(view = "struct",        id_col = "struct")
   )
-
   # Listing matrix types and filters
   matrix_types <- list(
     counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
@@ -603,108 +671,130 @@ skipImbalancedMatrix <- function(genome_ids,
   )
 
   # Connect to DuckDB
-  con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+  # Discover bug name and which genomes to include
   bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
+  metadata_all <- DBI::dbGetQuery(con0, "SELECT * FROM metadata")
+  DBI::dbDisconnect(con0, shutdown = FALSE)
 
-  grouping_variables <- list(resistant_classes = "resistant_classes")
-  group_col <- grouping_variables[[names(grouping_variables)]]
-  group_type <- "resistant_classes"
-
-  all_groups <- DBI::dbGetQuery(con, glue::glue('SELECT DISTINCT "{group_col}" FROM metadata'))[[1]]
-
-  log("info", "Building ML matrices for MDR ...")
-
-  # Genome selection logic
-  classes <- DBI::dbGetQuery(con, glue::glue('SELECT * FROM metadata')) |>
+  classes <- metadata_all |>
     dplyr::select(genome_drug.genome_id, resistant_classes) |>
     dplyr::distinct() |>
     dplyr::group_by(resistant_classes) |>
     dplyr::count() |>
-    dplyr::arrange(desc(n)) |>
-    dplyr::filter(n >= min_n) |>
-    dplyr::filter(resistant_classes != "Intermediate") |>
+    dplyr::arrange(dplyr::desc(n)) |>
+    dplyr::filter(n >= min_n, resistant_classes != "Intermediate") |>
     dplyr::pull(resistant_classes)
 
-  genome_ids <- DBI::dbGetQuery(con, glue::glue('SELECT * FROM metadata')) |>
+  log("info", paste0("Building MDR matrices for classes: ", paste(classes, collapse = ", ")))
+
+  genomes_to_keep <- metadata_all |>
     dplyr::filter(resistant_classes %in% classes) |>
     dplyr::pull(genome_drug.genome_id)
 
-  DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
-  DBI::dbWriteTable(con, "selected_genomes", data.frame(genome_id = genome_ids), append = TRUE)
-
-  log("debug", paste0("Selected MDR classes: ", paste(classes, collapse = ", ")))
-  log("debug", paste0("Number of genomes retained: ", length(genome_ids)))
-
-  # Feature and matrix generation
+  # Build one matrix per feature type and matrix type
   for (ftype in names(feature_types)) {
     fview <- feature_types[[ftype]]$view
-    fid <- feature_types[[ftype]]$id_col
-
-    # Create binary view
-    DBI::dbExecute(con, glue::glue("
-      CREATE OR REPLACE VIEW {ftype}_binary AS
-      SELECT genome_id, {fid},
-             CASE WHEN value > 0 THEN 1 ELSE 0 END AS present
-      FROM {fview}
-    "))
-
-    # Create counts view (except for struct)
-    if (ftype != "struct") {
-      DBI::dbExecute(con, glue::glue("
-        CREATE OR REPLACE VIEW {ftype}_counts AS
-        SELECT genome_id, {fid}, value
-        FROM {fview}
-      "))
-    }
+    fid   <- feature_types[[ftype]]$id_col
 
     for (mtype in names(matrix_types)) {
       binary_only <- matrix_types[[mtype]]$binary_only
       if (ftype == "struct" && !binary_only) next
 
-      mview <- glue::glue("{ftype}_{ifelse(grepl('binary', mtype), 'binary', 'counts')}")
+      mtype_label <- matrix_types[[mtype]]$label
+
+      out_file <- file.path(
+        MDR_matrix_path,
+        sprintf("%s_MDR_resistant_classes_%s_%s_sparse.parquet", bug, ftype, mtype_label)
+      )
+      out_file_sql <- gsub("\\\\", "/", out_file)
+
+      # Fresh connection for this matrix
+      con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+
+      # Selected genomes
+      DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
+      DBI::dbWriteTable(con, "selected_genomes",
+                        data.frame(genome_id = genomes_to_keep),
+                        append = TRUE)
+
+      # Binary view
+      DBI::dbExecute(con, sprintf("
+        CREATE OR REPLACE VIEW %s_binary AS
+        SELECT genome_id, %s,
+               CASE WHEN value > 0 THEN 1 ELSE 0 END AS present
+        FROM %s
+      ", ftype, fid, fview))
+
+      # Counts view
+      if (ftype != "struct") {
+        DBI::dbExecute(con, sprintf("
+          CREATE OR REPLACE VIEW %s_counts AS
+          SELECT genome_id, %s, value
+          FROM %s
+        ", ftype, fid, fview))
+      }
+
+      mview <- sprintf("%s_%s", ftype, ifelse(grepl("binary", mtype), "binary", "counts"))
       value_col <- matrix_types[[mtype]]$value_col
       filter_clause <- matrix_types[[mtype]]$filter
 
-      keep_query <- glue::glue("
-        SELECT {fid}, VAR_POP({value_col}) AS variance
-        FROM {mview}
+      keep_query <- sprintf("
+        SELECT %s AS feature_id, VAR_POP(%s) AS variance
+        FROM %s
         JOIN selected_genomes USING (genome_id)
-        GROUP BY {fid}
-        HAVING {filter_clause}
-      ")
+        GROUP BY %s
+        HAVING %s
+      ", fid, value_col, mview, fid, filter_clause)
 
-      keep_features <- DBI::dbGetQuery(con, keep_query)[[fid]]
+      keep_features <- DBI::dbGetQuery(con, keep_query)[["feature_id"]]
       if (length(keep_features) == 0) {
-        log("info", paste0("All features filtered for: ", ftype, " - ", mtype))
+        log("info", paste0("All features filtered for MDR: ", ftype, " - ", mtype))
+        DBI::dbDisconnect(con, shutdown = FALSE)
         next
       }
 
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
-      DBI::dbWriteTable(con, "keep_features", data.frame(feature_id = keep_features), append = TRUE)
+      DBI::dbWriteTable(con, "keep_features",
+                        data.frame(feature_id = keep_features),
+                        append = TRUE)
 
-      mtype_label <- matrix_types[[mtype]]$label
-      long_out_path <- file.path(MDR_matrix_path, glue::glue("{bug}_MDR_{group_type}_{ftype}_{mtype_label}_sparse.parquet"))
 
-      log("debug", paste0("Exporting MDR matrix: ", long_out_path))
-
-      DBI::dbExecute(con, glue::glue("
+      copy_sql <- sprintf("
         COPY (
           SELECT f.\"genome_drug.genome_id\" AS genome_id,
-                 {fid} AS feature_id,
-                 MAX(CAST ({value_col} AS DOUBLE)) AS value,
+                 %s AS feature_id,
+                 MAX(CAST(%s AS DOUBLE)) AS value,
                  resistant_classes
-          FROM {mview}
+          FROM %s
           JOIN selected_genomes USING (genome_id)
-          JOIN keep_features kf ON {fid} = kf.feature_id
+          JOIN keep_features kf ON %s = kf.feature_id
           JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
+          GROUP BY f.\"genome_drug.genome_id\", %s, resistant_classes
+          ORDER BY f.\"genome_drug.genome_id\", %s
+        )
+        TO '%s'
+        (FORMAT 'parquet', COMPRESSION 'zstd')
+      ",
+                        fid, value_col, mview, fid, fid,
+                          fid,
+                          out_file_sql
+      )
+
+
+      ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
+      if (inherits(ok, "try-error")) {
+        log("info", paste0("COPY failed for MDR matrix: ", out_file))
+      } else {
+        log("info", paste0("Exported MDR matrix: ", out_file))
+      }
           WHERE f.resistant_classes <> 'Intermediate'   
           GROUP BY f.\"genome_drug.genome_id\", {fid}, resistant_classes
           ORDER BY f.\"genome_drug.genome_id\", {fid}
         ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
       "))
 
-      log("info", paste0("Exported matrix: ", long_out_path))
+      DBI::dbDisconnect(con, shutdown = FALSE)
     }
   }
 
@@ -735,7 +825,7 @@ skipImbalancedMatrix <- function(genome_ids,
 #' @param split [numeric] training/validation split specification. Two formats accepted:
 #'   - Shorthand for CV: `split = 0` (converted internally to `c(1, 0)`)
 #'   - Vector form: `c(train_prop, val_prop)` where test_prop = 1 - train - val
-#'     * For CV: `c(1, 0)` means 100% training data with k-fold CV (default)
+#'     * For CV: `c(1, 0)` means 80% training data with k-fold CV, 20% stratified testing
 #'     * For classical splits: all three partitions must be > 0
 #'       Example: `c(0.7, 0.15)` = 70% train, 15% val, 15% test
 #' @param min_n [numeric] minimum number of samples for each combination of drug classes for MDR matrix; default is 25
@@ -806,6 +896,24 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   train_prop <- split[1]
   val_prop   <- split[2]
   test_prop  <- 1 - train_prop - val_prop
+
+  # Logging how we split with a wee .json file so ML scripts can read it in
+  params <- list(
+    mode        = mode,
+    n_fold      = if (mode == "cv") n_fold else NULL,
+    split       = split,
+    train_prop  = train_prop,
+    val_prop    = val_prop,
+    test_prop   = test_prop,
+    seed        = 5280,
+    timestamp <- as.character(Sys.time())
+  )
+
+  jsonlite::write_json(
+    params,
+    file.path(out_path, "ml_parameters.json"),
+    pretty = TRUE, auto_unbox = TRUE
+  )
 
   # Log resolved mode
   if (identical(mode, "cv")) {

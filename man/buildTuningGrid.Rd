@@ -17,9 +17,9 @@ buildTuningGrid(
 \item{model}{\link[rlang:vector-construction]{rlang::chr}  Logistic regression ("LR"), random forest ("RF"), or
 boosted tree ("BT")}
 
-\item{penalty_vec}{[num] A vector containing \code{penalty} (regularization
-strength) values to try (for logistic regression). It is recommended to
-choose values in the range 10^-4 to 10^4.}
+\item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
+strength) values to try (for logistic regression). Recommended range:
+10^-4 to 10^4.}
 
 \item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
@@ -29,13 +29,12 @@ intermediate values (0, 1) correspond to elastic net.}
 calculate \code{mtry} values for a subsequent grid search (for random forest or
 boosted tree). Output of \code{getNumFeat()}.}
 
-\item{min_n_vec}{[num] A vector containing \code{min_n} values (the number of data
+\item{min_n_vec}{\link[pillar:num]{pillar::num} A vector containing \code{min_n} values (the number of data
 points in a node required for the node to be split) to try for random forest
-or boosted tree. It is recommended to choose values in the range 1 to 100.}
+or boosted tree. Recommended range: 1 to 100.}
 
-\item{tree_vec}{[num] A vector containing values to try for the number of
-\code{trees} in random forest or boosted tree. It is recommended to choose values
-in the range 100 to 1000.}
+\item{tree_vec}{\link[pillar:num]{pillar::num} A vector containing values to try for the number of
+\code{trees} in random forest or boosted tree. Recommended range: 100 to 1000.}
 }
 \value{
 A logistic regression, random forest, or boosted tree tuning grid as
