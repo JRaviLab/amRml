@@ -759,40 +759,38 @@ skipImbalancedMatrix <- function(genome_ids,
                         data.frame(feature_id = keep_features),
                         append = TRUE)
 
-
       copy_sql <- sprintf("
         COPY (
-          SELECT f.\"genome_drug.genome_id\" AS genome_id,
-                 %s AS feature_id,
-                 MAX(CAST(%s AS DOUBLE)) AS value,
-                 resistant_classes
+          SELECT 
+            f.\"genome_drug.genome_id\" AS genome_id,
+            %s AS feature_id,
+            MAX(CAST(%s AS DOUBLE)) AS value,
+            resistant_classes
           FROM %s
           JOIN selected_genomes USING (genome_id)
           JOIN keep_features kf ON %s = kf.feature_id
           JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
-          GROUP BY f.\"genome_drug.genome_id\", %s, resistant_classes
-          ORDER BY f.\"genome_drug.genome_id\", %s
+          WHERE resistant_classes <> 'Intermediate'
+          GROUP BY 
+            f.\"genome_drug.genome_id\", 
+            %s, 
+            resistant_classes
+          ORDER BY 
+            f.\"genome_drug.genome_id\", 
+            %s
         )
         TO '%s'
         (FORMAT 'parquet', COMPRESSION 'zstd')
       ",
-                        fid, value_col, mview, fid, fid,
-                          fid,
-                          out_file_sql
+                          fid, value_col, mview, fid, fid, fid, out_file_sql
       )
-
-
+      
       ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
       if (inherits(ok, "try-error")) {
         log("info", paste0("COPY failed for MDR matrix: ", out_file))
       } else {
         log("info", paste0("Exported MDR matrix: ", out_file))
       }
-          WHERE f.resistant_classes <> 'Intermediate'   
-          GROUP BY f.\"genome_drug.genome_id\", {fid}, resistant_classes
-          ORDER BY f.\"genome_drug.genome_id\", {fid}
-        ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
-      "))
 
       DBI::dbDisconnect(con, shutdown = FALSE)
     }
