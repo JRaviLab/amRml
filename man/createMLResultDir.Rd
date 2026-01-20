@@ -47,8 +47,8 @@ including matrices, performance metrics, feature importance, models, and predict
 paths <- createMLResultDir("/path/to/results")
 
 # LOO analysis stratified by year
-paths_loo <- createMLResultDir("/path/to/results",
-                                stratify_by = "year",
+paths_loo <- createMLResultDir("/path/to/results", 
+                                stratify_by = "year", 
                                 LOO = TRUE)
 
 # MDR analysis

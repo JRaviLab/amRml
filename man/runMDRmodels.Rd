@@ -14,10 +14,7 @@ runMDRmodels(
   verbose = TRUE,
   return_tune_res = TRUE,
   return_fit = TRUE,
-  return_pred = TRUE,
-  use_saved_split = TRUE,
-  shuffle_labels = FALSE,
-  use_pca = FALSE
+  return_pred = TRUE
 )
 }
 \arguments{
@@ -25,27 +22,26 @@ runMDRmodels(
 
 \item{threads}{Integer. Number of parallel workers for model training. Default is 16.}
 
-\item{split}{Numeric vector of length 2. Train/validation split proportions.}
+\item{split}{Numeric vector of length 2. Train/validation split proportions.
+Default is \code{c(0.8, 0)} (80 percent train, 0 percent validation, 20 percent test).}
 
-\item{n_fold}{Integer. Number of cross-validation folds. Default 5.}
+\item{n_fold}{Integer. Number of cross-validation folds. Default is 5.}
 
-\item{prop_vi_top_feats}{Numeric vector of length 2. Proportion range for variable-importance selection.}
+\item{prop_vi_top_feats}{Numeric vector of length 2. Proportion range for
+variable importance feature selection. Default is \code{c(0, 1)}.}
 
-\item{pca_threshold}{Numeric. PCA variance threshold. Default 0.99.}
+\item{pca_threshold}{Numeric. PCA variance threshold (not used when
+\code{use_pca = FALSE}). Default is 0.99.}
 
-\item{verbose}{Logical. Print progress messages during model training. Default TRUE.}
+\item{verbose}{Logical. Print progress messages during model training.
+Default is \code{TRUE}.}
 
-\item{return_tune_res}{Logical. Return tuning results from cross-validation. Default TRUE.}
+\item{return_tune_res}{Logical. Return tuning results from cross-validation.
+Default is \code{TRUE}.}
 
-\item{return_fit}{Logical. Return fitted model objects. Default TRUE.}
+\item{return_fit}{Logical. Return fitted model objects. Default is \code{TRUE}.}
 
-\item{return_pred}{Logical. Return prediction results. Default TRUE.}
-
-\item{use_saved_split}{Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.}
-
-\item{shuffle_labels}{Logical. Randomly shuffle labels for baseline runs. Default FALSE.}
-
-\item{use_pca}{Logical. Use PCA on predictors. Default FALSE.}
+\item{return_pred}{Logical. Return prediction results. Default is \code{TRUE}.}
 }
 \value{
 NULL (invisible). Called for side effects (model training and result saving).
@@ -61,13 +57,13 @@ parquet files and saves results to designated output directories.
 runMDRmodels("/path/to/results")
 
 # Run with more threads and minimal output
-runMDRmodels("/path/to/results",
-             threads = 32,
+runMDRmodels("/path/to/results", 
+             threads = 32, 
              verbose = FALSE)
 
 # Run without saving model fits (save disk space)
-runMDRmodels("/path/to/results",
-             threads = 16,
+runMDRmodels("/path/to/results", 
+             threads = 16, 
              return_fit = FALSE)
 }
 

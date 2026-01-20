@@ -2,6 +2,59 @@
 # with a Parquet file. It also has functions to calculate relevant metrics,
 # such as the number of features in the pangenome.
 
+
+# Provide local logger for ML prep just like data_curation and data_processing
+.ml_logger <- function(verbosity = c("minimal", "debug")) {
+  .make_logger(match.arg(verbosity))
+}
+
+# Adding a helper to read in the .json file that defines the matrix generation
+# parameters, including how data are split
+
+#' @keywords internal
+.readMLParameters <- function(matrix_dir) {
+  stopifnot(length(matrix_dir) == 1)
+  matrix_dir <- normalizePath(matrix_dir)
+
+  candidates <- c(
+    file.path(matrix_dir, "ml_parameters.json"),
+    file.path(dirname(matrix_dir), "ml_parameters.json")
+  )
+
+  found <- candidates[file.exists(candidates)]
+
+  log <- .ml_logger("minimal")
+  if (length(found) == 0) {
+    log("info", paste0("No ml_parameters.json found in: ", matrix_dir, " or its parent."))
+    return(NULL)
+  }
+
+  params <- jsonlite::fromJSON(found[1])
+
+  # Basic structure checks
+  if (is.null(params$split) || length(params$split) != 2) {
+    stop("`ml_parameters.json` is missing a valid `split` (length-2 numeric).")
+  }
+  if (!is.null(params$mode) && !params$mode %in% c("cv", "splits")) {
+    stop("`ml_parameters.json` has invalid `mode`; expected 'cv' or 'splits'.")
+  }
+  if (!is.null(params$seed) && !is.numeric(params$seed)) {
+    stop("`ml_parameters.json` `seed` must be numeric if present.")
+  }
+  if (!is.null(params$n_fold) && !is.numeric(params$n_fold)) {
+    stop("`ml_parameters.json` `n_fold` must be numeric if present.")
+  }
+
+  params
+}
+
+# Read the output matrix paths to find the .json for .readMLParameters()
+#' @keywords internal
+.matrixDirFromParquet <- function(parquet_path) {
+  .checkArgPath(parquet_path)
+  normalizePath(dirname(parquet_path))
+}
+
 #' @importFrom arrow read_parquet
 #' @importFrom dplyr all_of
 #' @importFrom dplyr mutate
@@ -44,7 +97,7 @@ loadMLInputTibble <- function(parquet_path) {
     ))
   }
 
-  target_var <- getTargetVarName(long_tibble)
+  target_var <- .getTargetVarName(long_tibble)
 
   ml_input_tibble <- long_tibble |>
     dplyr::mutate(!!target_var := as.factor(!!target_var)) |>
@@ -54,6 +107,13 @@ loadMLInputTibble <- function(parquet_path) {
       ),
       names_from = feature_id, values_from = value, values_fill = 0
     )
+
+
+  if (exists(".ml_logger")) {
+    log <- .ml_logger("minimal")
+    log("debug", paste0("ML tibble constructed: ", nrow(ml_input_tibble),
+                        " genomes × ", getNumFeat(ml_input_tibble), " features"))
+  }
 
   if (anyDuplicated(dplyr::pull(ml_input_tibble, genome_id)) != 0) {
     stop("Non-unique genome IDs found when constructing the ML input tibble.")
@@ -87,7 +147,7 @@ getNumFeat <- function(ml_input_tibble) {
   # instead of `genome_drug.resistant_phenotype`, the above code will still
   # count this column as a feature since "genome" is not contained in the name,
   # so subtract 1 if this is the case.
-  if (getTargetVarName(ml_input_tibble) == "resistant_classes") {
+  if (as.character(.getTargetVarName(ml_input_tibble)) == "resistant_classes") {
     n_feat <- n_feat - 1
   }
 
@@ -107,21 +167,23 @@ getNumFeat <- function(ml_input_tibble) {
 #' @param seed [num] For reproducible analysis
 #' @return Pangenome with randomly shuffled AMR phenotype labels
 #' @export
-shuffleLabels <- function(ml_input_tibble, seed = 123) {
+shuffleLabels <- function(ml_input_tibble, seed = 5280) {
   .checkArgTibble(ml_input_tibble, ml = TRUE)
   .checkArgSeed(seed)
 
   set.seed(seed)
+  target_var <- .getTargetVarName(ml_input_tibble)
 
-  target_var <- getTargetVarName(ml_input_tibble)
+  log <- .ml_logger("debug")
+  log("debug", "Shuffling phenotype labels (for baseline models).")
 
-  ml_input_tibble_shuffled_labels <- ml_input_tibble |>
+  ml_input_tibble |>
     dplyr::mutate(!!target_var := sample(!!target_var))
-
-  return(ml_input_tibble_shuffled_labels)
 }
 
-<<<<<<< Updated upstream
+
+#' @rdname .calculateMinSamples
+#' @export
 #' calculateMinSamples()
 #'
 #' Returns the minimum number of total observations needed (one bug-drug combo)
@@ -177,22 +239,13 @@ calculateMinSamples <- function(
   min_samples <- min_samples * smallest_n_obs_rs
 
   return(ceiling(min_samples))
-=======
-
-#' .calculateMinSamples()
-#' 
-#' Calculate minimum number of samples given total isolates, AMR class balance,
-#' and the desired splits or cross-validation format.
-#' 
-#' @keywords internal
 .calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) {
   # Using the same logic from upstream matrix generation
   base <- .calculateMinSamples(n_fold = n_fold, split = split, res_prop = res_prop)
   ceiling(base * smallest_n_obs_rs)
->>>>>>> Stashed changes
 }
 
-#' getTargetVarName()
+#' .getTargetVarName()
 #'
 #' Returns the name of the target variable to be used for machine learning:
 #' either `genome_drug.resistant_phenotype` or `resistant_classes`
@@ -206,12 +259,8 @@ calculateMinSamples <- function(
 #' @return The name of the target variable to be used for machine learning:
 #' either `rlang::sym("genome_drug.resistant_phenotype")` or
 #' `rlang::sym("resistant_classes")`
-<<<<<<< Updated upstream
 #' @export
-getTargetVarName <- function(ml_input_tibble) {
-=======
 .getTargetVarName <- function(ml_input_tibble) {
->>>>>>> Stashed changes
   .checkArgTibble(ml_input_tibble, ml = TRUE)
 
   if ("genome_drug.resistant_phenotype" %in% colnames(ml_input_tibble)) {

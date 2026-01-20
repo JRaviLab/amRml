@@ -1,16 +1,14 @@
-#' .resolveSplitParams()
-#' 
+#' @keywords internal
 #' Pulls the ML parameters .json and reads what model split parameters are to be
 #' used. These defaults can be overridden if you so choose, but consider regenerating
 #' the ML matrices with these new split/CV values instead.
 #'
-#' @param parquet_path Path to the output directory created by amR_data::cleanData()
+#' @param parquet_path
 #' @param defaults
 #'
-#' @returns ML splits read from the parameters .json at the entered output directory
+#' @returns
 #'
-#' @keywords internal
-#' @examples NULL
+#' @examples
 .resolveSplitParams <- function(parquet_path,
                                 defaults = list(split = c(0.8, 0),
                                                 seed  = 5280,
