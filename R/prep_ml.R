@@ -121,6 +121,7 @@ shuffleLabels <- function(ml_input_tibble, seed = 123) {
   return(ml_input_tibble_shuffled_labels)
 }
 
+<<<<<<< Updated upstream
 #' calculateMinSamples()
 #'
 #' Returns the minimum number of total observations needed (one bug-drug combo)
@@ -176,6 +177,19 @@ calculateMinSamples <- function(
   min_samples <- min_samples * smallest_n_obs_rs
 
   return(ceiling(min_samples))
+=======
+
+#' .calculateMinSamples()
+#' 
+#' Calculate minimum number of samples given total isolates, AMR class balance,
+#' and the desired splits or cross-validation format.
+#' 
+#' @keywords internal
+.calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) {
+  # Using the same logic from upstream matrix generation
+  base <- .calculateMinSamples(n_fold = n_fold, split = split, res_prop = res_prop)
+  ceiling(base * smallest_n_obs_rs)
+>>>>>>> Stashed changes
 }
 
 #' getTargetVarName()
@@ -192,8 +206,12 @@ calculateMinSamples <- function(
 #' @return The name of the target variable to be used for machine learning:
 #' either `rlang::sym("genome_drug.resistant_phenotype")` or
 #' `rlang::sym("resistant_classes")`
+<<<<<<< Updated upstream
 #' @export
 getTargetVarName <- function(ml_input_tibble) {
+=======
+.getTargetVarName <- function(ml_input_tibble) {
+>>>>>>> Stashed changes
   .checkArgTibble(ml_input_tibble, ml = TRUE)
 
   if ("genome_drug.resistant_phenotype" %in% colnames(ml_input_tibble)) {

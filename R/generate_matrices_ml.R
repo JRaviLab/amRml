@@ -103,7 +103,6 @@ NULL
 #'   verbosity = "minimal"
 #' )
 #' }
-#' @export
 skipImbalancedMatrix <- function(genome_ids,
                                  phenotype_counts,
                                  n_fold = 5,
@@ -706,10 +705,31 @@ skipImbalancedMatrix <- function(genome_ids,
           JOIN selected_genomes USING (genome_id)
           JOIN keep_features kf ON {fid} = kf.feature_id
           JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
+<<<<<<< Updated upstream
           GROUP BY f.\"genome_drug.genome_id\", {fid}, resistant_classes
           ORDER BY f.\"genome_drug.genome_id\", {fid}
         ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
       "))
+=======
+          GROUP BY f.\"genome_drug.genome_id\", %s, resistant_classes
+          ORDER BY f.\"genome_drug.genome_id\", %s
+        )
+        TO '%s'
+        (FORMAT 'parquet', COMPRESSION 'zstd')
+      ",
+                        fid, value_col, mview, fid, fid,
+                          fid,
+                          out_file_sql
+      )
+
+
+      ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
+      if (inherits(ok, "try-error")) {
+        log("info", paste0("COPY failed for MDR matrix: ", out_file))
+      } else {
+        log("info", paste0("Exported MDR matrix: ", out_file))
+      }
+>>>>>>> Stashed changes
 
       log("info", paste0("Exported matrix: ", long_out_path))
     }
@@ -750,7 +770,6 @@ skipImbalancedMatrix <- function(genome_ids,
 #' @param min_n [numeric] minimum number of samples for each combination of drug classes for MDR matrix; default is 25
 #' @param verbosity [character] "minimal" or "debug"; when "debug", prints full diagnostics per matrix
 #' @return invisible(TRUE) on success; side effects: writes matrices/files
-#' @export
 #' @examples
 #' \dontrun{
 #' # Generate ML input matrices with 5-fold cross-validation (using shorthand)

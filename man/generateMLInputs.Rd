@@ -25,7 +25,7 @@ generateMLInputs(
 \item Shorthand for CV: \code{split = 0} (converted internally to \code{c(1, 0)})
 \item Vector form: \code{c(train_prop, val_prop)} where test_prop = 1 - train - val
 \itemize{
-\item For CV: \code{c(1, 0)} means 100\% training data with k-fold CV (default)
+\item For CV: \code{c(1, 0)} means 80\% training data with k-fold CV, 20\% stratified testing
 \item For classical splits: all three partitions must be > 0
 Example: \code{c(0.7, 0.15)} = 70\% train, 15\% val, 15\% test
 }

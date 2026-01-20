@@ -389,8 +389,12 @@ fitBestModel <- function(final_mod, train_data) {
 #'
 #' @param fit Best model fit, such as the output of `fitBestModel()`
 #' @return Hyperparameters used to fit the final model
+<<<<<<< Updated upstream
 #' @export
 getFitHps <- function(fit) {
+=======
+.getFitHps <- function(fit) {
+>>>>>>> Stashed changes
   .checkArgWflow(fit)
 
   model <- class(fit$fit$actions$model$spec)[1]
@@ -466,8 +470,12 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 #' @inheritParams getConfusionMatrix
 #' @return Normalized (to a 0 to 1 scale instead of -1 to 1) Matthews
 #' correlation coefficient (nMCC)
+<<<<<<< Updated upstream
 #' @export
 calculatenMCC <- function(test_data_plus_predictions) {
+=======
+.calculatenMCC <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   target_var <- getTargetVarName(test_data_plus_predictions)
@@ -489,8 +497,12 @@ calculatenMCC <- function(test_data_plus_predictions) {
 #'
 #' @inheritParams getConfusionMatrix
 #' @return F1 score
+<<<<<<< Updated upstream
 #' @export
 calculateF1 <- function(test_data_plus_predictions) {
+=======
+.calculateF1 <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
@@ -520,8 +532,12 @@ calculateF1 <- function(test_data_plus_predictions) {
 #'
 #' @inheritParams getConfusionMatrix
 #' @return AUPRC
+<<<<<<< Updated upstream
 #' @export
 calculateAUPRC <- function(test_data_plus_predictions) {
+=======
+.calculateAUPRC <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
@@ -550,8 +566,12 @@ calculateAUPRC <- function(test_data_plus_predictions) {
 #'
 #' @inheritParams getConfusionMatrix
 #' @return log2(AUPRC/prior)
+<<<<<<< Updated upstream
 #' @export
 calculateLog2APOP <- function(test_data_plus_predictions) {
+=======
+.calculateLog2APOP <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
@@ -592,8 +612,12 @@ calculateLog2APOP <- function(test_data_plus_predictions) {
 #'
 #' @inheritParams getConfusionMatrix
 #' @return Balanced accuracy
+<<<<<<< Updated upstream
 #' @export
 calculateBalAcc <- function(test_data_plus_predictions) {
+=======
+.calculateBalAcc <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
@@ -622,8 +646,12 @@ calculateBalAcc <- function(test_data_plus_predictions) {
 #'
 #' @inheritParams getConfusionMatrix
 #' @return sensitivity
+<<<<<<< Updated upstream
 #' @export
 calculateSensitivity <- function(test_data_plus_predictions) {
+=======
+.calculateSensitivity <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
@@ -653,8 +681,12 @@ calculateSensitivity <- function(test_data_plus_predictions) {
 #'
 #' @inheritParams getConfusionMatrix
 #' @return specificity
+<<<<<<< Updated upstream
 #' @export
 calculateSpecificity <- function(test_data_plus_predictions) {
+=======
+.calculateSpecificity <- function(test_data_plus_predictions) {
+>>>>>>> Stashed changes
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
   if (!("genome_drug.resistant_phenotype" %in%
