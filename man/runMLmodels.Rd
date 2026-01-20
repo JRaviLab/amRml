@@ -17,51 +17,56 @@ runMLmodels(
   verbose = TRUE,
   return_tune_res = TRUE,
   return_fit = TRUE,
-  return_pred = TRUE
+  return_pred = TRUE,
+  use_saved_split = TRUE,
+  shuffle_labels = FALSE,
+  use_pca = FALSE
 )
 }
 \arguments{
 \item{path}{Character scalar. Base directory containing matrix files.}
 
-\item{stratify_by}{Character scalar or NULL. Stratification method: \code{"country"},
-\code{"year"}, or \code{NULL} (no stratification). Default is \code{NULL}.}
+\item{stratify_by}{Character scalar or NULL. One of "year", "country", or NULL (no stratification).}
 
-\item{LOO}{Logical. Perform Leave-One-Out analysis. Default is \code{FALSE}.
-Requires \code{stratify_by} to be specified as either \code{"year"} or \code{"country"}.}
+\item{LOO}{Logical. Perform Leave-One-Out analysis. Default is FALSE.}
 
-\item{cross_test}{Logical. Perform cross-testing between groups. Default is \code{FALSE}.}
+\item{cross_test}{Logical. Perform cross-testing between groups. Default is FALSE.}
 
 \item{threads}{Integer. Number of parallel workers for model training. Default is 16.}
 
-\item{split}{Numeric vector of length 2. Train/validation split proportions.
-Default is \code{c(0.8, 0)} (80 percent train, 0 percent validation, 20 percent test).}
+\item{split}{Numeric vector of length 2. Train/validation split proportions.}
 
 \item{n_fold}{Integer. Number of cross-validation folds. Default is 5.}
 
-\item{prop_vi_top_feats}{Numeric vector of length 2. Proportion range for
-variable importance feature selection. Default is \code{c(0, 1)}.}
+\item{prop_vi_top_feats}{Numeric vector of length 2. Proportion range for variable-importance selection.}
 
-\item{pca_threshold}{Numeric. PCA variance threshold (not used when
-\code{use_pca = FALSE}). Default is 0.99.}
+\item{pca_threshold}{Numeric. PCA variance threshold. Default 0.99.}
 
-\item{verbose}{Logical. Print progress messages during model training.
-Default is \code{TRUE}.}
+\item{verbose}{Logical. Print progress messages during model training. Default TRUE.}
 
-\item{return_tune_res}{Logical. Return tuning results from cross-validation.
-Default is \code{TRUE}.}
+\item{return_tune_res}{Logical. Return tuning results from cross-validation. Default TRUE.}
 
-\item{return_fit}{Logical. Return fitted model objects. Default is \code{TRUE}.}
+\item{return_fit}{Logical. Return fitted model objects. Default TRUE.}
 
-\item{return_pred}{Logical. Return prediction results. Default is \code{TRUE}.}
+\item{return_pred}{Logical. Return prediction results. Default TRUE.}
+
+\item{use_saved_split}{Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.}
+
+\item{shuffle_labels}{Logical. Randomly shuffle labels for baseline runs. Default FALSE.}
+
+\item{use_pca}{Logical. Use PCA on predictors. Default FALSE.}
 }
 \value{
 NULL (invisible). Called for side effects (model training and result saving).
+
+NULL (invisible). Called for side effects (writes results).
 }
 \description{
 Executes machine learning pipeline with support for stratification,
 leave-one-out (LOO), and cross-testing configurations using logistic regression
 with parallel processing. Provides flexible model training across different
-experimental designs.
+experimental designs. Split/seed/n_fold are resolved from \code{ml_parameters.json}
+when available via \code{.resolveSplitParams()}.
 }
 \details{
 This function supports multiple analysis configurations:

@@ -32,9 +32,8 @@ NULL
 #' still represent fractions of `ml_input_tibble` (not including the input
 #' `test_data`). Please do not directly provide numbers that sum to 1 since the
 #' function is not equipped to handle this. If cross-validation is enabled here
-#' [`split = c(1,0)`], we will still retain a 20% test holdout for final reporting.
+#' `split = c(1,0)`, we will still retain a 20% test holdout for final reporting.
 #' Cross-validation is run on the 80% training portion, and not on the testing set.
-#' function is not equipped to handle this.
 #' @param n_fold [num] Number of folds of cross-validation
 #' @param prop_vi_top_feats [num] A vector of length 2 with elements together
 #' indicating the proportion of total variable importance the top features
@@ -47,7 +46,7 @@ NULL
 #' principle components account
 #' @param penalty_vec [num] A vector containing `penalty` (regularization
 #' strength) values to try (for logistic regression). It is recommended to
-#' choose values \eqn{[10^-4, 10^4]}.
+#' choose values `10^-4` to `10^4`.
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 #' intermediate values correspond to elastic net.
@@ -263,23 +262,7 @@ runMLPipeline <- function(
       mix_vec = mix_vec
     )
   }
-
-  if (model == "RF") {
-    mod <- buildRFModel()
-    grid <- buildTuningGrid(
-      model = model, n_feat = getNumFeat(train_data),
-      min_n_vec = min_n_vec, tree_vec = tree_vec
-    )
-  }
-
-  if (model == "BT") {
-    mod <- buildBTModel()
-    grid <- buildTuningGrid(
-      model = model, n_feat = getNumFeat(train_data),
-      min_n_vec = min_n_vec, tree_vec = tree_vec
-    )
-  }
-
+  
   recipe <- buildRecipe(train_data,
     use_pca = use_pca,
     pca_threshold = pca_threshold

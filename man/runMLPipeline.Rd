@@ -15,6 +15,8 @@ runMLPipeline(
   pca_threshold = 0.95,
   penalty_vec = 10^seq(-4, -1, length.out = 10),
   mix_vec = 0:5/5,
+  min_n_vec = c(2, 6, 12),
+  tree_vec = c(100, 500, 1000),
   select_best_metric = "mcc",
   seed = 123,
   shuffle_labels = FALSE,
@@ -33,7 +35,8 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{model}{\link[rlang:vector-construction]{rlang::chr} Logistic regression ("LR")}
+\item{model}{\link[rlang:vector-construction]{rlang::chr} Logistic regression ("LR"), random forest ("RF"), or
+boosted tree ("BT")}
 
 \item{split}{\link[pillar:num]{pillar::num} Vector of length 2 indicating the proportion of data to
 be designated as training and validation, respectively. Note: if \code{test_data}
@@ -41,7 +44,7 @@ is provided, these numbers will be scaled so that they sum to 1 and will
 still represent fractions of \code{ml_input_tibble} (not including the input
 \code{test_data}). Please do not directly provide numbers that sum to 1 since the
 function is not equipped to handle this. If cross-validation is enabled here
-by \code{split = c(1,0)}, we will still retain a 20\% test holdout for final reporting.
+\code{split = c(1,0)}, we will still retain a 20\% test holdout for final reporting.
 Cross-validation is run on the 80\% training portion, and not on the testing set.}
 
 \item{n_fold}{\link[pillar:num]{pillar::num} Number of folds of cross-validation}
@@ -60,16 +63,23 @@ total variable importance, for example,
 principle components account}
 
 \item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
-strength) values to try (for logistic regression). Recommended range:
-10^-4 to 10^4.}
-choose values \eqn{[10^-4, 10^4]}.}
+strength) values to try (for logistic regression). It is recommended to
+choose values \code{10^-4} to \code{10^4}.}
 
 \item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 intermediate values correspond to elastic net.}
 
+\item{min_n_vec}{[num] A vector containing \code{min_n} values (the number of data
+points in a node required for the node to be split) to try for random forest
+or boosted tree. It is recommended to choose values in the range 1 to 100.}
+
+\item{tree_vec}{[num] A vector containing values to try for the number of
+\code{trees} in random forest or boosted tree. It is recommended to choose values
+in the range 100 to 1000.}
+
 \item{select_best_metric}{\link[rlang:vector-construction]{rlang::chr} Metric to select best model: "f_meas",
-"pr_auc", "mcc", or "bal_accuracy"}
+"pr_auc", or "bal_accuracy"}
 
 \item{seed}{\link[pillar:num]{pillar::num} For reproducible analysis}
 
