@@ -788,6 +788,11 @@ skipImbalancedMatrix <- function(genome_ids,
       } else {
         log("info", paste0("Exported MDR matrix: ", out_file))
       }
+          WHERE f.resistant_classes <> 'Intermediate'   
+          GROUP BY f.\"genome_drug.genome_id\", {fid}, resistant_classes
+          ORDER BY f.\"genome_drug.genome_id\", {fid}
+        ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
+      "))
 
       DBI::dbDisconnect(con, shutdown = FALSE)
     }
