@@ -1,0 +1,25 @@
+Drug	Reason	Total_obs	Phenotype_distribution
+TET_2015-2019	Too few samples for CV/split	2	Resistant=2
+SMX_2015-2019	Too few samples for CV/split	2	Resistant=2
+AMX-CLA_2015-2019	Too few samples for CV/split	2	Resistant=2
+CAZ_2015-2019	Too few samples for CV/split	2	Susceptible=2
+CRO_2010-2014	Too few samples for CV/split	2	Resistant=4
+NAL_2015-2019	Too few samples for CV/split	2	Resistant=2
+CHL_2015-2019	Too few samples for CV/split	2	Resistant=2
+MEM_2015-2019	Too few samples for CV/split	323	Susceptible=323
+CST_2015-2019	Too few samples for CV/split	1	Resistant=2
+FOX_2015-2019	Too few samples for CV/split	2	Susceptible=2
+CRO_2015-2019	Too few samples for CV/split	322	Resistant=  3; Susceptible=320
+FEP_2015-2019	Too few samples for CV/split	2	Susceptible=2
+GEN_2015-2019	Too few samples for CV/split	327	Susceptible=324; Resistant=  3
+CTX_2015-2019	Too few samples for CV/split	2	Susceptible=2
+TET_2015-2019	Too few samples for CV/split	2	Resistant=2
+CEP_2015-2019	Too few samples for CV/split	324	Resistant=  3; Susceptible=328
+AMF_2015-2019	Too few samples for CV/split	2	Resistant=2
+POL_2015-2019	Too few samples for CV/split	1	Resistant=2
+SUL_2015-2019	Too few samples for CV/split	2	Resistant=2
+AMG_2015-2019	Too few samples for CV/split	327	Susceptible=324; Resistant=  3
+PEN-BLI_2015-2019	Too few samples for CV/split	2	Resistant=2
+CAR_2015-2019	Too few samples for CV/split	323	Susceptible=323
+QUI_2015-2019	Too few samples for CV/split	2	Resistant=2
+CEP_2010-2014	Too few samples for CV/split	2	Resistant=4

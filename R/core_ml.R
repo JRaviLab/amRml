@@ -106,6 +106,8 @@ splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280
 #'
 #' Specify predictors, outcome, and metadata by building a recipe.
 #'
+#' @importFrom stats reformulate
+#'
 #' @param train_data The part of the feature data designated for ML model
 #' training. This can be the output of
 #' `rsample::training(splitMLInputTibble(ml_input_tibble))`.
@@ -419,6 +421,14 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     colnames(test_data_plus_predictions))) {
     stop(paste("`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."))
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+    colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   f1 <- test_data_plus_predictions |>
@@ -444,6 +454,14 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     colnames(test_data_plus_predictions))) {
     stop(paste("`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."))
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+    colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   auprc <- test_data_plus_predictions |>
@@ -469,6 +487,14 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     colnames(test_data_plus_predictions))) {
     stop(paste("`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."))
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+    colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   auprc <- .calculateAUPRC(test_data_plus_predictions)
@@ -504,6 +530,14 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     colnames(test_data_plus_predictions))) {
     stop(paste("`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."))
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+    colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   bal_acc <- test_data_plus_predictions |>
@@ -529,6 +563,14 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     colnames(test_data_plus_predictions))) {
     stop(paste("`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."))
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+    colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   sens <- test_data_plus_predictions |>
@@ -554,6 +596,14 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     colnames(test_data_plus_predictions))) {
     stop(paste("`test_data_plus_predictions` does not have a column for",
       "`genome_drug.resistant_phenotype`."))
+  .checkArgTestDataPlusPredictions(test_data_plus_predictions)
+
+  if (!("genome_drug.resistant_phenotype" %in%
+    colnames(test_data_plus_predictions))) {
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   spec <- test_data_plus_predictions |>

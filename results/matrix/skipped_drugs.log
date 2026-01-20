@@ -1,0 +1,24 @@
+Drug	Reason	Total_obs	Phenotype_distribution
+AMX-CLA	Too few samples for CV/split	8	Resistant=8
+CTX	Too few samples for CV/split	8	Susceptible=7; Resistant=1
+MEM	Too few samples for CV/split	330	Susceptible=330
+GEN	Too few samples for CV/split	336	Susceptible=332; Resistant=  4
+TET	Too few samples for CV/split	11	Resistant=11
+CHL	Too few samples for CV/split	11	Resistant=11
+SXZ	Too few samples for CV/split	3	Resistant=3
+CAZ	Too few samples for CV/split	8	Susceptible=7; Resistant=1
+TMP-SMX	Too few samples for CV/split	3	Resistant=3
+CST	Too few samples for CV/split	1	Resistant=2
+FOX	Too few samples for CV/split	11	Susceptible=11
+FEP	Too few samples for CV/split	8	Resistant=1; Susceptible=7
+SMX	Too few samples for CV/split	8	Susceptible=2; Resistant=6
+NAL	Too few samples for CV/split	11	Resistant=9; Susceptible=2
+POL	Too few samples for CV/split	1	Resistant=2
+SUL	Too few samples for CV/split	11	Resistant=9; Susceptible=2
+TMD-SUL	Too few samples for CV/split	3	Resistant=3
+PEN-BLI	Too few samples for CV/split	8	Resistant=8
+AMF	Too few samples for CV/split	11	Resistant=11
+QUI	Too few samples for CV/split	11	Resistant=9; Susceptible=2
+TET	Too few samples for CV/split	11	Resistant=11
+AMG	Too few samples for CV/split	336	Susceptible=332; Resistant=  4
+CAR	Too few samples for CV/split	330	Susceptible=330

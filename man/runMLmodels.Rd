@@ -99,7 +99,7 @@ This function supports multiple analysis configurations:
 \item Penalty values: \code{10^seq(-4, -1, length.out = 10)}
 \item Mixture (alpha): 0, 0.2, 0.4, 0.6, 0.8, 1.0 (ridge to lasso)
 \item Selection metric: Matthews Correlation Coefficient (MCC)
-\item Random seed: 123 (for reproducibility)
+\item Random seed: 5280 (for reproducibility)
 \item PCA: Disabled
 }
 

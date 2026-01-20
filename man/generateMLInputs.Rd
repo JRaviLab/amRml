@@ -25,7 +25,7 @@ generateMLInputs(
 \item Shorthand for CV: \code{split = 0} (converted internally to \code{c(1, 0)})
 \item Vector form: \code{c(train_prop, val_prop)} where test_prop = 1 - train - val
 \itemize{
-\item For CV: \code{c(1, 0)} means 100\% training data with k-fold CV (default)
+\item For CV: \code{c(1, 0)} means 80\% training data with k-fold CV, 20\% stratified testing
 \item For classical splits: all three partitions must be > 0
 Example: \code{c(0.7, 0.15)} = 70\% train, 15\% val, 15\% test
 }
@@ -52,7 +52,7 @@ generateMLInputs(
   parquet_duckdb_path = "results/Cje_parquet.duckdb",
   out_path = "results/",
   n_fold = 5,
-  split = 0,  # shorthand for CV mode
+  split = 0, # shorthand for CV mode
   min_n = 25,
   verbosity = "minimal"
 )
@@ -62,7 +62,7 @@ generateMLInputs(
   parquet_duckdb_path = "results/Cje_parquet.duckdb",
   out_path = "results/",
   n_fold = 5,
-  split = c(1, 0),  # explicit CV mode
+  split = c(1, 0), # explicit CV mode
   verbosity = "minimal"
 )
 
@@ -71,7 +71,7 @@ generateMLInputs(
   parquet_duckdb_path = "results/Cje_parquet.duckdb",
   out_path = "results/",
   n_fold = NULL,
-  split = c(0.7, 0.15),  # 70\% train, 15\% val, 15\% test
+  split = c(0.7, 0.15), # 70\% train, 15\% val, 15\% test
   min_n = 25,
   verbosity = "debug"
 )

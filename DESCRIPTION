@@ -40,6 +40,7 @@ Imports:
     future,
     future.apply,
     ggplot2,
+    ggrepel,
     glue,
     hardhat,
     parsnip,
