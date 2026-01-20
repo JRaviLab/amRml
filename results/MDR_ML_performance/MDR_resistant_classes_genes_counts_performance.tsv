@@ -1,0 +1,2 @@
+num_obs	n_feat	model	train_prop	val_prop	n_fold	fit_penalty	fit_mixture	nmcc	run_time_sec	date
+155	5724	LR	1	0	5	0.01	0.8	0.71	91.51	2026-01-19
