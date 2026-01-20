@@ -429,7 +429,7 @@ NULL
 #' @noRd
 #' @keywords internal
 #' @param select_best_metric [chr] Metric to select best model: "f_meas",
-#' "pr_auc", "mcc, or "bal_accuracy"
+#' "pr_auc", "mcc", or "bal_accuracy"
 #'
 .checkArgSelectBestMetric <- function(select_best_metric) {
   if (!(select_best_metric %in% c("f_meas", "pr_auc", "mcc", "bal_accuracy"))) {
@@ -454,7 +454,7 @@ NULL
   if (!(".pred_class" %in% colnames(test_data_plus_predictions))) {
     stop(paste(
       "`test_data_plus_predictions` is missing a `.pred_class`",
-      "column. Try using the output of `predict()`."
+      "column. Try using the output of `predictML()`."
     ))
   }
 }

@@ -1,10 +1,40 @@
+#' @keywords internal
+#' Pulls the ML parameters .json and reads what model split parameters are to be
+#' used. These defaults can be overridden if you so choose, but consider regenerating
+#' the ML matrices with these new split/CV values instead.
+#'
+#' @param parquet_path
+#' @param defaults
+#'
+#' @returns
+#'
+#' @examples
+.resolveSplitParams <- function(parquet_path,
+                                defaults = list(split = c(0.8, 0),
+                                                seed  = 5280,
+                                                n_fold = 5)) {
+  # matrix_dir is the directory that contains the parquet files
+  matrix_dir <- normalizePath(dirname(parquet_path))
+  params_json <- .readMLParameters(matrix_dir)
+
+  if (is.null(params_json)) {
+    return(defaults)
+  }
+
+  list(
+    split  = if (!is.null(params_json$split))  params_json$split  else defaults$split,
+    seed   = if (!is.null(params_json$seed))   params_json$seed   else defaults$seed,
+    n_fold = if (!is.null(params_json$n_fold)) params_json$n_fold else defaults$n_fold
+  )
+}
+
 #' Create machine learning result directories
 #'
 #' Creates a structured directory hierarchy for storing machine learning results
 #' including matrices, performance metrics, feature importance, models, and predictions.
 #'
 #' @param path Character scalar. Base directory path where subdirectories will be created.
-#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"}, 
+#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"},
 #'   \code{"year"}, or \code{NULL}. Default is \code{NULL} (no stratification).
 #' @param LOO Logical. Whether to create directories for Leave-One-Out analysis.
 #'   Default is \code{FALSE}. Only valid when \code{stratify_by} is not \code{NULL}.
@@ -28,8 +58,8 @@
 #' paths <- createMLResultDir("/path/to/results")
 #'
 #' # LOO analysis stratified by year
-#' paths_loo <- createMLResultDir("/path/to/results", 
-#'                                 stratify_by = "year", 
+#' paths_loo <- createMLResultDir("/path/to/results",
+#'                                 stratify_by = "year",
 #'                                 LOO = TRUE)
 #'
 #' # MDR analysis
@@ -37,17 +67,17 @@
 #' }
 #'
 #' @export
-createMLResultDir <- function(path, 
-                              stratify_by = NULL, 
-                              LOO = FALSE, 
-                              cross_test = FALSE, 
+createMLResultDir <- function(path,
+                              stratify_by = NULL,
+                              LOO = FALSE,
+                              cross_test = FALSE,
                               MDR = FALSE) {
   # Basic input validation
   if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
     stop("`path` must be a non-empty character scalar.")
   }
   path <- normalizePath(path)
-    
+
   if (!is.null(stratify_by) && length(stratify_by) != 1) {
     stop("`stratify_by` must be NULL or a single value: 'country' or 'year'.")
   }
@@ -116,7 +146,7 @@ createMLResultDir <- function(path,
  #    createMLResultDir(path, stratify_by = "country", LOO = TRUE, cross_test = FALSE, MDR = FALSE)
  #    createMLResultDir(path, stratify_by = "country", LOO = TRUE, cross_test = TRUE, MDR = FALSE)
  #    }
- # 
+ #
 
 #' Create machine learning input list
 #'
@@ -125,7 +155,7 @@ createMLResultDir <- function(path,
 #' standard, cross-test, Leave-One-Out (LOO), and Multi-Drug Resistance (MDR).
 #'
 #' @param path Character scalar. Base directory path containing matrix subdirectories.
-#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"}, 
+#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"},
 #'   \code{"year"}, or \code{NULL}.
 #' @param LOO Logical. Whether to perform Leave-One-Out analysis. Requires \code{stratify_by}.
 #' @param MDR Logical. Whether to perform Multi-Drug Resistance analysis.
@@ -149,8 +179,8 @@ createMLResultDir <- function(path,
 #' inputs <- createMLinputList("/path/to/results")
 #'
 #' # Cross-test with year stratification
-#' inputs_ct <- createMLinputList("/path/to/results", 
-#'                                stratify_by = "year", 
+#' inputs_ct <- createMLinputList("/path/to/results",
+#'                                stratify_by = "year",
 #'                                cross_test = TRUE)
 #'
 #' # MDR analysis
@@ -158,65 +188,67 @@ createMLResultDir <- function(path,
 #' }
 #'
 #' @export
-createMLinputList <- function(path, 
+createMLinputList <- function(path,
                               stratify_by = NULL,
-                              LOO = FALSE, 
+                              LOO = FALSE,
                               MDR = FALSE,
                               cross_test = FALSE) {
-  
-  # ---- Validate inputs ----
+
+  # Validate inputs
   if (!is.character(path) || length(path) != 1 || is.na(path))
     stop("`path` must be a valid file path string.")
-  
+
   path <- normalizePath(path)
-  
+
   if (isTRUE(LOO) && (is.null(stratify_by) || !(stratify_by %in% c("year", "country")))) {
     stop("For Leave-One-Out (LOO) models, stratify_by must be 'year' or 'country'.")
   }
-  
+
   if (isTRUE(MDR) && (!is.null(stratify_by) || LOO || cross_test)) {
     stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
   }
-  
-  # ---- Create directories ----
+
+  # Create results directories
   paths <- createMLResultDir(path, stratify_by, LOO, cross_test, MDR)
-  
-  # ---- List parquet files ----
+
+  # List ML matrix parquet files
   files_vec <- list.files(paths$matrix_path, pattern = "\\.parquet$", full.names = TRUE)
-  
+
   if (length(files_vec) == 0) {
     message("No parquet files found in matrix path: ", paths$matrix_path)
     return(tibble::tibble())
   }
-  
-  # ---- Helper: get index of token ----
-  get_idx <- function(v, token) {
+
+  # Get index of token
+  .get_idx <- function(v, token) {
     w <- which(v == token)
     if (length(w) == 0) NA_integer_ else w[1]
   }
-  
+
+  # Parsing tokens from filename
+
   # ============================
-  # CASE 0: MDR
+  # Multi-drug resistance models
   # ============================
   if (MDR) {
-    
+
     parsed <- tibble::tibble(ref_file = files_vec) |>
       dplyr::mutate(
         parts = stringr::str_split(basename(ref_file), "_"),
-        
+
         species = purrr::map_chr(parts, ~ .x[1]),
         mdr_tag = purrr::map_chr(parts, ~ .x[2]),   # always "MDR"
-        phenotype = purrr::map_chr(parts, ~ paste(.x[3:4], collapse = "_")),  # resistant_classes
-        
+        phenotype = purrr::map_chr(parts, ~ paste(.x[3:4], collapse = "_")),
+
         # Feature is 5th + 6th tokens
         feature_type = purrr::map_chr(parts, ~ .x[5]),
         feature_subtype = purrr::map_chr(parts, ~ stringr::str_remove(.x[6], "_sparse.parquet")),
-        
+
         feature = purrr::map2_chr(feature_type, feature_subtype, paste, sep = "_"),
-        
+
         output_prefix = paste0("MDR_", phenotype, "_", feature)
       )
-    
+
     out <- parsed |>
       dplyr::mutate(
         test_file = NA_character_,
@@ -226,81 +258,79 @@ createMLinputList <- function(path,
         out_models= paths$ML_models,
         out_pred  = paths$ML_prediction
       )
-    
+
     return(out)
-  
+
   # ============================
-  # UNIVERSAL PARSER (shared by all other cases)
+  # For all other modeling types
   # ============================
   } else {
-    
+
     parsed <- tibble::tibble(ref_file = files_vec) |>
       dplyr::mutate(
         parts    = stringr::str_split(basename(ref_file), "_"),
-        i_sparse = purrr::map_int(parts, ~ get_idx(.x, "sparse.parquet")),
+        i_sparse = purrr::map_int(parts, ~ .get_idx(.x, "sparse.parquet")),
         i_strat  = purrr::map_int(parts, ~ {
           if (is.null(stratify_by)) return(NA_integer_)
-          get_idx(.x, stratify_by)
+          .get_idx(.x, stratify_by)
         }),
-        
-        # --- Feature: last two tokens before sparse.parquet ---
+
+        # Feature = last two tokens before sparse.parquet
         feature = purrr::map2_chr(parts, i_sparse, ~ {
           i <- .y; x <- .x
           if (is.na(i) || i < 3) return(NA_character_)
           paste(x[(i - 2):(i - 1)], collapse = "_")
         }),
-        
-        # --- Drug/class extraction ---
+
+        # Drug or drug class extraction
         drug_or_class = purrr::map2_chr(parts, i_strat, ~ {
           i <- .y; x <- .x
-          
-          # --- Case 1: stratified ---
+
+          # Stratified models
           if (!is.na(i)) {
-            return(x[i + 1])   # FLQ, CIP, NAL, etc.
+            return(x[i + 1])
           }
-          
-          # --- Case 2: unstratified ---
+
+          # Unstratified models
           # Find where "drug" or "drug_class" ends
-          
+
           if (x[2] == "drug" && x[3] != "class") {
             # Case A: Cje_drug_X
             return(x[3])
           }
-          
+
           if (x[2] == "drug" && x[3] == "class") {
             # Case B: Cje_drug_class_X
             return(x[4])
           }
-          
+
           # Fallback for unexpected structures
           NA_character_
         }),
-        
-        # --- Stratification value (if present) ---
-       
-# --- Stratification value (if present) ---
-strat_value = purrr::map2_chr(parts, i_strat, ~ {
-  i <- .y; x <- .x
-  if (is.na(i)) return("")
-  # default position: value is two tokens after the strat label
-  j <- i + 2
-  # if there's an intervening 'leaveout', skip over it
-  if (j <= length(x) && identical(x[j], "leaveout")) j <- j + 1
-  if (j <= length(x)) return(x[j])
-  ""   # no stratification
-}),
-          
-        # --- Prefix key for grouping ---
+
+        # Stratification value (if present)
+        strat_value = purrr::map2_chr(parts, i_strat, ~ {
+          i <- .y; x <- .x
+          if (is.na(i)) return("")
+          # default position is two tokens after the strat label
+          j <- i + 2
+          # if there's an intervening 'leaveout', skip over it
+          if (j <= length(x) && identical(x[j], "leaveout")) j <- j + 1
+          if (j <= length(x)) return(x[j])
+          ""   # no stratification
+        }),
+
+        # Prefix key for grouping
         prefix_key = purrr::map2_chr(parts, i_strat, ~ {
           i <- .y; x <- .x
-          
-          # Case A: stratified → prefix before the stratify label
+
+          # Case A: stratified -> prefix before the stratify label
           if (!is.na(i)) {
             if (i - 1 >= 1) return(paste(x[1:(i - 1)], collapse = "_"))
             return("")
           }
-          
-          # Case B: unstratified → prefix is first two tokens
+
+          # Case B: unstratified -> prefix is first two tokens
           if (x[2] == "drug" && x[3] != "class"){
             # Case A: Cje_drug_X
             return(paste(x[1:2], collapse = "_"))
@@ -311,9 +341,9 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
           }
         })
       )
-    
+
     # ============================
-    # CASE 1: non-cross-test
+    # Non-cross-test modeling
     # ============================
     if (!MDR && !cross_test) {
       out <- parsed |>
@@ -327,18 +357,14 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
           out_pred  = paths$ML_prediction
         )
       return(out)
-    
+
     # ============================
-    # CASE 2: CROSS TEST, NON-LOO
+    # Cross-test modeling, no LOO
     # ============================
     } else if (cross_test && !LOO) {
-      
+
       if (is.null(stratify_by)) {
-        # --------------------------
-        # Case A: stratify_by = NULL
-        # Pair across drugs within same feature + prefix
-        # --------------------------
-        
+        # Case A: stratify_by = NULL, pair across abx within same feature + prefix
         pairs <- parsed |>
           dplyr::select(ref_file, feature, prefix_key, strat_value, ref_drug = drug_or_class) |>
           dplyr::inner_join(
@@ -356,7 +382,7 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
               feature
             )
           )
-        
+
         out <- pairs |>
           dplyr::mutate(
             matrix_path = paths$matrix_path,
@@ -365,20 +391,16 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
             out_models= paths$ML_models,
             out_pred  = paths$ML_prediction
           )
-        
+
         return(out)
       }
-      
-      # --------------------------
-      # Case B: stratify_by != NULL
-      # Pair SAME drug/class, SAME prefix, SAME feature,
-      # but across DIFFERENT stratification groups
-      # --------------------------
-      
+
+      # Case B: stratify_by != NULL, pair same drug/class, prefix, feature,
+      # but across different stratification groups
       pairs <- parsed |>
         dplyr::select(ref_file, feature, prefix_key, strat_value,
                       drug_or_class) |>
-        
+
         # self-join ONLY on prefix_key, drug/class, feature
         dplyr::inner_join(
           parsed |>
@@ -387,29 +409,29 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
                           drug_or_class),
           by = c("prefix_key", "feature", "drug_or_class")
         ) |>
-        
+
         # do NOT test file against itself
         dplyr::filter(ref_file != test_file) |>
-        
+
         # enforce different stratification group
         dplyr::filter(strat_value != strat_value_test) |>
-        
+
         # remove symmetric duplicates (A,B == B,A)
         dplyr::rowwise() |>
         dplyr::mutate(pair_id = paste(sort(c(ref_file, test_file)), collapse = "||")) |>
         dplyr::ungroup() |>
         dplyr::distinct(pair_id, .keep_all = TRUE) |>
-        
+
         dplyr::mutate(
           output_prefix = paste0(
             prefix_key, "_",
-            drug_or_class, "_cross_",        
+            drug_or_class, "_cross_",
             strat_value, "_tested_on_", strat_value_test, "_",
             feature
           )
         ) |>
         dplyr::select(ref_file, test_file, output_prefix)
-      
+
       out <- pairs |>
         dplyr::mutate(
           matrix_path = paths$matrix_path,
@@ -418,18 +440,18 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
           out_models= paths$ML_models,
           out_pred  = paths$ML_prediction
         )
-      
+
       return(out)
-    
+
     # ============================
-    # CASE 3: CROSS TEST + LOO
+    # Cross-test + LOO modeling
     # ============================
     } else if (cross_test && LOO) {
-      
+
       # LOO requires special directory structure resolution
       test_path <- file.path(path, stringr::str_remove(basename(paths$matrix_path), "^LOO_"))
       test_path <- normalizePath(test_path)
-      
+
       loo_pairs <- parsed |>
         dplyr::transmute(
           ref_file,
@@ -441,7 +463,7 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
           )
         ) |>
         dplyr::filter(file.exists(test_file))
-      
+
       out <- loo_pairs |>
         dplyr::mutate(
           matrix_path = paths$matrix_path,
@@ -450,53 +472,53 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
           out_models= paths$ML_models,
           out_pred  = paths$ML_prediction
         )
-      
+
       return(out)
     }
   }
-  
+
   # If we ever get here, something wasn't covered
   stop("Unhandled combination of arguments: ",
-       "MDR=", MDR, ", cross_test=", cross_test, ", LOO=", LOO, 
+       "MDR=", MDR, ", cross_test=", cross_test, ", LOO=", LOO,
        ", stratify_by=", if (is.null(stratify_by)) "NULL" else stratify_by)
 }
 
 
 #  createAllMLInputList <- function(path) {
-#    
+#
 #     createMLinputList(path, stratify_by = NULL, LOO = FALSE, cross_test = FALSE, MDR = FALSE) |>
-#     readr::write_tsv(file.path(path, "ML.tsv")) 
-#     
-#     createMLinputList(path, stratify_by = NULL, LOO = FALSE, cross_test = TRUE, MDR = FALSE)|> 
+#     readr::write_tsv(file.path(path, "ML.tsv"))
+#
+#     createMLinputList(path, stratify_by = NULL, LOO = FALSE, cross_test = TRUE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "cross_test_ML.tsv"))
-#     
-#     createMLinputList(path, stratify_by = NULL, LOO = FALSE, cross_test = FALSE, MDR = TRUE)|> 
+#
+#     createMLinputList(path, stratify_by = NULL, LOO = FALSE, cross_test = FALSE, MDR = TRUE)|>
 #     readr::write_tsv(file.path(path, "MDR_ML.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "year", LOO = FALSE, cross_test = FALSE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "year", LOO = FALSE, cross_test = FALSE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "ML_year.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "year", LOO = FALSE, cross_test = TRUE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "year", LOO = FALSE, cross_test = TRUE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "cross_test_ML_year.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "year", LOO = TRUE, cross_test = FALSE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "year", LOO = TRUE, cross_test = FALSE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "LOO_ML_year.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "year", LOO = TRUE, cross_test = TRUE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "year", LOO = TRUE, cross_test = TRUE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "LOO_cross_test_ML_year.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "country", LOO = FALSE, cross_test = FALSE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "country", LOO = FALSE, cross_test = FALSE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "ML_country.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "country", LOO = FALSE, cross_test = TRUE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "country", LOO = FALSE, cross_test = TRUE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "cross_test_ML_country.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "country", LOO = TRUE, cross_test = FALSE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "country", LOO = TRUE, cross_test = FALSE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "LOO_ML_country.tsv"))
-#     
-#     createMLinputList(path, stratify_by = "country", LOO = TRUE, cross_test = TRUE, MDR = FALSE)|> 
+#
+#     createMLinputList(path, stratify_by = "country", LOO = TRUE, cross_test = TRUE, MDR = FALSE)|>
 #     readr::write_tsv(file.path(path, "LOO_cross_test_ML_country.tsv"))
-#     
+#
 # }
 
 #' Run MDR (multi-drug resistance) machine learning models
@@ -508,18 +530,16 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
 #' @param path Character scalar. Base directory containing MDR matrix files.
 #' @param threads Integer. Number of parallel workers for model training. Default is 16.
 #' @param split Numeric vector of length 2. Train/validation split proportions.
-#'   Default is \code{c(0.8, 0)} (80 percent train, 0 percent validation, 20 percent test).
-#' @param n_fold Integer. Number of cross-validation folds. Default is 5.
-#' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for
-#'   variable importance feature selection. Default is \code{c(0, 1)}.
-#' @param pca_threshold Numeric. PCA variance threshold (not used when
-#'   \code{use_pca = FALSE}). Default is 0.99.
-#' @param verbose Logical. Print progress messages during model training.
-#'   Default is \code{TRUE}.
-#' @param return_tune_res Logical. Return tuning results from cross-validation.
-#'   Default is \code{TRUE}.
-#' @param return_fit Logical. Return fitted model objects. Default is \code{TRUE}.
-#' @param return_pred Logical. Return prediction results. Default is \code{TRUE}.
+#' @param n_fold Integer. Number of cross-validation folds. Default 5.
+#' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for variable-importance selection.
+#' @param pca_threshold Numeric. PCA variance threshold. Default 0.99.
+#' @param verbose Logical. Print progress messages during model training. Default TRUE.
+#' @param return_tune_res Logical. Return tuning results from cross-validation. Default TRUE.
+#' @param return_fit Logical. Return fitted model objects. Default TRUE.
+#' @param return_pred Logical. Return prediction results. Default TRUE.
+#' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
+#' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
+#' @param use_pca Logical. Use PCA on predictors. Default FALSE.
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -529,20 +549,20 @@ strat_value = purrr::map2_chr(parts, i_strat, ~ {
 #' runMDRmodels("/path/to/results")
 #'
 #' # Run with more threads and minimal output
-#' runMDRmodels("/path/to/results", 
-#'              threads = 32, 
+#' runMDRmodels("/path/to/results",
+#'              threads = 32,
 #'              verbose = FALSE)
 #'
 #' # Run without saving model fits (save disk space)
-#' runMDRmodels("/path/to/results", 
-#'              threads = 16, 
+#' runMDRmodels("/path/to/results",
+#'              threads = 16,
 #'              return_fit = FALSE)
 #' }
 #'
 #' @seealso
 #' \code{\link{createMLinputList}} for generating input file lists,
 #' \code{\link{runMLmodels}} for non-MDR model execution
-#'
+#
 #' @export
 runMDRmodels <- function(path,
                          threads = 16,
@@ -553,102 +573,117 @@ runMDRmodels <- function(path,
                          verbose = TRUE,
                          return_tune_res = TRUE,
                          return_fit = TRUE,
-                         return_pred = TRUE) {
-  
-  # ---- Generate MDR Input File List ----
-  # This creates the directory structure and returns a tibble of files to process
-  files <- createMLinputList(path, 
-                             stratify_by = NULL, 
-                             LOO = FALSE, 
-                             cross_test = FALSE, 
-                             MDR = TRUE)
-  
-  # Check if any files were found
+                         return_pred = TRUE,
+                         use_saved_split = TRUE,
+                         shuffle_labels = FALSE,
+                         use_pca = FALSE) {
+
+  files <- createMLinputList(path,
+                             stratify_by = NULL,
+                             LOO         = FALSE,
+                             cross_test  = FALSE,
+                             MDR         = TRUE)
+
   if (nrow(files) == 0) {
     message("No MDR files found to process. Exiting.")
     return(invisible(NULL))
   }
-  
-  # ---- Configure Parallel Processing ----
-  # Save current future plan to restore after execution
+
   old_plan <- future::plan()
   on.exit(future::plan(old_plan), add = TRUE)
-  
-  # Set up multisession processing with specified number of workers
   future::plan(future::multisession, workers = threads)
-  
-  # ---- Execute Models in Parallel ----
+
+  if (isTRUE(verbose)) {
+    nw <- tryCatch(future::nbrOfWorkers(), error = function(e) NA_integer_)
+    message("runMDRmodels(): enabling multisession with workers = ", nw)
+  }
+
+  # Auto tags for shuffled and PCA
+  shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
+  pca_tag     <- if (isTRUE(use_pca)) paste0("_pca", as.character(pca_threshold)) else ""
+
   results_list <- future.apply::future_lapply(
     seq_len(nrow(files)),
     FUN = function(i) {
-      
-      # ---- Load Input Data ----
-      ml_input <- loadMLInputTibble(files$ref_file[i])
+
+      ref_parquet   <- files$ref_file[i]
       output_prefix <- files$output_prefix[i]
-      
-      # ---- Run ML Pipeline with Error Handling ----
+
+      if (interactive()) {
+        message(sprintf("[runMDRmodels] %d/%d: %s",
+                        i, nrow(files), basename(ref_parquet)))
+      }
+
+      ml_input <- loadMLInputTibble(ref_parquet)
+
+      sp <- if (isTRUE(use_saved_split)) {
+        .resolveSplitParams(
+          parquet_path = ref_parquet,
+          defaults = list(split = split, seed = 5280, n_fold = n_fold)
+        )
+      } else {
+        list(split = split, seed = 5280, n_fold = n_fold)
+      }
+
       res <- try({
         runMLPipeline(
           ml_input_tibble = ml_input,
-          test_data = NA,  # No external test set for MDR
-          model = "LR",    # Logistic Regression
-          split = split,
-          n_fold = n_fold,
+          test_data       = NA,
+          model           = "LR",
+          split           = sp$split,
+          n_fold          = sp$n_fold,
           prop_vi_top_feats = prop_vi_top_feats,
-          n_top_feats = NA,
-          use_pca = FALSE,
-          pca_threshold = pca_threshold,
-          shuffle_labels = FALSE,
-          penalty_vec = 10^seq(-4, -1, length.out = 10),  # L2 penalty range
-          mix_vec = 0:5 / 5,                               # Elastic net mixing
-          select_best_metric = "mcc",                      # Matthews Correlation Coefficient
-          seed = 123,
-          verbose = verbose,
-          return_tune_res = return_tune_res,
-          return_fit = return_fit,
-          return_pred = return_pred
+          n_top_feats       = NA,
+          use_pca           = use_pca,
+          pca_threshold     = pca_threshold,
+          shuffle_labels    = shuffle_labels,
+          penalty_vec       = 10^seq(-4, -1, length.out = 10),
+          mix_vec           = 0:5 / 5,
+          select_best_metric = "mcc",
+          seed              = sp$seed,
+          verbose           = verbose,
+          return_tune_res   = return_tune_res,
+          return_fit        = return_fit,
+          return_pred       = return_pred
         )
       }, silent = TRUE)
-      
-      # ---- Check for Errors ----
+
       if (inherits(res, "try-error")) {
-        warning("Model failed for: ", output_prefix, "\n  Error: ", attr(res, "condition")$message)
+        warning("Model failed for: ", output_prefix,
+                "\n  Error: ", attr(res, "condition")$message)
         return(NULL)
       }
-      
-      # ---- Save Results to Output Directories ----
-      base <- output_prefix
-      
-      # Save performance metrics
+
+      # Final base filename: shuffled_ + <matrix prefix> + _pcaXX
+      base <- paste0(shuffle_tag, output_prefix, pca_tag)
+
       if (!is.null(res$performance_tibble)) {
-        f <- file.path(files$out_perf[i], paste0(base, "_performance.tsv"))
-        readr::write_tsv(res$performance_tibble, f)
+        readr::write_tsv(res$performance_tibble,
+                         file.path(files$out_perf[i], paste0(base, "_performance.tsv")))
       }
-      
-      # Save top features by variable importance
       if (!is.null(res$top_feat_tibble)) {
-        f <- file.path(files$out_top[i], paste0(base, "_top_features.tsv"))
-        readr::write_tsv(res$top_feat_tibble, f)
+        readr::write_tsv(res$top_feat_tibble,
+                         file.path(files$out_top[i], paste0(base, "_top_features.tsv")))
       }
-      
-      # Save fitted model object (RDS format)
       if (!is.null(res$fit)) {
-        f <- file.path(files$out_models[i], paste0(base, "_model_fit.rds"))
-        saveRDS(res$fit, f)
+        saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
-      
-      # Save prediction results
       if (!is.null(res$pred)) {
-        f <- file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
-        readr::write_tsv(res$pred, f)
+        readr::write_tsv(res$pred,
+                         file.path(files$out_pred[i], paste0(base, "_prediction.tsv")))
       }
-      
-      return(NULL)
+
+      NULL
     },
-    future.seed = TRUE  # Ensures reproducible parallel processing
+    future.seed = TRUE
   )
-  
-  # Return invisibly (function called for side effects)
+
+  if (verbose) {
+    message("\nML modeling complete.")
+    message("Results saved under:")
+    message("  ", normalizePath(path))
+  }
+
   invisible(NULL)
 }
 
@@ -657,28 +692,25 @@ runMDRmodels <- function(path,
 #' Executes machine learning pipeline with support for stratification,
 #' leave-one-out (LOO), and cross-testing configurations using logistic regression
 #' with parallel processing. Provides flexible model training across different
-#' experimental designs.
+#' experimental designs. Split/seed/n_fold are resolved from `ml_parameters.json`
+#' when available via `.resolveSplitParams()`.
 #'
 #' @param path Character scalar. Base directory containing matrix files.
-#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"},
-#'   \code{"year"}, or \code{NULL} (no stratification). Default is \code{NULL}.
-#' @param LOO Logical. Perform Leave-One-Out analysis. Default is \code{FALSE}.
-#'   Requires \code{stratify_by} to be specified as either \code{"year"} or \code{"country"}.
-#' @param cross_test Logical. Perform cross-testing between groups. Default is \code{FALSE}.
+#' @param stratify_by Character scalar or NULL. One of "year", "country", or NULL (no stratification).
+#' @param LOO Logical. Perform Leave-One-Out analysis. Default is FALSE.
+#' @param cross_test Logical. Perform cross-testing between groups. Default is FALSE.
 #' @param threads Integer. Number of parallel workers for model training. Default is 16.
 #' @param split Numeric vector of length 2. Train/validation split proportions.
-#'   Default is \code{c(0.8, 0)} (80 percent train, 0 percent validation, 20 percent test).
 #' @param n_fold Integer. Number of cross-validation folds. Default is 5.
-#' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for
-#'   variable importance feature selection. Default is \code{c(0, 1)}.
-#' @param pca_threshold Numeric. PCA variance threshold (not used when
-#'   \code{use_pca = FALSE}). Default is 0.99.
-#' @param verbose Logical. Print progress messages during model training.
-#'   Default is \code{TRUE}.
-#' @param return_tune_res Logical. Return tuning results from cross-validation.
-#'   Default is \code{TRUE}.
-#' @param return_fit Logical. Return fitted model objects. Default is \code{TRUE}.
-#' @param return_pred Logical. Return prediction results. Default is \code{TRUE}.
+#' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for variable-importance selection.
+#' @param pca_threshold Numeric. PCA variance threshold. Default 0.99.
+#' @param verbose Logical. Print progress messages during model training. Default TRUE.
+#' @param return_tune_res Logical. Return tuning results from cross-validation. Default TRUE.
+#' @param return_fit Logical. Return fitted model objects. Default TRUE.
+#' @param return_pred Logical. Return prediction results. Default TRUE.
+#' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
+#' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
+#' @param use_pca Logical. Use PCA on predictors. Default FALSE.
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -718,7 +750,7 @@ runMDRmodels <- function(path,
 #'   \item Penalty values: \code{10^seq(-4, -1, length.out = 10)}
 #'   \item Mixture (alpha): 0, 0.2, 0.4, 0.6, 0.8, 1.0 (ridge to lasso)
 #'   \item Selection metric: Matthews Correlation Coefficient (MCC)
-#'   \item Random seed: 123 (for reproducibility)
+#'   \item Random seed: 5280 (for reproducibility)
 #'   \item PCA: Disabled
 #' }
 #'
@@ -779,6 +811,7 @@ runMDRmodels <- function(path,
 #' \code{\link{runMDRmodels}} for MDR-specific model execution,
 #' \code{\link{createMLResultDir}} for directory structure creation
 #'
+#' @return NULL (invisible). Called for side effects (writes results).
 #' @export
 runMLmodels <- function(path,
                         stratify_by = NULL,
@@ -792,53 +825,49 @@ runMLmodels <- function(path,
                         verbose = TRUE,
                         return_tune_res = TRUE,
                         return_fit = TRUE,
-                        return_pred = TRUE) {
-  
-  # ---- Validate stratify_by Parameter ----
+                        return_pred = TRUE,
+                        use_saved_split = TRUE,
+                        shuffle_labels = FALSE,
+                        use_pca = FALSE) {
+
   if (!is.null(stratify_by)) {
     if (!is.character(stratify_by) || length(stratify_by) != 1L)
       stop("`stratify_by` must be NULL or a single string: 'year' or 'country'.")
     if (!stratify_by %in% c("year", "country"))
       stop("`stratify_by` must be NULL, 'year', or 'country'.")
   }
-  
-  # ---- Generate Input File List ----
-  # Creates directory structure and identifies files to process
-  
+
   files <- createMLinputList(path,
                              stratify_by = stratify_by,
-                             LOO = LOO,
-                             MDR = FALSE,
-                             cross_test = cross_test)
-  
-  
-  # Check if any files were found
+                             LOO         = LOO,
+                             MDR         = FALSE,
+                             cross_test  = cross_test)
+
   if (nrow(files) == 0) {
     message("No files found to process. Exiting.")
     return(invisible(NULL))
   }
-  
-  # ---- Configure Parallel Processing ----
-  # Save current future plan to restore after execution
+
   old_plan <- future::plan()
   on.exit(future::plan(old_plan), add = TRUE)
-  
-  # Set up multisession processing with specified number of workers
   future::plan(future::multisession, workers = threads)
-  
-  # ---- Build Output File Prefix ----
-  # Prefix indicates LOO and/or cross-test configuration
-  prefix <- paste0(
+
+  if (isTRUE(verbose)) {
+    nw <- tryCatch(future::nbrOfWorkers(), error = function(e) NA_integer_)
+    message("runMLmodels(): enabling multisession with workers = ", nw)
+  }
+
+  # LOO / cross-test configuration prefix
+  config_prefix <- paste0(
     paste0(c(
       if (isTRUE(LOO)) "LOO",
       if (isTRUE(cross_test)) "cross_test"
     ), collapse = "_"),
     if (isTRUE(LOO) || isTRUE(cross_test)) "_" else ""
   )
-  
-  # ---- Build Output File Suffix ----
-  # Suffix indicates stratification method
-  suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
+
+  # Stratification suffix
+  strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
     ""
   } else {
     switch(
@@ -848,18 +877,25 @@ runMLmodels <- function(path,
       stop("`stratify_by` must be NULL, 'year', or 'country'.")
     )
   }
-  
-  # ---- Execute Models in Parallel ----
+
+  # Auto naming for shuffled and PCA
+  shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
+  pca_tag     <- if (isTRUE(use_pca)) paste0("_pca", as.character(pca_threshold)) else ""
+
   results_list <- future.apply::future_lapply(
     seq_len(nrow(files)),
     FUN = function(i) {
-      
-      # ---- Load Training Data ----
-      ml_input <- loadMLInputTibble(files$ref_file[i])
+
+      ref_parquet   <- files$ref_file[i]
       output_prefix <- files$output_prefix[i]
-      
-      # ---- Load Optional External Test Data ----
-      # For cross-testing, load the test file if specified
+
+      if (interactive()) {
+        message(sprintf("[runMLmodels] %d/%d: %s",
+                        i, nrow(files), basename(ref_parquet)))
+      }
+
+      ml_input <- loadMLInputTibble(ref_parquet)
+
       if ("test_file" %in% names(files)) {
         val <- files$test_file[i]
         test_data <- if (!is.na(val) && !is.null(val)) {
@@ -870,72 +906,201 @@ runMLmodels <- function(path,
       } else {
         test_data <- NULL
       }
-      
-      # ---- Run ML Pipeline with Error Handling ----
+
+      sp <- if (isTRUE(use_saved_split)) {
+        .resolveSplitParams(
+          parquet_path = ref_parquet,
+          defaults = list(split = split, seed = 5280, n_fold = n_fold)
+        )
+      } else {
+        list(split = split, seed = 5280, n_fold = n_fold)
+      }
+
       res <- try({
         runMLPipeline(
           ml_input_tibble = ml_input,
-          test_data = test_data,  # NULL for standard mode, tibble for cross-test
-          model = "LR",           # Logistic Regression
-          split = split,
-          n_fold = n_fold,
+          test_data       = test_data,
+          model           = "LR",
+          split           = sp$split,
+          n_fold          = sp$n_fold,
           prop_vi_top_feats = prop_vi_top_feats,
-          n_top_feats = NA,
-          use_pca = FALSE,
-          pca_threshold = pca_threshold,
-          shuffle_labels = FALSE,
-          penalty_vec = 10^seq(-4, -1, length.out = 10),  # L2 penalty range
-          mix_vec = 0:5 / 5,                               # Elastic net mixing
-          select_best_metric = "mcc",                      # Matthews Correlation Coefficient
-          seed = 123,
-          verbose = verbose,
-          return_tune_res = return_tune_res,
-          return_fit = return_fit,
-          return_pred = return_pred
+          n_top_feats       = NA,
+          use_pca           = use_pca,
+          pca_threshold     = pca_threshold,
+          shuffle_labels    = shuffle_labels,
+          penalty_vec       = 10^seq(-4, -1, length.out = 10),
+          mix_vec           = 0:5 / 5,
+          select_best_metric = "mcc",
+          seed              = sp$seed,
+          verbose           = verbose,
+          return_tune_res   = return_tune_res,
+          return_fit        = return_fit,
+          return_pred       = return_pred
         )
       }, silent = TRUE)
-      
-      # ---- Check for Errors ----
+
       if (inherits(res, "try-error")) {
-        warning("Model failed for: ", output_prefix, 
+        warning("Model failed for: ", output_prefix,
                 "\n  Error: ", attr(res, "condition")$message)
         return(NULL)
       }
-      
-      # ---- Save Results with Appropriate Naming ----
-      # Combine prefix, output_prefix, and suffix for full filename
-      base <- paste0(prefix, output_prefix, suffix)
-      
-      # Save performance metrics
+
+      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + _year/_country
+      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, strat_suffix)
+
       if (!is.null(res$performance_tibble)) {
-        f <- file.path(files$out_perf[i], paste0(base, "_performance.tsv"))
-        readr::write_tsv(res$performance_tibble, f)
+        readr::write_tsv(res$performance_tibble,
+                         file.path(files$out_perf[i], paste0(base, "_performance.tsv")))
       }
-      
-      # Save top features by variable importance
       if (!is.null(res$top_feat_tibble)) {
-        f <- file.path(files$out_top[i], paste0(base, "_top_features.tsv"))
-        readr::write_tsv(res$top_feat_tibble, f)
+        readr::write_tsv(res$top_feat_tibble,
+                         file.path(files$out_top[i], paste0(base, "_top_features.tsv")))
       }
-      
-      # Save fitted model object (RDS format)
       if (!is.null(res$fit)) {
-        f <- file.path(files$out_models[i], paste0(base, "_model_fit.rds"))
-        saveRDS(res$fit, f)
+        saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
-      
-      # Save prediction results
       if (!is.null(res$pred)) {
-        f <- file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
-        readr::write_tsv(res$pred, f)
+        readr::write_tsv(res$pred,
+                         file.path(files$out_pred[i], paste0(base, "_prediction.tsv")))
       }
-      
-      return(NULL)
+
+      NULL
     },
-    future.seed = TRUE  # Ensures reproducible parallel processing
+    future.seed = TRUE
   )
-  
-  # Return invisibly (function called for side effects)
+
+  if (verbose) {
+    message("\nML modeling complete.")
+    message("Results saved under:")
+    message("  ", normalizePath(path))
+  }
+
   invisible(NULL)
+}
+
+
+
+#' Run the entire AMR ML pipeline from a parquet-backed DuckDB
+#'
+#' This function provides a complete end-to-end AMR machine learning workflow.
+#' Given a DuckDB file produced by `runDataProcessing()`, it:
+#'   1. Generates all ML feature matrices (drug, class, year, country, MDR, LOO)
+#'   2. Creates all ML directory structures
+#'   3. Prepares ML input lists for every mode
+#'   4. Runs logistic regression ML models (standard + stratified + cross-test + MDR)
+#'   5. Saves performance metrics, fitted models, predictions, and top feature rankings
+#'
+#' @param parquet_duckdb_path Path to a `<bug>_parquet.duckdb` produced by data_processing.R
+#' @param threads Number of parallel workers. Default: 16
+#' @param n_fold Cross-validation folds (default: 5). Use 0 or NULL for classical splits.
+#' @param split Training/validation split (default: c(1,0) for CV mode)
+#' @param min_n Minimum samples per drug class for MDR matrices (default: 25)
+#' @param prop_vi_top_feats Proportion of variable importance for top features (default: c(0,1))
+#' @param pca_threshold PCA variance threshold (not used unless `use_pca = TRUE`)
+#' @param verbose Print progress updates? Default: TRUE
+#' @param use_saved_split Whether to inherit split/seed/n_fold from ml_parameters.json
+#'
+#' @return Invisibly returns the output directory used for ML results.
+#'
+#' @export
+runModelingPipeline <- function(parquet_duckdb_path,
+                                threads = 16,
+                                n_fold = 5,
+                                split = c(1, 0),
+                                min_n = 25,
+                                prop_vi_top_feats = c(0, 1),
+                                pca_threshold = 0.99,
+                                verbose = TRUE,
+                                use_saved_split = TRUE) {
+
+  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
+  if (!file.exists(parquet_duckdb_path)) {
+    stop("Parquet-backed DuckDB at ", parquet_duckdb_path, " not found.\n",
+         "Are you using `{Bug}.duckdb` instead of `{Bug}_parquet.duckdb?`")
+  }
+
+  out_root <- dirname(parquet_duckdb_path)
+
+  if (verbose) {
+    message("\n=== amR_ml: Full pipeline runner ===")
+    message("Using parquet-backed DB:\n  ", parquet_duckdb_path)
+  }
+
+  if (verbose) message("\n[1/4] Generating ML feature matrices.")
+  generateMLInputs(
+    parquet_duckdb_path = parquet_duckdb_path,
+    out_path = out_root,
+    n_fold   = n_fold,
+    split    = split,
+    min_n    = min_n,
+    verbosity = if (verbose) "minimal" else "debug"
+  )
+
+  if (verbose) message("\n[2/4] Running standard ML models.")
+  runMLmodels(
+    path = out_root,
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    verbose = verbose,
+    use_saved_split = use_saved_split
+  )
+
+  if (verbose) message("\n[3/4] Running stratified (year) ML models.")
+  runMLmodels(
+    path = out_root,
+    stratify_by = "year",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    verbose = verbose,
+    use_saved_split = use_saved_split
+  )
+
+  if (verbose) message("\n[3/4] Running stratified (country) ML models.")
+  runMLmodels(
+    path = out_root,
+    stratify_by = "country",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    verbose = verbose,
+    use_saved_split = use_saved_split
+  )
+
+  if (verbose) message("\n[4/4] Running MDR ML models.")
+  runMDRmodels(
+    path = out_root,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    verbose = verbose,
+    use_saved_split = use_saved_split
+  )
+  # All done!
+  if (verbose) {
+    message("\n=== AMR-ML Pipeline Complete ===")
+    message("All matrices, models, top feature lists, and performance metrics saved under:\n  ",
+            out_root)
+    message("\nTo inspect model outputs, see directories such as:")
+    message("  ML_performance/, ML_models/, ML_prediction/, ML_top_features/")
+  }
+
+  invisible(out_root)
 }
 

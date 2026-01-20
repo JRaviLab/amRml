@@ -30,7 +30,9 @@ NULL
 #' is provided, these numbers will be scaled so that they sum to 1 and will
 #' still represent fractions of `ml_input_tibble` (not including the input
 #' `test_data`). Please do not directly provide numbers that sum to 1 since the
-#' function is not equipped to handle this.
+#' function is not equipped to handle this. If cross-validation is enabled here
+#' [`split = c(1,0)`], we will still retain a 20% test holdout for final reporting.
+#' Cross-validation is run on the 80% training portion, and not on the testing set.
 #' @param n_fold [num] Number of folds of cross-validation
 #' @param prop_vi_top_feats [num] A vector of length 2 with elements together
 #' indicating the proportion of total variable importance the top features
@@ -83,10 +85,21 @@ runMLPipeline <- function(
   .checkArgReturnFit(return_fit)
   .checkArgReturnPred(return_pred)
 
+
+
   # Set `n_fold` to `NA` if not using cross-validation.
   if (split[2] != 0) {
     n_fold <- NA
   }
+
+  # Confirm resolved split params
+    if (verbose) {
+       mode <- if (split[2] == 0) "cv" else "splits"
+       message(sprintf("ML split mode: %s | split = c(%.2f, %.2f) | n_fold = %s | seed = %s",
+                                           mode, split[1], split[2],
+                                           ifelse(is.na(n_fold), "NA", as.character(n_fold)),
+                                           as.character(seed)))
+      }
 
   # Create a variable indicating whether external `test_data` was provided. This
   # will be set to `TRUE` later if the `test_data` argument is not `NA`.
@@ -95,11 +108,11 @@ runMLPipeline <- function(
   num_obs_ml_input_tibble <- nrow(ml_input_tibble)
 
   # Determine whether multi-class classification is to be performed.
-  if (getTargetVarName(ml_input_tibble) == "resistant_classes") {
-    multi_class <- TRUE
-  } else {
-    multi_class <- FALSE
-  }
+  if (as.character(.getTargetVarName(ml_input_tibble)) == "resistant_classes") {
+      multi_class <- TRUE
+    } else {
+      multi_class <- FALSE
+    }
 
   if (model != "LR" & multi_class) {
     stop(paste(
@@ -260,23 +273,23 @@ runMLPipeline <- function(
     fitBestModel(train_data = train_data)
 
   if (model == "LR") {
-    fit_penalty <- getFitHps(fit)["penalty"] |> as.numeric()
-    fit_mixture <- getFitHps(fit)["mixture"] |> as.numeric()
+    fit_penalty <- .getFitHps(fit)["penalty"] |> as.numeric()
+    fit_mixture <- .getFitHps(fit)["mixture"] |> as.numeric()
   }
 
-  test_data_plus_predictions <- predict(fit, test_data)
+  test_data_plus_predictions <- predictML(fit, test_data)
 
   if (!multi_class) {
-    f1 <- calculateF1(test_data_plus_predictions)
-    bal_acc <- calculateBalAcc(test_data_plus_predictions)
-    sens <- calculateSensitivity(test_data_plus_predictions)
-    spec <- calculateSpecificity(test_data_plus_predictions)
+    f1 <- .calculateF1(test_data_plus_predictions)
+    bal_acc <- .calculateBalAcc(test_data_plus_predictions)
+    sens <- .calculateSensitivity(test_data_plus_predictions)
+    spec <- .calculateSpecificity(test_data_plus_predictions)
     # From here on out, log2(AUPRC/prior) will be referred to as "log2_apop" for
     # variable naming purposes.
-    log2_apop <- calculateLog2APOP(test_data_plus_predictions)
+    log2_apop <- .calculateLog2APOP(test_data_plus_predictions)
   }
 
-  nmcc <- calculatenMCC(test_data_plus_predictions)
+  nmcc <- .calculatenMCC(test_data_plus_predictions)
 
   if (verbose) {
     message(paste("Normalized Matthews correlation coefficient:", nmcc))
@@ -397,14 +410,14 @@ runMLPipeline <- function(
     all_results[["fit"]] <- fit
   }
 
-if(return_pred) {
-      if(!multi_class){
-    all_results[["pred"]] <- test_data_plus_predictions |> 
-      dplyr::select(c(genome_id, .pred_class, .pred_Resistant, 
-        .pred_Susceptible, genome_drug.resistant_phenotype))
-  }
-   all_results[["pred"]] <- test_data_plus_predictions 
-  }
+  if(return_pred) {
+        if(!multi_class){
+      all_results[["pred"]] <- test_data_plus_predictions |>
+        dplyr::select(c(genome_id, .pred_class, .pred_Resistant,
+          .pred_Susceptible, genome_drug.resistant_phenotype))
+    }
+     all_results[["pred"]] <- test_data_plus_predictions
+    }
 
   return(all_results)
 }
