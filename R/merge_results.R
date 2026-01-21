@@ -1,4 +1,4 @@
-
+## Consolidate results into Parquet outputs
 #' Merge all *_performance.tsv into one table (plus metadata) and write Parquet inside results path
 #'
 #' - Uses createMLResultDir() to find the ML_performance directory under `path`
@@ -16,7 +16,7 @@
 #' @param compression parquet compression ("zstd" or "snappy"); default "zstd"
 #' @param verbose logical; print progress messages
 #' @return A tibble with all performance rows + parsed metadata columns
-buildPerformanceParquetFromResults <- function(
+buildPerfPq <- function(
   path,
   stratify_by = NULL,
   LOO = FALSE,
@@ -274,7 +274,7 @@ if (!is.na(label_end)) {
     )
 
     md_cols <- tibble(
-   
+
       output_prefix   = base_no_suffix,
       species         = meta$species,
       mdr_tag         = meta$mdr_tag,
@@ -319,7 +319,7 @@ if (!is.na(label_end)) {
   out
 }
 
-           
+
 #' Merge all *_top_features.tsv into one table + metadata, write Parquet inside results path
 #'
 #' - Uses createMLResultDir() to find the ML_top_features directory under `path`
@@ -337,7 +337,7 @@ if (!is.na(label_end)) {
 #' @param compression parquet compression ("zstd" or "snappy"); default "zstd"
 #' @param verbose logical; print progress messages
 #' @return A tibble with all top-features rows + parsed metadata columns
-buildTopFeaturesParquetFromResults <- function(
+buildTopFeatsPq <- function(
   path,
   stratify_by = NULL,
   LOO = FALSE,
@@ -591,7 +591,7 @@ buildTopFeaturesParquetFromResults <- function(
 
     # Attach metadata columns
     md_cols <- tibble(
-   
+
       output_prefix   = base_no_suffix,
       species         = meta$species,
       mdr_tag         = meta$mdr_tag,
