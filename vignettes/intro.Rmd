@@ -10,11 +10,12 @@ vignette: >
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  eval = FALSE
 )
 ```
 
-```{r setup, eval = FALSE}
+```{r setup}
 library(amRml)
 ```
 
@@ -22,4 +23,352 @@ library(amRml)
 
 `amRml` is part of a 3-package suite for predicting antimicrobial resistance (AMR) using machine learning models trained on bacterial genomic features.
 
-This vignette will be expanded with usage examples.
+This vignette demonstrates how to generate ML input matrices, train models, and visualize results.
+
+## Generating ML input matrices
+
+After data curation with `amRdata`, use `generateMLInputs()` to create ML-ready matrices from the DuckDB containing metadata and feature parquets.
+The DuckDB with the parquet views is created with `cleanData()`
+
+```{r generate-matrices}
+# Generate all ML input matrices from curated data
+generateMLInputs(
+  parquet_duckdb_path = "results/Sfl_parquet.duckdb",
+  out_path = "results/",
+  n_fold = 5,
+  split = c(1, 0), # CV mode (or use split = 0 as shorthand)
+  min_n = 25,
+  verbosity = "minimal"
+)
+```
+
+This generates:
+
+- Drug and drug-class matrices for all feature types (genes, proteins, domains, struct)
+- Year-stratified and country-stratified matrices
+- Leave-one-out (LOO) matrices for temporal/geographic holdouts
+- Multi-drug resistance (MDR) matrices
+
+For classical train/validation/test splits instead of cross-validation:
+
+```{r generate-splits}
+# 70% train, 15% validation, 15% test
+generateMLInputs(
+  parquet_duckdb_path = "results/Sfl_parquet.duckdb",
+  out_path = "results/",
+  n_fold = NULL,
+  split = c(0.7, 0.15),
+  verbosity = "debug"
+)
+```
+
+Use `skipImbalancedMatrix()` to check if a drug-bug combination has sufficient samples:
+
+```{r skip-check}
+skip <- skipImbalancedMatrix(
+  genome_ids = genome_ids,
+  phenotype_counts = phenotype_counts,
+  n_fold = 5,
+  split = c(1, 0),
+  min_total_obs = 40
+)
+```
+
+## Loading ML matrices
+
+The package expects Parquet files in long (sparse) format with these columns:
+
+| Column | Description |
+|--------|-------------|
+| `genome_id` | Unique identifier for each isolate |
+| `feature_id` | Feature name (gene, protein, domain, or struct) |
+| `value` | Binary presence/absence (0 or 1) or count |
+| `genome_drug.resistant_phenotype` | "Resistant" or "Susceptible" |
+
+`loadMLInputTibble()` converts this to wide format (one row per genome, one column per feature) for ML.
+
+```{r load-data}
+# Load a generated matrix
+ml_tibble <- loadMLInputTibble(
+  parquet_path = "results/matrix/Sfl_drug_AMP_domains_binary_sparse.parquet"
+)
+
+# Check dimensions
+n_features <- getNumFeat(ml_tibble)
+target_var <- getTargetVarName(ml_tibble)
+```
+
+## Main pipeline
+
+The primary entry point is `runMLPipeline()`, which orchestrates the entire ML workflow:
+
+```{r run-pipeline}
+results <- runMLPipeline(
+  ml_input_tibble = ml_tibble,
+  model = "LR",
+  split = c(0.6, 0.2),
+  n_fold = 2,
+  n_top_feats = 20,
+  select_best_metric = "mcc",
+  return_fit = TRUE,
+  return_pred = TRUE,
+  verbose = TRUE
+)
+
+# View results
+results$performance_tibble
+results$top_feat_tibble
+```
+
+### Output structure
+
+`runMLPipeline()` returns a list with:
+
+**`performance_tibble`** - model performance metrics:
+
+| Column | Description |
+|--------|-------------|
+| `num_obs` | Number of observations |
+| `res_prop` | Proportion of resistant samples |
+| `n_feat` | Number of features |
+| `model` | Model type (LR) |
+| `train_prop`, `val_prop` | Train/validation split proportions |
+| `fit_penalty`, `fit_mixture` | Fitted hyperparameters |
+| `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
+| `run_time_sec` | Runtime in seconds |
+
+**`top_feat_tibble`** - ranked feature importance:
+
+| Column | Description |
+|--------|-------------|
+| `Variable` | Feature name |
+| `Importance` | Variable importance score |
+| `Sign` | Direction of effect (POS = resistance, NEG = susceptibility) |
+
+**Optional outputs** (when `return_*` = TRUE):
+
+- `tune_res` - tuning results from grid search
+- `fit` - fitted model workflow object
+- `pred` - predictions with `.pred_class`, `.pred_Resistant`, `.pred_Susceptible`
+
+## Step-by-step model building
+
+For more control, use the individual tidymodels-based functions:
+
+```{r split-data}
+# Split data
+data_split <- splitMLInputTibble(ml_tibble, split = c(0.6, 0.2), seed = 123)
+
+library(rsample)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+```{r build-model}
+# Build recipe (preprocessing)
+recipe <- buildRecipe(train_data, use_pca = FALSE, pca_threshold = 0.95)
+
+# Build logistic regression model
+lr_model <- buildLRModel(multi_class = FALSE)
+
+# Build workflow
+wflow <- buildWflow(lr_model, recipe)
+
+# Build tuning grid
+grid <- buildTuningGrid(
+  model = "LR",
+  penalty_vec = 10^seq(-4, -1, length.out = 10),
+  mix_vec = 0:5 / 5
+)
+```
+
+```{r tune-fit}
+# Tune hyperparameters
+tune_res <- tuneGrid(wflow, data_split, grid, n_fold = 5)
+
+# Select and fit best model
+best_wflow <- selectBestModel(tune_res, wflow, select_best_metric = "mcc")
+fit <- fitBestModel(best_wflow, train_data)
+
+# Get fitted hyperparameters
+fit_hps <- getFitHps(fit)
+
+# Make predictions
+predictions <- predict(fit, test_data)
+```
+
+## Performance metrics
+
+```{r metrics}
+# Individual metrics
+nmcc <- calculatenMCC(predictions) # Normalized MCC (0-1 scale)
+f1 <- calculateF1(predictions) # F1 score
+bal_acc <- calculateBalAcc(predictions) # Balanced accuracy
+auprc <- calculateAUPRC(predictions) # Area under PR curve
+log2_apop <- calculateLog2APOP(predictions) # log2(AUPRC/prior)
+
+# All metrics at once
+all_metrics <- calculateEvalMets(predictions)
+
+# Confusion matrix
+conf_mat <- getConfusionMatrix(predictions)
+```
+
+| Metric | Function | Description |
+|--------|----------|-------------|
+| nMCC | `calculatenMCC()` | Normalized Matthews correlation coefficient (0-1) |
+| F1 | `calculateF1()` | Harmonic mean of precision and recall |
+| Balanced accuracy | `calculateBalAcc()` | Average of sensitivity and specificity |
+| AUPRC | `calculateAUPRC()` | Area under precision-recall curve |
+| log2(AUPRC/prior) | `calculateLog2APOP()` | Class-imbalance adjusted AUPRC |
+
+## Feature importance
+
+```{r feature-importance}
+# Extract top features from fitted model by number
+top_features <- extractTopFeats(fit, n_top_feats = 20)
+
+# Or by proportion of variable importance
+top_features <- extractTopFeats(fit, prop_vi_top_feats = c(0, 0.2))
+
+# Columns: Variable, Importance, Sign
+# Positive Sign = associated with resistance
+# Negative Sign = associated with susceptibility
+```
+
+## Iterative feature elimination (IFE)
+
+IFE iteratively removes top features to identify the most predictive subset:
+
+```{r ife}
+ife_results <- runIFE(
+  ml_tibble,
+  by_num = TRUE, # Remove by number of features
+  by_vi = FALSE, # Or remove by variable importance
+  percent_removal_vec = 10 * 1:9, # Remove 10%, 20%, ..., 90%
+  mix_vec = 0, # L2 regularization for IFE
+  return_feats = TRUE,
+  verbose = TRUE
+)
+
+# Results include nMCC at each iteration
+ife_results$ife_performance_tibble
+ife_results$feats_removed
+
+# Remove specific features manually
+ml_tibble_reduced <- removeTopFeats(ml_tibble, top_features)
+```
+
+## Visualization
+
+### Precision-recall curve
+
+```{r plot-prc}
+test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+plotPRC(test_data_plus_predictions)
+```
+### ROC curve
+
+```{r plot-roc}
+test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+plotROC(test_data_plus_predictions)
+```
+### Variable importance plot
+
+```{r plot-vi}
+topfeat <- readr::read_tsv(results/ML_top_features/Sfl_drug_AMP_domains_binary_top_features.tsv)
+plotTopFeatsVI(topfeat)
+```
+### Baseline comparison barplot
+non_shuffled_label_results Output of `runMLPipeline(shuffle_labels = FALSE)`
+shuffled_label_results Output of `runMLPipeline(shuffle_labels = TRUE)`
+```{r plot-baseline}
+# Run with shuffled labels for baseline
+baseline_results <- runMLPipeline(
+  ml_input_tibble = ml_tibble,
+  model = "LR",
+  split = c(0.6, 0.2),
+  shuffle_labels = TRUE
+)
+
+
+# Compare performance
+getBaselineComparisonBarplot(
+  non_shuffled_label_results = results$performance_tibble,
+  shuffled_label_results = baseline_results$performance_tibble
+)
+```
+
+## Fisher's exact tests (baseline comparison)
+
+As a non-ML baseline, run Fisher's exact tests with multiple testing correction:
+
+```{r fisher}
+# Complete Fisher pipeline
+fisher_results <- runFishers(
+  matrix_path = "results/matrix/Cje_drug_CIP_genes_binary_sparse.parquet",
+  Q = 0.05,
+  alternative = "two.sided",
+  susceptible_label = "Susceptible",
+  resistant_label = "Resistant"
+)
+
+# Or step-by-step:
+encoded <- encodePhenotype(ml_tibble)
+fisher_res <- runFisherTests(encoded$df, encoded$target, alternative = "two.sided")
+fisher_res <- applyBenjaminiHochberg(fisher_res, Q = 0.05)
+fisher_res <- computeFeatureFreq(encoded$df, fisher_res, encoded$target)
+```
+
+### Plot Fisher's results
+You can label the top N features to highlight the strongest hits (default is 5) or change the BH-adjusted p-value threshold with the alpha argument
+
+```{r}
+plotFishers(fisher_results)
+plotFishers(fisher_results, alpha = 0.01, label_top_n = 5)
+
+```
+
+## Wrapper to run all models 
+Given a DuckDB file produced by `runDataProcessing()`, it:
+1. generates all ML feature matrices (drug, class, year, country, MDR, LOO)
+2. creates all ML directory structures
+3. prepares ML input lists for every mode
+4. runs logistic regression ML models (standard + stratified + MDR)
+5. saves performance metrics, fitted models, predictions, and top feature rankings
+``` {r}
+runModelingPipeline(parquet_duckdb_path,
+                                threads = 16,
+                                n_fold = 5,
+                                split = c(1, 0),
+                                min_n = 25,
+                                prop_vi_top_feats = c(0, 1),
+                                pca_threshold = 0.99,
+                                verbose = TRUE,
+                                use_saved_split = TRUE)
+```
+
+Merge the performance and top features of each kind of models into a parquet that will serve as starting data for `amRshiny` package
+
+``` {r}
+buildPerformancePq(
+  path = "results/ML_perf",
+  stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE,
+  out_parquet = NULL,    
+  compression = "zstd",
+  verbose = TRUE
+)
+buildTopFeatsPq(
+  path = "results/ML_top_features",
+  stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE,
+  out_parquet = NULL, 
+  compression = "zstd",
+  verbose = TRUE
+) 
+```

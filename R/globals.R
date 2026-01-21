@@ -1,6 +1,12 @@
 # Global variables declaration to avoid R CMD check NOTEs for NSE
 # (non-standard evaluation) variables used with dplyr/tidyr/ggplot2
 
+# Package-level imports for packages used with :: notation
+#' @importFrom jsonlite fromJSON write_json
+#' @importFrom glmnet glmnet
+#' @keywords internal
+"_PACKAGE"
+
 utils::globalVariables(c(
 
   # Prediction columns from tidymodels
@@ -25,7 +31,10 @@ utils::globalVariables(c(
   "feature_id",
   "feature_subtype",
   "feature_type",
+  "fit_min_n",
   "fit_mixture",
+  "fit_mtry",
+  "fit_trees",
   "gene",
   "genome_drug.genome_id",
   "genome_drug.resistant_phenotype",
@@ -35,6 +44,7 @@ utils::globalVariables(c(
   "idx_sparse",
   "idx_strat",
   "model",
+  "neg_log10_adj_p",
   "nmcc",
   "num_obs",
   "output_prefix",
@@ -54,6 +64,7 @@ utils::globalVariables(c(
   "resistant_classes",
   "run_time_sec",
   "sig_after_bh",
+  "significance",
   "strat_value",
   "strat_value_test",
   "stratification",

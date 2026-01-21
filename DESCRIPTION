@@ -15,8 +15,8 @@ Description: Comprehensive machine learning (ML) pipeline for predicting antimic
     (MDR) and cross-resistance predictions with multiple holdout strategies
     (geographic, temporal, species). Includes model evaluation, feature importance
     analysis, cross-scale performance comparison, and functional characterization
-    of top features. Designed to work with data from amR_data package and generate
-    results for amR_shiny visualization. Can work independently with example
+    of top features. Designed to work with data from amRdata package and generate
+    results for amRshiny visualization. Can work independently with example
     ESKAPE pathogen datasets, too.
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
@@ -40,7 +40,10 @@ Imports:
     future,
     future.apply,
     ggplot2,
+    ggrepel,
+    glmnet,
     glue,
+    jsonlite,
     hardhat,
     parsnip,
     purrr,
@@ -63,5 +66,5 @@ biocViews:
     MicrobialGenomics,
     Pathogen,
     Visualization
-URL: https://github.com/JRaviLab/amR_ml
-BugReports: https://github.com/JRaviLab/amR_ml/issues
+URL: https://github.com/JRaviLab/amRml
+BugReports: https://github.com/JRaviLab/amRml/issues

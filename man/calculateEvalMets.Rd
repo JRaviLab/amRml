@@ -8,7 +8,7 @@ calculateEvalMets(test_data_plus_predictions)
 }
 \arguments{
 \item{test_data_plus_predictions}{Test data (tibble) with an added column for
-predicted phenotype labels, such as the output of \code{predict()}}
+predicted phenotype labels, such as the output of \code{predictML()}}
 }
 \value{
 F1 score, AUPRC, balanced accuracy, nMCC, and log2(AUPRC/prior)

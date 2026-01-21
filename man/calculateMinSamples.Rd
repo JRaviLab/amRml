@@ -7,26 +7,21 @@
 calculateMinSamples(n_fold, split, res_prop, smallest_n_obs_rs = 1)
 }
 \arguments{
-\item{n_fold}{\link[pillar:num]{pillar::num} Number of folds of cross-validation. This will be ignored
-if the second element of the \code{split} argument is non-zero (indicating that
-a validation set is being used rather than cross-validation).}
+\item{n_fold}{\link{numeric} Number of CV folds; must be >= 2 in CV mode}
 
-\item{split}{\link[pillar:num]{pillar::num} Vector of length 2 indicating the proportion of data to
-be designated as training and validation, respectively.}
+\item{split}{\link{numeric} Vector length 2: c(train_prop, val_prop).
+For pure CV we enforce c(1, 0). For classical splits: val > 0, test > 0.}
 
-\item{res_prop}{\link[pillar:num]{pillar::num} The proportion of antibiotic resistant genomes}
+\item{res_prop}{\link{numeric} Proportion of resistant genomes in the combo}
 
-\item{smallest_n_obs_rs}{\link[pillar:num]{pillar::num} The smallest number of "Resistant" or
-"Susceptible" observations allowable in the smallest subset of data used
-during ML.}
+\item{smallest_n_obs_rs}{\link{numeric} Minimum number of observations of the
+rarer class required per fold/partition. Default is 1.}
 }
 \value{
-Minimum number of total observations needed (one bug-drug combo)
-to have at least one observation of each class in each fold of
-cross-validation
+Minimum total observations required, adjusted by smallest_n_obs_rs
 }
 \description{
 Returns the minimum number of total observations needed (one bug-drug combo)
-to have at least \code{smallest_n_obs_rs} observations (default is 1) of each
-class in each fold of cross-validation.
+to have at least one observation of the rarer class in each CV fold
+or, in validation mode, across train/val/test.
 }

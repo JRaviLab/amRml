@@ -7,15 +7,11 @@
 buildTuningGrid(
   model = "LR",
   penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5/5,
-  n_feat = NA,
-  min_n_vec = c(2, 6, 12),
-  tree_vec = c(100, 500, 1000)
+  mix_vec = 0:5/5
 )
 }
 \arguments{
-\item{model}{\link[rlang:vector-construction]{rlang::chr}  Logistic regression ("LR"), random forest ("RF"), or
-boosted tree ("BT")}
+\item{model}{\link[rlang:vector-construction]{rlang::chr}  Currently, logistic regression ("LR") is supported.}
 
 \item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
 strength) values to try (for logistic regression). Recommended range:
@@ -24,21 +20,9 @@ strength) values to try (for logistic regression). Recommended range:
 \item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 intermediate values (0, 1) correspond to elastic net.}
-
-\item{n_feat}{\link[pillar:num]{pillar::num} Number of features in pangenome. Used to
-calculate \code{mtry} values for a subsequent grid search (for random forest or
-boosted tree). Output of \code{getNumFeat()}.}
-
-\item{min_n_vec}{\link[pillar:num]{pillar::num} A vector containing \code{min_n} values (the number of data
-points in a node required for the node to be split) to try for random forest
-or boosted tree. Recommended range: 1 to 100.}
-
-\item{tree_vec}{\link[pillar:num]{pillar::num} A vector containing values to try for the number of
-\code{trees} in random forest or boosted tree. Recommended range: 100 to 1000.}
 }
 \value{
-A logistic regression, random forest, or boosted tree tuning grid as
-a tibble
+A logistic regression tuning grid as a tibble
 }
 \description{
 Builds a tuning grid according to the input model.

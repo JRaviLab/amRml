@@ -12,299 +12,105 @@ knitr::opts_chunk$set(
   out.width = "100%"
 )
 ```
-
-# amRml: machine learning for antimicrobial resistance prediction
+## amRml: Machine Learning for Antimicrobial Resistance Prediction
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![CRAN status](https://www.r-pkg.org/badges/version/amRml)](https://CRAN.R-project.org/package=amRml)
 <!-- badges: end -->
 
-amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. This package trains interpretable machine learning models using multi-scale genomic features from bacterial isolates.
+amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. amRml is the machine learning (ML) engine of the https://github.com/JRaviLab/amR.
+It trains interpretable ML models to predict antimicrobial resistance (AMR) from the multi‑scale genomic features prepared by amRdata.
+The package includes streamlined pipelines for:
+
+-  Single‑drug AMR prediction
+-  Multi‑drug resistance (MDR) prediction
+-  Stratified and cross‑testing workflows (year, country)
+-  Leave‑one‑out (LOO) generalization tests
+-  Baseline shuffled‑label controls
+-  PCA and variable‑importance‑based feature reduction
+
+All with reproducible, parallelized model execution.
+
+amRml produces ML‑ready tibbles, trains logistic regression models, and exports clean performance summaries, feature rankings, predictions, and tuned model objects.
 
 ## Overview
-
 amRml provides functions to:
 
-- Prepare ML-ready datasets from feature matrices
-- Train interpretable logistic regression models
-- Generate ranked feature importance lists
-- Calculate comprehensive performance metrics
-- Support parallel processing across drugs and species
-- Export results for visualization in amRshiny
+-  Convert multi‑scale genomic feature Parquets into ML‑ready tibbles
+-  Train interpretable AMR classifiers with tidymodels
+-  Perform robust evaluation using MCC, F1, AuPRC, balanced accuracy, and confusion matrices
+-  Extract top predictive features to connect models' performance with biological underpinnings
+
+The models are optimized for reproducibility, interpretability, and benchmarking across species and antibiotic classes.
+See the https://jravilab.github.io/amRml/articles/intro.html for full examples.
 
 ## Installation
-
-### Current (development version)
 
 ```r
 # Install from GitHub
 if (!requireNamespace("remotes", quietly = TRUE))
     install.packages("remotes")
 
-remotes::install_github("JRaviLab/amR_ml")
-```
-
-### Future (Bioconductor release)
-
-Once submitted to Bioconductor, installation will be:
-
-```r
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("amRml")
+remotes::install_github("JRaviLab/amRml")
 ```
 
 ## Quick start
-
+### 1. Generate ML‑ready data and metadata inputs
+`generateMLInputs()` converts the Parquet‑backed DuckDB file created by amRdata into a standard set of ready-to-model matrices.
 ```r
 library(amRml)
 
-# Load feature data from amRdata
-features <- readRDS("features.rds")
-
-# Train models for a single drug
-models <- train_amr_models(
-  features = features,
-  drug = "ciprofloxacin",
-  scales = c("gene", "protein", "domain", "struct"),
-  model_type = "logistic_regression"
-)
-
-# View performance metrics
-models$performance
-
-# Extract top features
-top_features <- get_top_features(models, n = 20)
-
-# Train models across multiple drugs (parallel)
-all_models <- train_multiple_drugs(
-  features = features,
-  drugs = c("ciprofloxacin", "tetracycline", "gentamicin"),
-  parallel = TRUE,
-  n_cores = 4
+generateMLInputs(
+  parquet_duckdb_path = "data/Shigella_flexneri/Sfl_parquet.duckdb",
+  out_path            = "results/Shigella_flexneri/",
+  n_fold              = 5,
+  verbosity           = "minimal"
 )
 ```
+This will analyze the Parquet tables attached to the {Bug}_parquet.duckdb database created by the amRdata::cleanData() step at the end of the `amRdata::runDataProcessing()` workflow. For each drug or drug class, it evaluates how many isolates have paired genotype and AMR phenotype data, and produced subsetted ML-ready matrices for each feature scale. 
+
+The result: All modeling matrices that can be created for a given dataset, ready for input into the ML modeling workflow next. 
+
+### 2. Run standard AMR prediction models
+`runMLmodels()` executes logistic regression ML models across all prepared matrices.
+```r
+runMLmodels(
+  path        = "results/Shigella_flexneri/",
+  threads     = 16
+)
+```
+This produces 4 output directories:
+-  `performance`:  Containing performance metrics per bug-drug-feature_scale model
+-  `pred`:         Containing the specific predictions made per model
+-  `top_features`: Containing which specific features drove model predictions per model
+-  `models`:       Containing the model fits themselves in .Rds format
+
+These models can also be adjusted with parameters like `shuffle_labels = TRUE` (creates random baseline models to compare against), `use_pca = TRUE` (to reduce feature space by using PCs as features), `stratify_by = "country"` (to stratify samples into countries of origin to identify regional trends in AMR and how well models generalize), and many other options.  
+
+### 3. Multi‑drug resistance (MDR) modeling
+`runMDRmodels()` trains models that predict aggregated multi‑drug resistance phenotypes.
+
+```r
+runMDRmodels(
+  path        = "results/Shigella_flexneri/",
+  threads     = 16
+)
+```
+
+This uses specific matrices to test whether ML models can predict resistance against multiple drug classes, and identify any features associated with MDR.
 
 ## Features
 
-### Data preparation
+- **Data preparation**: Load Parquet files and prepare ML-ready datasets
+- **Model training**: User-customizable logistic regression via tidymodels
+- **Evaluation**: nMCC, F1, balanced accuracy, AuPRC, and confusion matrices
+- **Feature importance**: Extract and rank predictive features
 
-The package processes feature matrices from amRdata to create ML-ready datasets:
-
-- Subset isolates with available AST data for target drug
-- Split samples into training and testing sets (stratified)
-- Handle class imbalance through balanced sampling or weighting
-- Normalize features when appropriate
-- Filter low-variance features
-
-### Model training
-
-Uses the tidymodels framework for consistent, reproducible modeling:
-
-- **Logistic regression**: Primary algorithm for interpretability
-- Separate models per molecular scale (gene, protein, domain, struct)
-- Combined multi-scale models using all features
-- Cross-validation for hyperparameter tuning
-- Support for custom model specifications
-
-### Feature importance
-
-Extracts ranked feature importance to identify resistance determinants:
-
-- Coefficient magnitudes for logistic regression
-- Permutation importance for other models (future)
-- Scale-specific rankings
-- Cross-drug comparison of features
-- Integration with visualization tools
-
-### Performance metrics
-
-Comprehensive evaluation of model predictions:
-
-- **Balanced accuracy**: Accounts for class imbalance
-- **F1 score**: Harmonic mean of precision and recall
-- **Matthews correlation coefficient (MCC)**: Overall classification quality
-- **Sensitivity and specificity**: Per-class performance
-- **Confusion matrices**: Detailed classification breakdown
-- **ROC curves**: Threshold-independent evaluation
-
-### Parallel processing
-
-Efficient training across multiple models:
-
-- Drug-level parallelization
-- Scale-level parallelization
-- Progress tracking for long-running jobs
-- Automatic resource management
-
-## Workflow example
-
-Complete ML workflow for *Campylobacter jejuni*:
-
-```r
-library(amRml)
-
-# Load features from amRdata
-features <- arrow::read_parquet("cjej_features.parquet")
-metadata <- arrow::read_parquet("cjej_metadata.parquet")
-
-# Prepare ML datasets
-ml_data <- prepare_ml_data(
-  features = features,
-  metadata = metadata,
-  drug = "ciprofloxacin",
-  test_fraction = 0.2,
-  balance_classes = TRUE
-)
-
-# Train models across all scales
-models <- train_amr_models(
-  ml_data = ml_data,
-  scales = c("gene", "protein", "domain", "struct", "combined"),
-  model_type = "logistic_regression",
-  cv_folds = 5
-)
-
-# Evaluate performance
-performance <- evaluate_models(models)
-print(performance)
-
-# Extract feature importance
-importance <- get_feature_importance(
-  models,
-  n_features = 50,
-  scale = "gene"
-)
-
-# Visualize top features
-plot_feature_importance(importance)
-
-# Compare scales
-compare_scales(models, metric = "bal_acc")
-
-# Export for dashboard
-export_results(
-  models,
-  output_dir = "model_outputs"
-)
-```
-
-## Model interpretability
-
-The package prioritizes interpretability through logistic regression:
-
-### Coefficient interpretation
-
-```r
-# Get model coefficients
-coefficients <- extract_coefficients(models$gene_model)
-
-# Positive coefficients indicate features associated with resistance
-# Negative coefficients indicate features associated with susceptibility
-
-# Example output:
-#   feature              coefficient   p_value
-#   gyrA_mutation        2.34          <0.001
-#   efflux_pump_ABC      1.87          <0.001
-#   porin_loss          -0.45          0.023
-```
-
-### Feature ranking
-
-```r
-# Rank features by absolute coefficient magnitude
-ranked_features <- rank_features(
-  models,
-  scale = "gene",
-  n = 20
-)
-
-# Identify consistent features across drugs
-cross_drug_features <- find_consistent_features(
-  all_models,
-  drugs = c("ciprofloxacin", "tetracycline"),
-  min_rank = 10
-)
-```
-
-## Advanced usage
-
-### Custom model specifications
-
-```r
-# Specify custom logistic regression parameters
-custom_spec <- logistic_reg(
-  penalty = 0.01,
-  mixture = 1  # LASSO regularization
-) %>%
-  set_engine("glmnet")
-
-models <- train_amr_models(
-  ml_data = ml_data,
-  model_spec = custom_spec
-)
-```
-
-### Cross-model analysis
-
-```r
-# Train models on different stratifications
-country_models <- train_stratified_models(
-  features = features,
-  metadata = metadata,
-  drug = "ciprofloxacin",
-  stratify_by = "country",
-  min_samples = 100
-)
-
-year_models <- train_stratified_models(
-  features = features,
-  metadata = metadata,
-  drug = "ciprofloxacin",
-  stratify_by = "collection_year",
-  min_samples = 50
-)
-
-# Compare temporal stability
-compare_temporal_models(year_models)
-```
-
-### Multi-drug prediction
-
-```r
-# Train models for drug classes
-drug_classes <- list(
-  fluoroquinolones = c("ciprofloxacin", "levofloxacin"),
-  tetracyclines = c("tetracycline", "doxycycline"),
-  aminoglycosides = c("gentamicin", "amikacin")
-)
-
-class_models <- train_drug_class_models(
-  features = features,
-  metadata = metadata,
-  drug_classes = drug_classes,
-  parallel = TRUE
-)
-```
-
-## Performance benchmarks
-
-Typical model performance varies by species and drug:
-
-- **Balanced accuracy**: 0.75--0.95
-- **F1 score**: 0.70--0.90
-- **MCC**: 0.50--0.85
-
-Training times depend on feature dimensions:
-- Single drug, single scale: 1--5 minutes
-- Single drug, all scales: 5--20 minutes
-- Multiple drugs (parallel): 10--60 minutes
+See the [package vignette](https://jravilab.github.io/amRml/articles/intro.html) for detailed usage.
 
 ## Integration with amR suite
 
-amRml integrates seamlessly with other amR packages:
+amRml is designed to work seamlessly with other amR packages:
 
 ```r
 library(amRdata)
@@ -312,55 +118,30 @@ library(amRml)
 library(amRshiny)
 
 # 1. Curate data
-features <- extract_features(...)
+prepareGenomes("Shigella flexneri")
+runDataProcessing("amRdata/data/Shigella_flexneri/Sfl.duckdb")
 
-# 2. Train models (this package)
-models <- train_amr_models(
-  features = features,
-  drug = "ciprofloxacin"
-)
+# 2. Train models
+runMLmodels("amRdata/data/Shigella_flexneri/Sfl_parquet.duckdb")
 
-# 3. Visualize in dashboard
-launch_dashboard(models = models)
-```
-
-## Model outputs
-
-The package generates structured outputs for downstream analysis:
-
-- `performances.tsv`: Metrics per model (balanced accuracy, F1, MCC, etc.)
-- `feature_importance.tsv`: Ranked features per model
-- `predictions.tsv`: Per-isolate predictions and probabilities
-- `confusion_matrices.rds`: Detailed classification results
-- `model_objects.rds`: Serialized model objects for reuse
-
-These outputs are formatted for direct use in amRshiny or custom analyses.
-
-## Future enhancements
-
-Post-Bioconductor submission, planned additions include:
-
-- Random forest and XGBoost algorithms
-- Regression models for MIC prediction
-- Automated feature selection pipelines
-- Ensemble model combinations
-- Enhanced cross-validation strategies
-
-## Citation
-
-If you use amRml in your research, please cite:
-
-```
-Wolfe EP\^, Brenner EP\^, Ravi J. (2025). amRml: Machine learning for antimicrobial 
-resistance prediction. R package version 0.99.0.
-https://github.com/JRaviLab/amR_ml
+# 3. Visualize
+launchAMRDashboard()
 ```
 
 ## Related packages
-
 - [amR](https://github.com/JRaviLab/amR): Suite metapackage
-- [amRdata](https://github.com/JRaviLab/amR_data): Data curation
-- [amRshiny](https://github.com/JRaviLab/amR_shiny): Interactive dashboard
+- [amRdata](https://github.com/JRaviLab/amRml): Data preparation for AMR prediction
+- [amRshiny](https://github.com/JRaviLab/amRshiny): Interactive dashboard
+
+## Citation
+If you use `amRml` in your research, please cite:
+
+```
+Brenner E, Ghosh A, Wolfe E, Boyer E, Vang C, Lesiyon R, Mayer D, Ravi J. (2026).
+amR: an R package suite to predict antimicrobial resistance in bacterial pathogens.
+R package version 0.99.0.
+https://github.com/JRaviLab/amR
+```
 
 ## Contributing
 
@@ -368,7 +149,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## Reporting issues
 
-Report bugs and request features at: https://github.com/JRaviLab/amR_ml/issues
+Report bugs and request features at: https://github.com/JRaviLab/amRml/issues
 
 ## License
 
@@ -380,6 +161,6 @@ BSD 3-Clause License. See [LICENSE](LICENSE) for details.
 
 **Lab website**: https://jravilab.github.io
 
-## Code of Conduct
-  
-Please note that the `amRml` is released with a [Contributor Code of Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html). By contributing to this project, you agree to abide by its terms.
+## Code of conduct
+
+Please note that `amRml` is released with a [Contributor Code of Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html). By contributing to this project, you agree to abide by its terms.

@@ -2,13 +2,7 @@
 #' Pulls the ML parameters .json and reads what model split parameters are to be
 #' used. These defaults can be overridden if you so choose, but consider regenerating
 #' the ML matrices with these new split/CV values instead.
-#'
-#' @param parquet_path
-#' @param defaults
-#'
-#' @returns
-#'
-#' @examples
+#' @noRd
 .resolveSplitParams <- function(parquet_path,
                                 defaults = list(split = c(0.8, 0),
                                                 seed  = 5280,
@@ -1022,7 +1016,7 @@ runModelingPipeline <- function(parquet_duckdb_path,
   out_root <- dirname(parquet_duckdb_path)
 
   if (verbose) {
-    message("\n=== amR_ml: Full pipeline runner ===")
+    message("\n=== amRml: Full pipeline runner ===")
     message("Using parquet-backed DB:\n  ", parquet_duckdb_path)
   }
 
