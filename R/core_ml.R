@@ -184,7 +184,7 @@ buildLRModel <- function(multi_class = FALSE) {
 #' Builds a `tidymodels` workflow based on an input model and recipe.
 #'
 #' @param parsnip_mod A `parsnip` model object, such as the output of
-#' `buildLRModel()`, `buildRFModel()`, or `buildBTModel()`
+#' `buildLRModel()`
 #' @param recipe A recipe, such as the output of `buildRecipe()`
 #' @return A `workflow` object
 #' @export
@@ -207,7 +207,7 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' boosted tree ("BT")
 #' @param penalty_vec [num] A vector containing `penalty` (regularization
 #' strength) values to try (for logistic regression). It is recommended to
-#' choose values [10^-4, 10^4].
+#' choose values within a range of 10^-4 to 10^4.
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 #' intermediate values (0, 1) correspond to elastic net.
@@ -216,10 +216,10 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' boosted tree). Output of `getNumFeat()`.
 #' @param min_n_vec [num] A vector containing `min_n` values (the number of data
 #' points in a node required for the node to be split) to try for random forest
-#' or boosted tree. It is recommended to choose values [1, 100].
+#' or boosted tree. It is recommended to choose values within a range of 1 to 100.
 #' @param tree_vec [num] A vector containing values to try for the number of
 #' `trees` in random forest or boosted tree. It is recommended to choose values
-#' [100, 1000].
+#' within a range of 100 to 1000.
 #' @return A logistic regression, random forest, or boosted tree tuning grid as
 #' a tibble
 #' @export

@@ -15,8 +15,6 @@ runMLPipeline(
   pca_threshold = 0.95,
   penalty_vec = 10^seq(-4, -1, length.out = 10),
   mix_vec = 0:5/5,
-  min_n_vec = c(2, 6, 12),
-  tree_vec = c(100, 500, 1000),
   select_best_metric = "mcc",
   seed = 123,
   shuffle_labels = FALSE,
@@ -35,8 +33,7 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{model}{\link[rlang:vector-construction]{rlang::chr} Logistic regression ("LR"), random forest ("RF"), or
-boosted tree ("BT")}
+\item{model}{\link[rlang:vector-construction]{rlang::chr} Logistic regression ("LR")}
 
 \item{split}{\link[pillar:num]{pillar::num} Vector of length 2 indicating the proportion of data to
 be designated as training and validation, respectively. Note: if \code{test_data}
@@ -60,24 +57,16 @@ total variable importance, for example,
 \item{pca_threshold}{\link[pillar:num]{pillar::num} The proportion of total variance for which the
 principle components account}
 
-\item{penalty_vec}{[num] A vector containing \code{penalty} (regularization
+\item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
 strength) values to try (for logistic regression). It is recommended to
-choose values in the range 10^-4 to 10^4.}
+choose values within a range of 10^-4 to 10^4.}
 
 \item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 intermediate values correspond to elastic net.}
 
-\item{min_n_vec}{[num] A vector containing \code{min_n} values (the number of data
-points in a node required for the node to be split) to try for random forest
-or boosted tree. It is recommended to choose values in the range 1 to 100.}
-
-\item{tree_vec}{[num] A vector containing values to try for the number of
-\code{trees} in random forest or boosted tree. It is recommended to choose values
-in the range 100 to 1000.}
-
 \item{select_best_metric}{\link[rlang:vector-construction]{rlang::chr} Metric to select best model: "f_meas",
-"pr_auc", or "bal_accuracy"}
+"pr_auc", "mcc", or "bal_accuracy"}
 
 \item{seed}{\link[pillar:num]{pillar::num} For reproducible analysis}
 

@@ -43,7 +43,7 @@ NULL
 #' principle components account
 #' @param penalty_vec [num] A vector containing `penalty` (regularization
 #' strength) values to try (for logistic regression). It is recommended to
-#' choose values [10^-4, 10^4].
+#' choose values within a range of 10^-4 to 10^4.
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 #' intermediate values correspond to elastic net.
@@ -399,11 +399,11 @@ runMLPipeline <- function(
 
 if(return_pred) {
       if(!multi_class){
-    all_results[["pred"]] <- test_data_plus_predictions |> 
-      dplyr::select(c(genome_id, .pred_class, .pred_Resistant, 
+    all_results[["pred"]] <- test_data_plus_predictions |>
+      dplyr::select(c(genome_id, .pred_class, .pred_Resistant,
         .pred_Susceptible, genome_drug.resistant_phenotype))
   }
-   all_results[["pred"]] <- test_data_plus_predictions 
+   all_results[["pred"]] <- test_data_plus_predictions
   }
 
   return(all_results)
