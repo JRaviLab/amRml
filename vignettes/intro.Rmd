@@ -351,7 +351,7 @@ runModelingPipeline(parquet_duckdb_path,
 Merge the performance and top features of each kind of models into a parquet that will serve as starting data for `amRshiny` package
 
 ``` {r}
-buildPerformanceParquetFromResults(
+buildPerformancePq(
   path = "results/ML_perf",
   stratify_by = NULL,
   LOO = FALSE,
