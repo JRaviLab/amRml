@@ -12,15 +12,38 @@ knitr::opts_chunk$set(
   out.width = "100%"
 )
 ```
-
-# amRml: machine learning for antimicrobial resistance prediction
+## amRml: Machine Learning for Antimicrobial Resistance Prediction
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![CRAN status](https://www.r-pkg.org/badges/version/amRml)](https://CRAN.R-project.org/package=amRml)
 <!-- badges: end -->
 
-amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. This package trains interpretable machine learning models using genomic features from bacterial isolates.
+amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrobial resistance prediction. amRml is the machine learning (ML) engine of the https://github.com/JRaviLab/amR.
+It trains interpretable ML models to predict antimicrobial resistance (AMR) from the multi‑scale genomic features prepared by amRdata.
+The package includes streamlined pipelines for:
+
+-  Single‑drug AMR prediction
+-  Multi‑drug resistance (MDR) prediction
+-  Stratified and cross‑testing workflows (year, country)
+-  Leave‑one‑out (LOO) generalization tests
+-  Baseline shuffled‑label controls
+-  PCA and variable‑importance‑based feature reduction
+
+All with reproducible, parallelized model execution.
+
+amRml produces ML‑ready tibbles, trains logistic regression models, and exports clean performance summaries, feature rankings, predictions, and tuned model objects.
+
+## Overview
+amRml provides functions to:
+
+-  Convert multi‑scale genomic feature Parquets into ML‑ready tibbles
+-  Train interpretable AMR classifiers with tidymodels
+-  Perform robust evaluation using MCC, F1, AuPRC, balanced accuracy, and confusion matrices
+-  Extract top predictive features to connect models' performance with biological underpinnings
+
+The models are optimized for reproducibility, interpretability, and benchmarking across species and antibiotic classes.
+See the https://jravilab.github.io/amRml/articles/intro.html for full examples.
 
 ## Installation
 
@@ -29,47 +52,86 @@ amRml is part of the [amR suite](https://github.com/JRaviLab/amR) for antimicrob
 if (!requireNamespace("remotes", quietly = TRUE))
     install.packages("remotes")
 
-remotes::install_github("JRaviLab/amR_ml")
+remotes::install_github("JRaviLab/amRml")
 ```
 
 ## Quick start
-
+### 1. Generate ML‑ready data and metadata inputs
+generateMLInputs() converts the Parquet‑backed DuckDB file created by amRdata into a standard set of ready-to-model matrices.
 ```r
 library(amRml)
 
-# Load feature data from a Parquet file
-ml_data <- loadMLInputTibble("path/to/features.parquet")
+generateMLInputs(
+  parquet_duckdb_path = "data/Shigella_flexneri/Sfl_parquet.duckdb",
+  out_path            = "results/Shigella_flexneri/",
+  n_fold              = 5,
+  verbosity           = "minimal"
+)
+```
+This will analyze the Parquet tables attached to the {Bug}_parquet.duckdb database created by the amRdata::cleanData() step at the end of the amRdata::runDataProcessing() workflow. For each drug or drug class, it evaluates how many isolates have paired genotype and AMR phenotype data, and produced subsetted ML-ready matrices for each feature scale. 
 
-# Run the ML pipeline
-results <- runMLPipeline(
- ml_input_tibble = ml_data,
-  model = "LR",
-  split = c(0.6, 0.2),
-  n_top_feats = 20,
-  return_fit = TRUE
+The result: All modeling matrices that can be created for a given dataset, ready for input into the ML modeling workflow next. 
+
+### 2. Run standard AMR prediction models
+runMLmodels() executes logistic regression ML models across all prepared matrices.
+```r
+runMLmodels(
+  path        = "results/Shigella_flexneri/",
+  threads     = 16
+)
+```
+This produces 4 output directories:
+-  performance:  Containing performance metrics per bug-drug-feature_scale model
+-  pred:         Containing the specific predictions made per model
+-  top_features: Containing which specific features drove model predictions per model
+-  models:       Containing the model fits themselves in .Rds format
+
+These models can also be adjusted with parameters like shuffle_labels = TRUE (creates random baseline models to compare against), use_pca = TRUE (to reduce feature space by using PCs as features), stratify_by = "country" (to stratify samples into countries of origin to identify regional trends in AMR and how well models generalize), and many other options.  
+
+### 3. Multi‑drug resistance (MDR) modeling
+runMDRmodels() trains models that predict aggregated multi‑drug resistance phenotypes.
+
+```r
+runMDRmodels(
+  path        = "results/Shigella_flexneri/",
+  threads     = 16
 )
 
-# View results
-results$performance_tibble
-results$top_feat_tibble
-```
+This uses specific matrices to test whether ML models can predict resistance against multiple drug classes, and identify any features associated with MDR.
 
 ## Features
 
 - **Data preparation**: Load Parquet files and prepare ML-ready datasets
-- **Model training**: Logistic regression, random forest, and boosted trees via tidymodels
-- **Evaluation**: nMCC, F1, balanced accuracy, AUPRC, and confusion matrices
+- **Model training**: User-customizable logistic regression via tidymodels
+- **Evaluation**: nMCC, F1, balanced accuracy, AuPRC, and confusion matrices
 - **Feature importance**: Extract and rank predictive features
-- **Iterative feature elimination**: Identify minimal predictive feature sets
-- **Baseline comparisons**: Fisher's exact tests with Benjamini-Hochberg correction
 
-See the [package vignette](https://jravilab.github.io/amR_ml/articles/intro.html) for detailed usage.
+See the [package vignette](https://jravilab.github.io/amRml/articles/intro.html) for detailed usage.
+
+## Integration with amR suite
+
+amRml is designed to work seamlessly with other amR packages:
+
+```r
+library(amRdata)
+library(amRml)
+library(amRshiny)
+
+# 1. Curate data
+prepareGenomes("Shigella flexneri")
+runDataProcessing("amRdata/data/Shigella_flexneri/Sfl.duckdb")
+
+# 2. Train models
+runMLmodels("amRdata/data/Shigella_flexneri/Sfl_parquet.duckdb")
+
+# 3. Visualize ### To add
+launch_dashboard()
+```
 
 ## Related packages
-
 - [amR](https://github.com/JRaviLab/amR): Suite metapackage
-- [amRdata](https://github.com/JRaviLab/amR_data): Data curation
-- [amRshiny](https://github.com/JRaviLab/amR_shiny): Interactive dashboard
+- [amRdata](https://github.com/JRaviLab/amRml): Data preparation for AMR prediction
+- [amRshiny](https://github.com/JRaviLab/amRshiny): Interactive dashboard
 
 ## Citation
 If you use `amRml` in your research, please cite:
@@ -87,7 +149,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## Reporting issues
 
-Report bugs and request features at: https://github.com/JRaviLab/amR_ml/issues
+Report bugs and request features at: https://github.com/JRaviLab/amRml/issues
 
 ## License
 
