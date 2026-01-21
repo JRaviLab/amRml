@@ -40,7 +40,9 @@ be designated as training and validation, respectively. Note: if \code{test_data
 is provided, these numbers will be scaled so that they sum to 1 and will
 still represent fractions of \code{ml_input_tibble} (not including the input
 \code{test_data}). Please do not directly provide numbers that sum to 1 since the
-function is not equipped to handle this.}
+function is not equipped to handle this. If cross-validation is enabled here
+\code{split = c(1,0)}, we will still retain a 20\% test holdout for final reporting.
+Cross-validation is run on the 80\% training portion, and not on the testing set.}
 
 \item{n_fold}{\link[pillar:num]{pillar::num} Number of folds of cross-validation}
 

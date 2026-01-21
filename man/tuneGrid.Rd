@@ -4,7 +4,7 @@
 \alias{tuneGrid}
 \title{tuneGrid()}
 \usage{
-tuneGrid(wflow, data_split, grid = buildTuningGrid(model = "LR"), n_fold = 2)
+tuneGrid(wflow, data_split, grid = buildTuningGrid(model = "LR"), n_fold = 5)
 }
 \arguments{
 \item{wflow}{A \code{workflow} object, such as the output of \code{buildWflow()}}

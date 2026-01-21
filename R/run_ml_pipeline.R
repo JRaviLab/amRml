@@ -24,13 +24,16 @@ NULL
 #' classification for one bug/drug combination) or `resistant_classes`
 #' (multi-class classification for determining the drug classes to which each
 #' genome is resistant), but not both.
-#' @param model [chr] Logistic regression ("LR")
+#' @param model [chr] Logistic regression ("LR"), random forest ("RF"), or
+#' boosted tree ("BT")
 #' @param split [num] Vector of length 2 indicating the proportion of data to
 #' be designated as training and validation, respectively. Note: if `test_data`
 #' is provided, these numbers will be scaled so that they sum to 1 and will
 #' still represent fractions of `ml_input_tibble` (not including the input
 #' `test_data`). Please do not directly provide numbers that sum to 1 since the
-#' function is not equipped to handle this.
+#' function is not equipped to handle this. If cross-validation is enabled here
+#' `split = c(1,0)`, we will still retain a 20% test holdout for final reporting.
+#' Cross-validation is run on the 80% training portion, and not on the testing set.
 #' @param n_fold [num] Number of folds of cross-validation
 #' @param prop_vi_top_feats [num] A vector of length 2 with elements together
 #' indicating the proportion of total variable importance the top features
@@ -47,8 +50,14 @@ NULL
 #' @param mix_vec [num] A vector containing `mixture` values to try for logistic
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 #' intermediate values correspond to elastic net.
+#' @param min_n_vec \[num\] A vector containing `min_n` values (the number of data
+#' points in a node required for the node to be split) to try for random forest
+#' or boosted tree. It is recommended to choose values in the range 1 to 100.
+#' @param tree_vec \[num\] A vector containing values to try for the number of
+#' `trees` in random forest or boosted tree. It is recommended to choose values
+#' in the range 100 to 1000.
 #' @param select_best_metric [chr] Metric to select best model: "f_meas",
-#' "pr_auc", "mcc", or "bal_accuracy"
+#' "pr_auc", or "bal_accuracy"
 #' @param seed [num] For reproducible analysis
 #' @param shuffle_labels [bool] Set to `TRUE` to randomly shuffle AMR phenotype
 #' labels for baseline comparisons.
@@ -70,7 +79,7 @@ runMLPipeline <- function(
   ml_input_tibble, model = "LR", split = c(0.6, 0.2),
   n_fold = 2, prop_vi_top_feats = c(0, 1), n_top_feats = NA, use_pca = FALSE,
   pca_threshold = 0.95, penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5 / 5,
+  mix_vec = 0:5 / 5, min_n_vec = c(2, 6, 12), tree_vec = c(100, 500, 1000),
   select_best_metric = "mcc", seed = 123, shuffle_labels = FALSE,
   test_data = NA, return_tune_res = FALSE, return_fit = FALSE,
   return_pred = FALSE, verbose = TRUE
@@ -83,10 +92,21 @@ runMLPipeline <- function(
   .checkArgReturnFit(return_fit)
   .checkArgReturnPred(return_pred)
 
+
+
   # Set `n_fold` to `NA` if not using cross-validation.
   if (split[2] != 0) {
     n_fold <- NA
   }
+
+  # Confirm resolved split params
+    if (verbose) {
+       mode <- if (split[2] == 0) "cv" else "splits"
+       message(sprintf("ML split mode: %s | split = c(%.2f, %.2f) | n_fold = %s | seed = %s",
+                                           mode, split[1], split[2],
+                                           ifelse(is.na(n_fold), "NA", as.character(n_fold)),
+                                           as.character(seed)))
+      }
 
   # Create a variable indicating whether external `test_data` was provided. This
   # will be set to `TRUE` later if the `test_data` argument is not `NA`.
@@ -95,11 +115,11 @@ runMLPipeline <- function(
   num_obs_ml_input_tibble <- nrow(ml_input_tibble)
 
   # Determine whether multi-class classification is to be performed.
-  if (getTargetVarName(ml_input_tibble) == "resistant_classes") {
-    multi_class <- TRUE
-  } else {
-    multi_class <- FALSE
-  }
+  if (as.character(.getTargetVarName(ml_input_tibble)) == "resistant_classes") {
+      multi_class <- TRUE
+    } else {
+      multi_class <- FALSE
+    }
 
   if (model != "LR" & multi_class) {
     stop(paste(
@@ -242,7 +262,7 @@ runMLPipeline <- function(
       mix_vec = mix_vec
     )
   }
-
+  
   recipe <- buildRecipe(train_data,
     use_pca = use_pca,
     pca_threshold = pca_threshold
@@ -260,23 +280,23 @@ runMLPipeline <- function(
     fitBestModel(train_data = train_data)
 
   if (model == "LR") {
-    fit_penalty <- getFitHps(fit)["penalty"] |> as.numeric()
-    fit_mixture <- getFitHps(fit)["mixture"] |> as.numeric()
+    fit_penalty <- .getFitHps(fit)["penalty"] |> as.numeric()
+    fit_mixture <- .getFitHps(fit)["mixture"] |> as.numeric()
   }
 
-  test_data_plus_predictions <- predict(fit, test_data)
+  test_data_plus_predictions <- predictML(fit, test_data)
 
   if (!multi_class) {
-    f1 <- calculateF1(test_data_plus_predictions)
-    bal_acc <- calculateBalAcc(test_data_plus_predictions)
-    sens <- calculateSensitivity(test_data_plus_predictions)
-    spec <- calculateSpecificity(test_data_plus_predictions)
+    f1 <- .calculateF1(test_data_plus_predictions)
+    bal_acc <- .calculateBalAcc(test_data_plus_predictions)
+    sens <- .calculateSensitivity(test_data_plus_predictions)
+    spec <- .calculateSpecificity(test_data_plus_predictions)
     # From here on out, log2(AUPRC/prior) will be referred to as "log2_apop" for
     # variable naming purposes.
-    log2_apop <- calculateLog2APOP(test_data_plus_predictions)
+    log2_apop <- .calculateLog2APOP(test_data_plus_predictions)
   }
 
-  nmcc <- calculatenMCC(test_data_plus_predictions)
+  nmcc <- .calculatenMCC(test_data_plus_predictions)
 
   if (verbose) {
     message(paste("Normalized Matthews correlation coefficient:", nmcc))
@@ -361,8 +381,6 @@ runMLPipeline <- function(
         .after = "val_prop"
       ) |>
       tibble::add_column(bal_acc, .after = "nmcc") |>
-      tibble::add_column(sens, .after = "nmcc") |>
-      tibble::add_column(spec, .after = "nmcc") |>
       tibble::add_column(f1, .after = "nmcc") |>
       tibble::add_column(log2_apop, .after = "nmcc")
   }
@@ -371,7 +389,13 @@ runMLPipeline <- function(
     performance_tibble <- performance_tibble |>
       tibble::add_column(fit_penalty, .before = "nmcc") |>
       tibble::add_column(fit_mixture, .before = "nmcc")
+  } else if (model == "RF" || model == "BT") {
+    performance_tibble <- performance_tibble |>
+      tibble::add_column(fit_trees, .before = "nmcc") |>
+      tibble::add_column(fit_mtry, .before = "nmcc") |>
+      tibble::add_column(fit_min_n, .before = "nmcc")
   }
+
   if (external_test_data) {
     performance_tibble <- performance_tibble |>
       tibble::add_column(num_obs_test_data, .before = "res_prop") |>
