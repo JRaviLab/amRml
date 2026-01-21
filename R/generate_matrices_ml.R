@@ -766,6 +766,7 @@ skipImbalancedMatrix <- function(genome_ids,
                         data.frame(feature_id = keep_features),
                         append = TRUE)
 
+      
       copy_sql <- sprintf("
         COPY (
           SELECT 
@@ -785,15 +786,17 @@ skipImbalancedMatrix <- function(genome_ids,
           ORDER BY 
             f.\"genome_drug.genome_id\", 
             %s
-          GROUP BY f.\"genome_drug.genome_id\", {fid}, resistant_classes
-          ORDER BY f.\"genome_drug.genome_id\", {fid}
-        ) TO '{long_out_path}' (FORMAT 'parquet', COMPRESSION 'zstd')
-      "))
         )
         TO '%s'
         (FORMAT 'parquet', COMPRESSION 'zstd')
-      ",
-                          fid, value_col, mview, fid, fid, fid, out_file_sql
+      ", 
+                          fid,          # %s -> feature_id expression column name
+                          value_col,    # %s -> value column to CAST
+                          mview,        # %s -> source view (binary or counts)
+                          fid,          # %s -> join to keep_features
+                          fid,          # %s -> group by feature id
+                          fid,          # %s -> order by feature id
+                          out_file_sql  # %s -> destination parquet file
       )
       
       ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)

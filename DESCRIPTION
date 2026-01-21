@@ -41,6 +41,7 @@ Imports:
     future.apply,
     ggplot2,
     ggrepel,
+    glmnet,
     glue,
     hardhat,
     parsnip,

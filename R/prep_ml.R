@@ -181,67 +181,12 @@ shuffleLabels <- function(ml_input_tibble, seed = 5280) {
     dplyr::mutate(!!target_var := sample(!!target_var))
 }
 
-
-#' @rdname .calculateMinSamples
-#' @export
 #' calculateMinSamples()
 #'
-#' Returns the minimum number of total observations needed (one bug-drug combo)
-#' to have at least `smallest_n_obs_rs` observations (default is 1) of each
-#' class in each fold of cross-validation.
-#'
-#' @param n_fold [num] Number of folds of cross-validation. This will be ignored
-#' if the second element of the `split` argument is non-zero (indicating that
-#' a validation set is being used rather than cross-validation).
-#' @param split [num] Vector of length 2 indicating the proportion of data to
-#' be designated as training and validation, respectively.
-#' @param res_prop [num] The proportion of antibiotic resistant genomes
-#' @return Minimum number of total observations needed (one bug-drug combo)
-#' to have at least one observation of each class in each fold of
-#' cross-validation
-#' @param smallest_n_obs_rs [num] The smallest number of "Resistant" or
-#' "Susceptible" observations allowable in the smallest subset of data used
-#' during ML.
+#' @inherit .calculateMinSamples description
 #' @export
-calculateMinSamples <- function(
-  n_fold, split, res_prop,
-  smallest_n_obs_rs = 1
-) {
-  .checkArgSplit(split)
-  .checkArgResProp(res_prop)
-  .checkArgSmallestNObsRS(smallest_n_obs_rs)
-
-  # Designate `lowest_prop` as the phenotype ("Resistant" or "Susceptible") in
-  # lower proportion.
-  if (res_prop <= 0.5) {
-    lowest_prop_rs <- res_prop
-  } else {
-    lowest_prop_rs <- 1 - res_prop
-  }
-
-  if (split[2] == 0) { # If using cross-validation...
-    # If a single fold of cross-validation has fewer observations than the test
-    # data, calculate `min_samples` based on this. Otherwise, calculate it based
-    # on the test data.
-    .checkArgNFold(n_fold)
-
-    if (1 - split[1] >= split[1] / n_fold) {
-      min_samples <- n_fold / (lowest_prop_rs * split[1])
-    } else {
-      min_samples <- 1 / (lowest_prop_rs * (1 - split[1]))
-    }
-  } else { # If using a validation set...
-    lowest_prop_tvt <- min(split[1], split[2], 1 - split[1] - split[2])
-
-    min_samples <- 1 / (lowest_prop_rs * lowest_prop_tvt)
-  }
-
-  min_samples <- min_samples * smallest_n_obs_rs
-
-  return(ceiling(min_samples))
-.calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) {
-  # Using the same logic from upstream matrix generation
-  base <- .calculateMinSamples(n_fold = n_fold, split = split, res_prop = res_prop)
+calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) {
+  base <- .calculateMinSamples(n_fold, split, res_prop)
   ceiling(base * smallest_n_obs_rs)
 }
 

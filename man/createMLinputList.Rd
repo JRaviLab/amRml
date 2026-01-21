@@ -48,8 +48,8 @@ standard, cross-test, Leave-One-Out (LOO), and Multi-Drug Resistance (MDR).
 inputs <- createMLinputList("/path/to/results")
 
 # Cross-test with year stratification
-inputs_ct <- createMLinputList("/path/to/results", 
-                               stratify_by = "year", 
+inputs_ct <- createMLinputList("/path/to/results",
+                               stratify_by = "year",
                                cross_test = TRUE)
 
 # MDR analysis
