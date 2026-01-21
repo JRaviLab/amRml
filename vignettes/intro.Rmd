@@ -331,11 +331,11 @@ plotFishers(fisher_results, alpha = 0.01, label_top_n = 5)
 
 ## Wrapper to run all models 
 Given a DuckDB file produced by `runDataProcessing()`, it:
-1. Generates all ML feature matrices (drug, class, year, country, MDR, LOO)
-2. Creates all ML directory structures
-3. Prepares ML input lists for every mode
-4. Runs logistic regression ML models (standard + stratified + MDR)
-5. Saves performance metrics, fitted models, predictions, and top feature rankings
+1. generates all ML feature matrices (drug, class, year, country, MDR, LOO)
+2. creates all ML directory structures
+3. prepares ML input lists for every mode
+4. runs logistic regression ML models (standard + stratified + MDR)
+5. saves performance metrics, fitted models, predictions, and top feature rankings
 ``` {r}
 runModelingPipeline(parquet_duckdb_path,
                                 threads = 16,
@@ -361,7 +361,7 @@ buildPerformancePq(
   compression = "zstd",
   verbose = TRUE
 )
-buildTopFeaturesParquetFromResults(
+buildTopFeatsPq(
   path = "results/ML_top_features",
   stratify_by = NULL,
   LOO = FALSE,
