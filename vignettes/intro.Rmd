@@ -28,11 +28,12 @@ This vignette demonstrates how to generate ML input matrices, train models, and 
 ## Generating ML input matrices
 
 After data curation with `amRdata`, use `generateMLInputs()` to create ML-ready matrices from the DuckDB containing metadata and feature parquets.
+The DuckDB with the parquet views is created with `cleanData()`
 
 ```{r generate-matrices}
 # Generate all ML input matrices from curated data
 generateMLInputs(
-  parquet_duckdb_path = "results/Cje_parquet.duckdb",
+  parquet_duckdb_path = "results/Sfl_parquet.duckdb",
   out_path = "results/",
   n_fold = 5,
   split = c(1, 0), # CV mode (or use split = 0 as shorthand)
@@ -53,7 +54,7 @@ For classical train/validation/test splits instead of cross-validation:
 ```{r generate-splits}
 # 70% train, 15% validation, 15% test
 generateMLInputs(
-  parquet_duckdb_path = "results/Cje_parquet.duckdb",
+  parquet_duckdb_path = "results/Sfl_parquet.duckdb",
   out_path = "results/",
   n_fold = NULL,
   split = c(0.7, 0.15),
@@ -89,7 +90,7 @@ The package expects Parquet files in long (sparse) format with these columns:
 ```{r load-data}
 # Load a generated matrix
 ml_tibble <- loadMLInputTibble(
-  parquet_path = "results/matrix/Cje_drug_CIP_genes_binary_sparse.parquet"
+  parquet_path = "results/matrix/Sfl_drug_AMP_domains_binary_sparse.parquet"
 )
 
 # Check dimensions
@@ -263,30 +264,24 @@ ml_tibble_reduced <- removeTopFeats(ml_tibble, top_features)
 ### Precision-recall curve
 
 ```{r plot-prc}
-plotPRC(results$pred)
+test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+plotPRC(test_data_plus_predictions)
 ```
+### ROC curve
 
+```{r plot-roc}
+test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+plotROC(test_data_plus_predictions)
+```
 ### Variable importance plot
 
 ```{r plot-vi}
-plotTopFeatsVI(results$fit, n_top_feats = 10)
+topfeat <- readr::read_tsv(results/ML_top_features/Sfl_drug_AMP_domains_binary_top_features.tsv)
+plotTopFeatsVI(topfeat)
 ```
-
-### Default evaluation plot
-
-```{r plot-default-eval}
-# Plot performance metric vs training proportion or CV folds
-plotDefaultEval(
-  default_eval_tibble,
-  x_default_eval = "train_prop",
-  y_default_eval = "avg_f1_score",
-  xlab = "Training data proportion",
-  ylab = "Average F1 score"
-)
-```
-
 ### Baseline comparison barplot
-
+non_shuffled_label_results Output of `runMLPipeline(shuffle_labels = FALSE)`
+shuffled_label_results Output of `runMLPipeline(shuffle_labels = TRUE)`
 ```{r plot-baseline}
 # Run with shuffled labels for baseline
 baseline_results <- runMLPipeline(
@@ -295,6 +290,7 @@ baseline_results <- runMLPipeline(
   split = c(0.6, 0.2),
   shuffle_labels = TRUE
 )
+
 
 # Compare performance
 getBaselineComparisonBarplot(
@@ -331,4 +327,48 @@ You can label the top N features to highlight the strongest hits (default is 5) 
 plotFishers(fisher_results)
 plotFishers(fisher_results, alpha = 0.01, label_top_n = 5)
 
+```
+
+## Wrapper to run all models 
+Given a DuckDB file produced by `runDataProcessing()`, it:
+1. generates all ML feature matrices (drug, class, year, country, MDR, LOO)
+2. creates all ML directory structures
+3. prepares ML input lists for every mode
+4. runs logistic regression ML models (standard + stratified + MDR)
+5. saves performance metrics, fitted models, predictions, and top feature rankings
+``` {r}
+runModelingPipeline(parquet_duckdb_path,
+                                threads = 16,
+                                n_fold = 5,
+                                split = c(1, 0),
+                                min_n = 25,
+                                prop_vi_top_feats = c(0, 1),
+                                pca_threshold = 0.99,
+                                verbose = TRUE,
+                                use_saved_split = TRUE)
+```
+
+Merge the performance and top features of each kind of models into a parquet that will serve as starting data for `amRshiny` package
+
+``` {r}
+buildPerformancePq(
+  path = "results/ML_perf",
+  stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE,
+  out_parquet = NULL,    
+  compression = "zstd",
+  verbose = TRUE
+)
+buildTopFeatsPq(
+  path = "results/ML_top_features",
+  stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE,
+  out_parquet = NULL, 
+  compression = "zstd",
+  verbose = TRUE
+) 
 ```
