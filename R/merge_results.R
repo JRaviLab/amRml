@@ -253,14 +253,6 @@ if (!is.na(label_end)) {
     )
   }
 
-  suppressPackageStartupMessages({
-    library(readr)
-    library(dplyr)
-    library(purrr)
-    library(stringr)
-    library(tibble)
-  })
-
   # -----------------------
   # Read, parse and bind
   # -----------------------
@@ -282,7 +274,7 @@ if (!is.na(label_end)) {
     )
 
     md_cols <- tibble(
-      file_path       = f,
+   
       output_prefix   = base_no_suffix,
       species         = meta$species,
       mdr_tag         = meta$mdr_tag,
@@ -576,14 +568,6 @@ buildTopFeaturesParquetFromResults <- function(
     )
   }
 
-  suppressPackageStartupMessages({
-    library(readr)
-    library(dplyr)
-    library(purrr)
-    library(stringr)
-    library(tibble)
-  })
-
   # -----------------------
   # Read, parse and bind
   # -----------------------
@@ -607,7 +591,7 @@ buildTopFeaturesParquetFromResults <- function(
 
     # Attach metadata columns
     md_cols <- tibble(
-      file_path       = f,
+   
       output_prefix   = base_no_suffix,
       species         = meta$species,
       mdr_tag         = meta$mdr_tag,
