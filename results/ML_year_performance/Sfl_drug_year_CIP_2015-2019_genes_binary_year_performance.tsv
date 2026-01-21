@@ -1,0 +1,2 @@
+num_obs	res_prop	n_feat	model	train_prop	val_prop	lower_prop_vi_top_feats	upper_prop_vi_top_feats	n_feats_returned	n_fold	fit_penalty	fit_mixture	nmcc	log2_apop	f1	spec	sens	bal_acc	run_time_sec	date
+327	0.09	6572	LR	1	0	0	1	97	5	0.004641588833612777	0.6	0.97	2.87	0.94	1	0.89	0.94	111.21	2026-01-19
