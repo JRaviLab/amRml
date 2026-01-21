@@ -22,7 +22,7 @@ machine learning models using genomic features from bacterial isolates.
 if (!requireNamespace("remotes", quietly = TRUE))
     install.packages("remotes")
 
-remotes::install_github("JRaviLab/amR_ml")
+remotes::install_github("JRaviLab/amRml")
 ```
 
 ## Quick start
@@ -61,21 +61,21 @@ results$top_feat_tibble
   correction
 
 See the [package
-vignette](https://jravilab.github.io/amR_ml/articles/intro.html) for
+vignette](https://jravilab.github.io/amRml/articles/intro.html) for
 detailed usage.
 
 ## Related packages
 
 - [amR](https://github.com/JRaviLab/amR): Suite metapackage
-- [amRdata](https://github.com/JRaviLab/amR_data): Data curation
-- [amRshiny](https://github.com/JRaviLab/amR_shiny): Interactive
+- [amRdata](https://github.com/JRaviLab/amRdata): Data curation
+- [amRshiny](https://github.com/JRaviLab/amRshiny): Interactive
   dashboard
 
 ## Citation
 
     Wolfe EP^, Brenner EP^, Ravi J. (2025). amRml: Machine learning for antimicrobial
     resistance prediction. R package version 0.99.0.
-    https://github.com/JRaviLab/amR_ml
+    https://github.com/JRaviLab/amRml
 
 ## Contributing
 
@@ -85,7 +85,7 @@ for guidelines.
 ## Reporting issues
 
 Report bugs and request features at:
-<https://github.com/JRaviLab/amR_ml/issues>
+<https://github.com/JRaviLab/amRml/issues>
 
 ## License
 
