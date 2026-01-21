@@ -1016,7 +1016,7 @@ runModelingPipeline <- function(parquet_duckdb_path,
   out_root <- dirname(parquet_duckdb_path)
 
   if (verbose) {
-    message("\n=== amR_ml: Full pipeline runner ===")
+    message("\n=== amRml: Full pipeline runner ===")
     message("Using parquet-backed DB:\n  ", parquet_duckdb_path)
   }
 
