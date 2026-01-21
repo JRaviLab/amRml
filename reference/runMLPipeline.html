@@ -36,7 +36,7 @@
     </li>
   </ul></li>
       </ul><ul class="nav navbar-nav navbar-right"><li>
-  <a href="https://github.com/JRaviLab/amR_ml/" class="external-link">
+  <a href="https://github.com/JRaviLab/amRml/" class="external-link">
     <span class="fab fa-github fa-lg"></span>
 
   </a>
@@ -51,7 +51,7 @@
   <div class="col-md-9 contents">
     <div class="page-header">
     <h1>runMLPipeline()</h1>
-    <small class="dont-index">Source: <a href="https://github.com/JRaviLab/amR_ml/blob/main/R/run_ml_pipeline.R" class="external-link"><code>R/run_ml_pipeline.R</code></a></small>
+    <small class="dont-index">Source: <a href="https://github.com/JRaviLab/amRml/blob/main/R/run_ml_pipeline.R" class="external-link"><code>R/run_ml_pipeline.R</code></a></small>
     <div class="hidden name"><code>runMLPipeline.Rd</code></div>
     </div>
 
@@ -108,7 +108,9 @@ be designated as training and validation, respectively. Note: if <code>test_data
 is provided, these numbers will be scaled so that they sum to 1 and will
 still represent fractions of <code>ml_input_tibble</code> (not including the input
 <code>test_data</code>). Please do not directly provide numbers that sum to 1 since the
-function is not equipped to handle this.</p></dd>
+function is not equipped to handle this. If cross-validation is enabled here
+<code>split = c(1,0)</code>, we will still retain a 20% test holdout for final reporting.
+Cross-validation is run on the 80% training portion, and not on the testing set.</p></dd>
 
 
 <dt id="arg-n-fold">n_fold<a class="anchor" aria-label="anchor" href="#arg-n-fold"></a></dt>
@@ -137,9 +139,9 @@ principle components account</p></dd>
 
 
 <dt id="arg-penalty-vec">penalty_vec<a class="anchor" aria-label="anchor" href="#arg-penalty-vec"></a></dt>
-<dd><p>[num] A vector containing <code>penalty</code> (regularization
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> A vector containing <code>penalty</code> (regularization
 strength) values to try (for logistic regression). It is recommended to
-choose values in the range 10^-4 to 10^4.</p></dd>
+choose values <code>10^-4</code> to <code>10^4</code>.</p></dd>
 
 
 <dt id="arg-mix-vec">mix_vec<a class="anchor" aria-label="anchor" href="#arg-mix-vec"></a></dt>

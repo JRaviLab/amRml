@@ -5,14 +5,14 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Train ML models to predict AMR using bacterial genomes and paired AMR phenotype metadata | pkg 2 of 3-pkg amR suite • amRml</title>
+<title>Machile learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite • amRml</title>
 <!-- jquery --><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script><!-- Bootstrap --><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha256-bZLfwXAP04zRMK2BjiO8iu9pf4FbLqX6zitd+tIvLhE=" crossorigin="anonymous">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha256-nuL8/2cJ5NDSSwnKD8VqreErSWHtnEP9E7AySL+1ev4=" crossorigin="anonymous"></script><!-- bootstrap-toc --><link rel="stylesheet" href="bootstrap-toc.css">
 <script src="bootstrap-toc.js"></script><!-- Font Awesome icons --><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css" integrity="sha256-mmgLkCYLUQbXn0B1SRqzHar6dCnv9oZFPEC1g1cwlkk=" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/v4-shims.min.css" integrity="sha256-wZjR52fzng1pJHwx4aV2AO3yyTOXrcDW7jBpJtTwVxw=" crossorigin="anonymous">
 <!-- clipboard.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js" integrity="sha256-inc5kl9MA1hkeYUt+EC3BhlIgyp/2jDIyBLS6k3UxPI=" crossorigin="anonymous"></script><!-- headroom.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/headroom.min.js" integrity="sha256-AsUX4SJE1+yuDu5+mAVzJbuYNPHj/WroHuZ8Ir/CkE0=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/jQuery.headroom.min.js" integrity="sha256-ZX/yNShbjqsohH1k95liqY9Gd8uOiE1S4vZc+9KQ1K4=" crossorigin="anonymous"></script><!-- pkgdown --><link href="pkgdown.css" rel="stylesheet">
-<script src="pkgdown.js"></script><meta property="og:title" content="Train ML models to predict AMR using bacterial genomes and paired AMR phenotype metadata | pkg 2 of 3-pkg amR suite">
-<meta property="og:description" content="This package processes AMR data matrices from `amR_data` (genomic features by genomes w/ paired AMR phenotypic labels), makes them ML-ready, and trains ML models (LR). Model outputs (e.g., performances, top features) can be summarized and visualized across drugs, drug classes, and passed along to `amR_shiny` to spin up a dashboard to explore these results.">
+<script src="pkgdown.js"></script><meta property="og:title" content="Machile learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite">
+<meta property="og:description" content="Comprehensive machine learning (ML) pipeline for predicting antimicrobial resistance (AMR) in ESKAPE pathogens across molecular scales (gene, protein, domain, structure). Implements logistic regression using tidymodels framework. Supports multi-drug resistance (MDR) and cross-resistance predictions with multiple holdout strategies (geographic, temporal, species). Includes model evaluation, feature importance analysis, cross-scale performance comparison, and functional characterization of top features. Designed to work with data from amRdata package and generate results for amRshiny visualization. Can work independently with example ESKAPE pathogen datasets, too.">
 <!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
 <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
 <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
@@ -57,7 +57,7 @@
       </ul>
 <ul class="nav navbar-nav navbar-right">
 <li>
-  <a href="https://github.com/JRaviLab/amR_ml/" class="external-link">
+  <a href="https://github.com/JRaviLab/amRml/" class="external-link">
     <span class="fab fa-github fa-lg"></span>
 
   </a>
@@ -74,107 +74,179 @@
 
       </header><div class="row">
   <div class="contents col-md-9">
-<div class="section level1">
-<div class="page-header"><h1 id="newpackage">NewPackage<a class="anchor" aria-label="anchor" href="#newpackage"></a>
-</h1></div>
+
+<div class="section level2">
+<h2 id="amrml-machine-learning-for-antimicrobial-resistance-prediction">amRml: Machine Learning for Antimicrobial Resistance Prediction<a class="anchor" aria-label="anchor" href="#amrml-machine-learning-for-antimicrobial-resistance-prediction"></a>
+</h2>
 <!-- badges: start -->
 
-<p>The goal of NewPackage is to … &lt; <em>your awesome package description here!</em> &gt;</p>
-<div class="section level2">
-<h2 id="github-setup">GitHub Setup<a class="anchor" aria-label="anchor" href="#github-setup"></a>
-</h2>
-<div class="section level3">
-<h3 id="repository">Repository<a class="anchor" aria-label="anchor" href="#repository"></a>
-</h3>
-<p>Initial Repository Configuration:</p>
+<p>amRml is part of the <a href="https://github.com/JRaviLab/amR" class="external-link">amR suite</a> for antimicrobial resistance prediction. amRml is the machine learning (ML) engine of the <a href="https://github.com/JRaviLab/amR" class="external-link uri">https://github.com/JRaviLab/amR</a>. It trains interpretable ML models to predict antimicrobial resistance (AMR) from the multi‑scale genomic features prepared by amRdata. The package includes streamlined pipelines for:</p>
 <ul>
-<li>Enable Git: <code>usethis::use_git()</code>
-</li>
-<li>Configure Remote: <code>usethis::use_github(organisation = "JRaviLab", private = TRUE, protocol = "https")</code>
-</li>
-<li>Contributor Code of Conduct: <code>usethis::use_code_of_conduct(contact = "janani.ravi@cuanschutz.edu")</code>
-</li>
+<li>Single‑drug AMR prediction</li>
+<li>Multi‑drug resistance (MDR) prediction</li>
+<li>Stratified and cross‑testing workflows (year, country)</li>
+<li>Leave‑one‑out (LOO) generalization tests</li>
+<li>Baseline shuffled‑label controls</li>
+<li>PCA and variable‑importance‑based feature reduction</li>
 </ul>
-</div>
-<div class="section level3">
-<h3 id="github-actions">GitHub Actions<a class="anchor" aria-label="anchor" href="#github-actions"></a>
-</h3>
-<p>These functions will enable common package development GitHub Actions is desired:</p>
-<ul>
-<li>R CMD Check (multiplatform): <code>usethis::use_github_action("check_standard")</code>
-</li>
-<li>Build Pkgdown: <code>use_github_action("pkgdown")</code>
-</li>
-<li>lint code: <code>use_github_action("lint")</code>
-</li>
-<li>style code: <code>use_github_action("style")</code>
-</li>
-</ul>
-<p>Example GitHub Actions workflows have been incorporated into this template. Modify workflows in <code>.github/workflows/</code> or delete if these are not required.</p>
-</div>
+<p>All with reproducible, parallelized model execution.</p>
+<p>amRml produces ML‑ready tibbles, trains logistic regression models, and exports clean performance summaries, feature rankings, predictions, and tuned model objects.</p>
 </div>
 <div class="section level2">
-<h2 id="development">Development<a class="anchor" aria-label="anchor" href="#development"></a>
+<h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
+<p>amRml provides functions to:</p>
 <ul>
-<li>new function: <code>usethis::use_r("hello")</code>
-</li>
-<li>add package dependency: <code>usethis::use_package("rlang")</code>
-</li>
-<li>render documentation/update NAMESPACE: <code>devtools::document()</code>
-</li>
-<li>load changes without install: <code>devtools::load_all()</code>
-</li>
-<li>Local R CMD Check: <code>devtools::check()</code>
-</li>
+<li>Convert multi‑scale genomic feature Parquets into ML‑ready tibbles</li>
+<li>Train interpretable AMR classifiers with tidymodels</li>
+<li>Perform robust evaluation using MCC, F1, AuPRC, balanced accuracy, and confusion matrices</li>
+<li>Extract top predictive features to connect models’ performance with biological underpinnings</li>
 </ul>
+<p>The models are optimized for reproducibility, interpretability, and benchmarking across species and antibiotic classes. See the <a href="https://jravilab.github.io/amRml/articles/intro.html" class="external-link uri">https://jravilab.github.io/amRml/articles/intro.html</a> for full examples.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install the development version of NewPackage like so:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># GitHub</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"JRaviLab/NewPackage"</span>, auth_token <span class="op">=</span> <span class="st">"&lt;PersonalAccessToken&gt;"</span><span class="op">)</span></span>
-<span><span class="co"># If Bioconductor Dependencies</span></span>
-<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"JRaviLab/NewPackage"</span>, auth_token <span class="op">=</span> <span class="st">"&lt;PersonalAccessToken&gt;"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co"># Install from GitHub</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"remotes"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"JRaviLab/amRml"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="example">Example<a class="anchor" aria-label="anchor" href="#example"></a>
+<h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p>This is a basic example which shows you how to solve a common problem:</p>
+<div class="section level3">
+<h3 id="id_1-generate-mlready-data-and-metadata-inputs">1. Generate ML‑ready data and metadata inputs<a class="anchor" aria-label="anchor" href="#id_1-generate-mlready-data-and-metadata-inputs"></a>
+</h3>
+<p><code><a href="reference/generateMLInputs.html">generateMLInputs()</a></code> converts the Parquet‑backed DuckDB file created by amRdata into a standard set of ready-to-model matrices.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">NewPackage</span><span class="op">)</span></span>
-<span><span class="co">## basic example code</span></span></code></pre></div>
-<p>What is special about using <code>README.Rmd</code> instead of just <code>README.md</code>? You can include R chunks like so:</p>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/JRaviLab/amRml" class="external-link">amRml</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/generateMLInputs.html">generateMLInputs</a></span><span class="op">(</span></span>
+<span>  parquet_duckdb_path <span class="op">=</span> <span class="st">"data/Shigella_flexneri/Sfl_parquet.duckdb"</span>,</span>
+<span>  out_path            <span class="op">=</span> <span class="st">"results/Shigella_flexneri/"</span>,</span>
+<span>  n_fold              <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  verbosity           <span class="op">=</span> <span class="st">"minimal"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>This will analyze the Parquet tables attached to the {Bug}_parquet.duckdb database created by the amRdata::cleanData() step at the end of the <code>amRdata::runDataProcessing()</code> workflow. For each drug or drug class, it evaluates how many isolates have paired genotype and AMR phenotype data, and produced subsetted ML-ready matrices for each feature scale.</p>
+<p>The result: All modeling matrices that can be created for a given dataset, ready for input into the ML modeling workflow next.</p>
+</div>
+<div class="section level3">
+<h3 id="id_2-run-standard-amr-prediction-models">2. Run standard AMR prediction models<a class="anchor" aria-label="anchor" href="#id_2-run-standard-amr-prediction-models"></a>
+</h3>
+<p><code><a href="reference/runMLmodels.html">runMLmodels()</a></code> executes logistic regression ML models across all prepared matrices.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">cars</span><span class="op">)</span></span>
-<span><span class="co">#&gt;      speed           dist       </span></span>
-<span><span class="co">#&gt;  Min.   : 4.0   Min.   :  2.00  </span></span>
-<span><span class="co">#&gt;  1st Qu.:12.0   1st Qu.: 26.00  </span></span>
-<span><span class="co">#&gt;  Median :15.0   Median : 36.00  </span></span>
-<span><span class="co">#&gt;  Mean   :15.4   Mean   : 42.98  </span></span>
-<span><span class="co">#&gt;  3rd Qu.:19.0   3rd Qu.: 56.00  </span></span>
-<span><span class="co">#&gt;  Max.   :25.0   Max.   :120.00</span></span></code></pre></div>
-<p>You’ll still need to render <code>README.Rmd</code> regularly, to keep <code>README.md</code> up-to-date. <code>devtools::build_readme()</code> is handy for this.</p>
-<p>You can also embed plots, for example:</p>
-<p><img src="reference/figures/README-pressure-1.png" width="100%"></p>
-<p>In that case, don’t forget to commit and push the resulting figure files, so they display on GitHub and CRAN.</p>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/runMLmodels.html">runMLmodels</a></span><span class="op">(</span></span>
+<span>  path        <span class="op">=</span> <span class="st">"results/Shigella_flexneri/"</span>,</span>
+<span>  threads     <span class="op">=</span> <span class="fl">16</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>This produces 4 output directories: - <code>performance</code>: Containing performance metrics per bug-drug-feature_scale model - <code>pred</code>: Containing the specific predictions made per model - <code>top_features</code>: Containing which specific features drove model predictions per model - <code>models</code>: Containing the model fits themselves in .Rds format</p>
+<p>These models can also be adjusted with parameters like <code>shuffle_labels = TRUE</code> (creates random baseline models to compare against), <code>use_pca = TRUE</code> (to reduce feature space by using PCs as features), <code>stratify_by = "country"</code> (to stratify samples into countries of origin to identify regional trends in AMR and how well models generalize), and many other options.</p>
+</div>
+<div class="section level3">
+<h3 id="id_3-multidrug-resistance-mdr-modeling">3. Multi‑drug resistance (MDR) modeling<a class="anchor" aria-label="anchor" href="#id_3-multidrug-resistance-mdr-modeling"></a>
+</h3>
+<p><code><a href="reference/runMDRmodels.html">runMDRmodels()</a></code> trains models that predict aggregated multi‑drug resistance phenotypes.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/runMDRmodels.html">runMDRmodels</a></span><span class="op">(</span></span>
+<span>  path        <span class="op">=</span> <span class="st">"results/Shigella_flexneri/"</span>,</span>
+<span>  threads     <span class="op">=</span> <span class="fl">16</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>This uses specific matrices to test whether ML models can predict resistance against multiple drug classes, and identify any features associated with MDR.</p>
+</div>
 </div>
 <div class="section level2">
-<h2 id="code-of-conduct">Code of Conduct<a class="anchor" aria-label="anchor" href="#code-of-conduct"></a>
+<h2 id="features">Features<a class="anchor" aria-label="anchor" href="#features"></a>
 </h2>
-<p>Please note that the NewPackage project is released with a <a href="https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html" class="external-link">Contributor Code of Conduct</a>. By contributing to this project, you agree to abide by its terms.</p>
+<ul>
+<li>
+<strong>Data preparation</strong>: Load Parquet files and prepare ML-ready datasets</li>
+<li>
+<strong>Model training</strong>: User-customizable logistic regression via tidymodels</li>
+<li>
+<strong>Evaluation</strong>: nMCC, F1, balanced accuracy, AuPRC, and confusion matrices</li>
+<li>
+<strong>Feature importance</strong>: Extract and rank predictive features</li>
+</ul>
+<p>See the <a href="https://jravilab.github.io/amRml/articles/intro.html" class="external-link">package vignette</a> for detailed usage.</p>
 </div>
+<div class="section level2">
+<h2 id="integration-with-amr-suite">Integration with amR suite<a class="anchor" aria-label="anchor" href="#integration-with-amr-suite"></a>
+</h2>
+<p>amRml is designed to work seamlessly with other amR packages:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">amRdata</span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/JRaviLab/amRml" class="external-link">amRml</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">amRshiny</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># 1. Curate data</span></span>
+<span><span class="fu">prepareGenomes</span><span class="op">(</span><span class="st">"Shigella flexneri"</span><span class="op">)</span></span>
+<span><span class="fu">runDataProcessing</span><span class="op">(</span><span class="st">"amRdata/data/Shigella_flexneri/Sfl.duckdb"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># 2. Train models</span></span>
+<span><span class="fu"><a href="reference/runMLmodels.html">runMLmodels</a></span><span class="op">(</span><span class="st">"amRdata/data/Shigella_flexneri/Sfl_parquet.duckdb"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># 3. Visualize</span></span>
+<span><span class="fu">launchAMRDashboard</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
+<div class="section level2">
+<h2 id="related-packages">Related packages<a class="anchor" aria-label="anchor" href="#related-packages"></a>
+</h2>
+<ul>
+<li>
+<a href="https://github.com/JRaviLab/amR" class="external-link">amR</a>: Suite metapackage</li>
+<li>
+<a href="https://github.com/JRaviLab/amRml" class="external-link">amRdata</a>: Data preparation for AMR prediction</li>
+<li>
+<a href="https://github.com/JRaviLab/amRshiny" class="external-link">amRshiny</a>: Interactive dashboard</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
+</h2>
+<p>If you use <code>amRml</code> in your research, please cite:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>Brenner E, Ghosh A, Wolfe E, Boyer E, Vang C, Lesiyon R, Mayer D, Ravi <span class="fu">J.</span> (<span class="dv">2026</span>).</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>amR<span class="sc">:</span> an R package suite to predict antimicrobial resistance <span class="cf">in</span> bacterial pathogens.</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>R package version <span class="dv">0</span>.<span class="dv">99</span>.<span class="fl">0.</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>JRaviLab<span class="sc">/</span>amR</span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="contributing">Contributing<a class="anchor" aria-label="anchor" href="#contributing"></a>
+</h2>
+<p>We welcome contributions! Please see <a href="CONTRIBUTING.html">CONTRIBUTING.md</a> for guidelines.</p>
+</div>
+<div class="section level2">
+<h2 id="reporting-issues">Reporting issues<a class="anchor" aria-label="anchor" href="#reporting-issues"></a>
+</h2>
+<p>Report bugs and request features at: <a href="https://github.com/JRaviLab/amRml/issues" class="external-link uri">https://github.com/JRaviLab/amRml/issues</a></p>
+</div>
+<div class="section level2">
+<h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
+</h2>
+<p>BSD 3-Clause License. See <a href="LICENSE">LICENSE</a> for details.</p>
+</div>
+<div class="section level2">
+<h2 id="contact">Contact<a class="anchor" aria-label="anchor" href="#contact"></a>
+</h2>
+<p><strong>Corresponding author</strong>: Janani Ravi (<a href="mailto:janani.ravi@cuanschutz.edu" class="email">janani.ravi@cuanschutz.edu</a>)</p>
+<p><strong>Lab website</strong>: <a href="https://jravilab.github.io" class="external-link uri">https://jravilab.github.io</a></p>
+</div>
+<div class="section level2">
+<h2 id="code-of-conduct">Code of conduct<a class="anchor" aria-label="anchor" href="#code-of-conduct"></a>
+</h2>
+<p>Please note that <code>amRml</code> is released with a <a href="https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html" class="external-link">Contributor Code of Conduct</a>. By contributing to this project, you agree to abide by its terms.</p>
+</div>
+
   </div>
 
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/JRaviLab/amR_ml/" class="external-link">Browse source code</a></li>
-<li><a href="https://github.com/JRaviLab/amR_ml/issues" class="external-link">Report a bug</a></li>
+<li><a href="https://github.com/JRaviLab/amRml/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/JRaviLab/amRml/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 
@@ -213,8 +285,6 @@
 <h2 data-toc-skip>Dev status</h2>
 <ul class="list-unstyled">
 <li><a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle: experimental"></a></li>
-<li><a href="https://CRAN.R-project.org/package=NewPackage" class="external-link"><img src="https://www.r-pkg.org/badges/version/NewPackage" alt="CRAN status"></a></li>
-<li><a href="https://github.com/JRaviLab/NewPackage/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/JRaviLab/NewPackage/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
 </ul>
 </div>
 

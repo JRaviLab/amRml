@@ -36,7 +36,7 @@
     </li>
   </ul></li>
       </ul><ul class="nav navbar-nav navbar-right"><li>
-  <a href="https://github.com/JRaviLab/amR_ml/" class="external-link">
+  <a href="https://github.com/JRaviLab/amRml/" class="external-link">
     <span class="fab fa-github fa-lg"></span>
 
   </a>
@@ -51,7 +51,7 @@
   <div class="col-md-9 contents">
     <div class="page-header">
     <h1>buildTuningGrid()</h1>
-    <small class="dont-index">Source: <a href="https://github.com/JRaviLab/amR_ml/blob/main/R/core_ml.R" class="external-link"><code>R/core_ml.R</code></a></small>
+    <small class="dont-index">Source: <a href="https://github.com/JRaviLab/amRml/blob/main/R/core_ml.R" class="external-link"><code>R/core_ml.R</code></a></small>
     <div class="hidden name"><code>buildTuningGrid.Rd</code></div>
     </div>
 
@@ -63,10 +63,7 @@
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">buildTuningGrid</span><span class="op">(</span></span>
 <span>  model <span class="op">=</span> <span class="st">"LR"</span>,</span>
 <span>  penalty_vec <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">4</span>, <span class="op">-</span><span class="fl">1</span>, length.out <span class="op">=</span> <span class="fl">10</span><span class="op">)</span>,</span>
-<span>  mix_vec <span class="op">=</span> <span class="fl">0</span><span class="op">:</span><span class="fl">5</span><span class="op">/</span><span class="fl">5</span>,</span>
-<span>  n_feat <span class="op">=</span> <span class="cn">NA</span>,</span>
-<span>  min_n_vec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">6</span>, <span class="fl">12</span><span class="op">)</span>,</span>
-<span>  tree_vec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">100</span>, <span class="fl">500</span>, <span class="fl">1000</span><span class="op">)</span></span>
+<span>  mix_vec <span class="op">=</span> <span class="fl">0</span><span class="op">:</span><span class="fl">5</span><span class="op">/</span><span class="fl">5</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -75,14 +72,13 @@
 
 
 <dl><dt id="arg-model">model<a class="anchor" aria-label="anchor" href="#arg-model"></a></dt>
-<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">rlang::chr</a>  Logistic regression ("LR"), random forest ("RF"), or
-boosted tree ("BT")</p></dd>
+<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">rlang::chr</a>  Currently, logistic regression ("LR") is supported.</p></dd>
 
 
 <dt id="arg-penalty-vec">penalty_vec<a class="anchor" aria-label="anchor" href="#arg-penalty-vec"></a></dt>
-<dd><p>[num] A vector containing <code>penalty</code> (regularization
-strength) values to try (for logistic regression). It is recommended to
-choose values in the range 10^-4 to 10^4.</p></dd>
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> A vector containing <code>penalty</code> (regularization
+strength) values to try (for logistic regression). Recommended range:
+10^-4 to 10^4.</p></dd>
 
 
 <dt id="arg-mix-vec">mix_vec<a class="anchor" aria-label="anchor" href="#arg-mix-vec"></a></dt>
@@ -90,29 +86,10 @@ choose values in the range 10^-4 to 10^4.</p></dd>
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 intermediate values (0, 1) correspond to elastic net.</p></dd>
 
-
-<dt id="arg-n-feat">n_feat<a class="anchor" aria-label="anchor" href="#arg-n-feat"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> Number of features in pangenome. Used to
-calculate <code>mtry</code> values for a subsequent grid search (for random forest or
-boosted tree). Output of <code><a href="getNumFeat.html">getNumFeat()</a></code>.</p></dd>
-
-
-<dt id="arg-min-n-vec">min_n_vec<a class="anchor" aria-label="anchor" href="#arg-min-n-vec"></a></dt>
-<dd><p>[num] A vector containing <code>min_n</code> values (the number of data
-points in a node required for the node to be split) to try for random forest
-or boosted tree. It is recommended to choose values in the range 1 to 100.</p></dd>
-
-
-<dt id="arg-tree-vec">tree_vec<a class="anchor" aria-label="anchor" href="#arg-tree-vec"></a></dt>
-<dd><p>[num] A vector containing values to try for the number of
-<code>trees</code> in random forest or boosted tree. It is recommended to choose values
-in the range 100 to 1000.</p></dd>
-
 </dl></div>
     <div id="value">
     <h2>Value</h2>
-    <p>A logistic regression, random forest, or boosted tree tuning grid as
-a tibble</p>
+    <p>A logistic regression tuning grid as a tibble</p>
     </div>
 
   </div>
