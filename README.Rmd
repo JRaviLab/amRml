@@ -130,7 +130,7 @@ launch_dashboard()
 
 ## Related packages
 - [amR](https://github.com/JRaviLab/amR): Suite metapackage
-- [amRml](https://github.com/JRaviLab/amRml): ML for AMR prediction
+- [amRdata](https://github.com/JRaviLab/amRml): Data preparation for AMR prediction
 - [amRshiny](https://github.com/JRaviLab/amRshiny): Interactive dashboard
 
 ## Citation
