@@ -2,7 +2,6 @@
 # (non-standard evaluation) variables used with dplyr/tidyr/ggplot2
 
 utils::globalVariables(c(
-
   # Prediction columns from tidymodels
   ".estimate",
   ".pred_Resistant",
@@ -42,7 +41,6 @@ utils::globalVariables(c(
   "pair_id",
   "parts",
   "phenotype",
-
   "precision",
   "prefix",
   "prefix_key",

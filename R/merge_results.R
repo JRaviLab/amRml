@@ -22,7 +22,7 @@ buildPerfPq <- function(
   LOO = FALSE,
   MDR = FALSE,
   cross_test = FALSE,
-  out_parquet = NULL,     # only filename; will be written under ML_performance/
+  out_parquet = NULL, # only filename; will be written under ML_performance/
   compression = "zstd",
   verbose = TRUE
 ) {
@@ -47,8 +47,10 @@ buildPerfPq <- function(
   # -----------------------
   # Resolve directories from your function (ensures they exist)
   # -----------------------
-  paths <- createMLResultDir(path, stratify_by = stratify_by, LOO = LOO,
-                             cross_test = cross_test, MDR = MDR)
+  paths <- createMLResultDir(path,
+    stratify_by = stratify_by, LOO = LOO,
+    cross_test = cross_test, MDR = MDR
+  )
   perf_dir <- paths$ML_performance
 
   # -----------------------
@@ -74,42 +76,46 @@ buildPerfPq <- function(
     }
     i <- idx[1]
     if (i < length(tokens) && identical(tokens[i + 1], "class")) {
-      list(drug_label = "drug_class",
-           drug_value = if (i + 2 <= length(tokens)) tokens[i + 2] else .NA_chr(),
-           label_end  = i + 1)
+      list(
+        drug_label = "drug_class",
+        drug_value = if (i + 2 <= length(tokens)) tokens[i + 2] else .NA_chr(),
+        label_end = i + 1
+      )
     } else {
-      list(drug_label = "drug",
-           drug_value = if (i + 1 <= length(tokens)) tokens[i + 1] else .NA_chr(),
-           label_end  = i)
+      list(
+        drug_label = "drug",
+        drug_value = if (i + 1 <= length(tokens)) tokens[i + 1] else .NA_chr(),
+        label_end = i
+      )
     }
   }
 
   .parse_base <- function(base_no_suffix) {
     xs <- strsplit(base_no_suffix, "_", fixed = TRUE)[[1]]
-    n  <- length(xs)
+    n <- length(xs)
 
     # Initialize
-    species         <- .NA_chr()
-    mdr_tag         <- .NA_chr()
-    phenotype       <- .NA_chr()
-    drug_label      <- .NA_chr()
-    drug_or_class   <- .NA_chr()
-    strat_label     <- .NA_chr()
-    strat_value     <- .NA_chr()
-    strat_value_test<- .NA_chr()
-    leaveout        <- FALSE
-    is_cross        <- FALSE
-    ref_drug        <- .NA_chr()
-    test_drug       <- .NA_chr()
-    prefix_key      <- .NA_chr()
-    feature         <- .NA_chr()
-    feature_type    <- .NA_chr()
+    species <- .NA_chr()
+    mdr_tag <- .NA_chr()
+    phenotype <- .NA_chr()
+    drug_label <- .NA_chr()
+    drug_or_class <- .NA_chr()
+    strat_label <- .NA_chr()
+    strat_value <- .NA_chr()
+    strat_value_test <- .NA_chr()
+    leaveout <- FALSE
+    is_cross <- FALSE
+    ref_drug <- .NA_chr()
+    test_drug <- .NA_chr()
+    prefix_key <- .NA_chr()
+    feature <- .NA_chr()
+    feature_type <- .NA_chr()
     feature_subtype <- .NA_chr()
 
     # Require at least 2 tokens for feature
     if (n >= 2) {
-      feature         <- paste(xs[(n - 1):n], collapse = "_")
-      feature_type    <- xs[n - 1]
+      feature <- paste(xs[(n - 1):n], collapse = "_")
+      feature_type <- xs[n - 1]
       feature_subtype <- xs[n]
     }
     core <- if ((n - 2) >= 1) xs[1:(n - 2)] else character(0)
@@ -121,13 +127,13 @@ buildPerfPq <- function(
       if (length(core) >= 2) phenotype <- paste(core[-1], collapse = "_")
       prefix_key <- "MDR"
       return(list(
-        species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-        drug_label=drug_label, drug_or_class=drug_or_class,
-        strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-        leaveout=leaveout, is_cross=is_cross,
-        ref_drug=ref_drug, test_drug=test_drug,
-        prefix_key=prefix_key,
-        feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+        species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+        drug_label = drug_label, drug_or_class = drug_or_class,
+        strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+        leaveout = leaveout, is_cross = is_cross,
+        ref_drug = ref_drug, test_drug = test_drug,
+        prefix_key = prefix_key,
+        feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
       ))
     }
 
@@ -138,57 +144,57 @@ buildPerfPq <- function(
       if (grepl("_leaveout_tested_on_", core_str, fixed = TRUE)) {
         leaveout <- TRUE
         di <- .find_drug_label_value(core)
-        drug_label    <- di$drug_label
+        drug_label <- di$drug_label
         drug_or_class <- di$drug_value
-        label_end     <- di$label_end
+        label_end <- di$label_end
         if (!is.na(label_end)) {
           prefix_key <- paste(core[1:label_end], collapse = "_")
           i_val <- label_end + 1
           # expect: value, leaveout, tested, on, strat_value
           if ((i_val + 4) <= length(core) &&
-              core[i_val + 1] == "leaveout" && core[i_val + 2] == "tested" && core[i_val + 3] == "on") {
+            core[i_val + 1] == "leaveout" && core[i_val + 2] == "tested" && core[i_val + 3] == "on") {
             strat_label <- stratify_by %||% .NA_chr()
             strat_value <- core[i_val + 4]
           }
         }
         species <- if (length(core) >= 1) core[1] else .NA_chr()
         return(list(
-          species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-          drug_label=drug_label, drug_or_class=drug_or_class,
-          strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-          leaveout=leaveout, is_cross=is_cross,
-          ref_drug=ref_drug, test_drug=test_drug,
-          prefix_key=prefix_key,
-          feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+          species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+          drug_label = drug_label, drug_or_class = drug_or_class,
+          strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+          leaveout = leaveout, is_cross = is_cross,
+          ref_drug = ref_drug, test_drug = test_drug,
+          prefix_key = prefix_key,
+          feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
         ))
       }
 
       # 2) Cross by strat group: ... <prefix_key>_<drug_value>_cross_<strat_value>_tested_on_<strat_value_test>_<feature>
       if (grepl("_cross_", core_str, fixed = TRUE)) {
         di <- .find_drug_label_value(core)
-        drug_label    <- di$drug_label
+        drug_label <- di$drug_label
         drug_or_class <- di$drug_value
-        label_end     <- di$label_end
+        label_end <- di$label_end
         if (!is.na(label_end)) {
           prefix_key <- paste(core[1:label_end], collapse = "_")
           i_val <- label_end + 1
           # expect: value, cross, strat_value, tested, on, strat_value_test
           if ((i_val + 5) <= length(core) &&
-              core[i_val + 1] == "cross" && core[i_val + 3] == "tested" && core[i_val + 4] == "on") {
-            strat_label     <- stratify_by %||% .NA_chr()
-            strat_value     <- core[i_val + 2]
-            strat_value_test<- core[i_val + 5]
+            core[i_val + 1] == "cross" && core[i_val + 3] == "tested" && core[i_val + 4] == "on") {
+            strat_label <- stratify_by %||% .NA_chr()
+            strat_value <- core[i_val + 2]
+            strat_value_test <- core[i_val + 5]
           }
         }
         species <- if (length(core) >= 1) core[1] else .NA_chr()
         return(list(
-          species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-          drug_label=drug_label, drug_or_class=drug_or_class,
-          strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-          leaveout=leaveout, is_cross=is_cross,
-          ref_drug=ref_drug, test_drug=test_drug,
-          prefix_key=prefix_key,
-          feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+          species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+          drug_label = drug_label, drug_or_class = drug_or_class,
+          strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+          leaveout = leaveout, is_cross = is_cross,
+          ref_drug = ref_drug, test_drug = test_drug,
+          prefix_key = prefix_key,
+          feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
         ))
       }
 
@@ -198,8 +204,8 @@ buildPerfPq <- function(
       if (!is.na(label_end)) {
         prefix_key <- paste(core[1:label_end], collapse = "_")
         if ((label_end + 4) <= length(core) &&
-            core[label_end + 2] == "tested" && core[label_end + 3] == "on") {
-          ref_drug  <- core[label_end + 1]
+          core[label_end + 2] == "tested" && core[label_end + 3] == "on") {
+          ref_drug <- core[label_end + 1]
           test_drug <- core[label_end + 4]
           drug_label <- if (endsWith(prefix_key, "drug_class")) "drug_class" else "drug"
           drug_or_class <- ref_drug
@@ -207,49 +213,47 @@ buildPerfPq <- function(
       }
       species <- if (length(core) >= 1) core[1] else .NA_chr()
       return(list(
-        species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-        drug_label=drug_label, drug_or_class=drug_or_class,
-        strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-        leaveout=leaveout, is_cross=is_cross,
-        ref_drug=ref_drug, test_drug=test_drug,
-        prefix_key=prefix_key,
-        feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+        species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+        drug_label = drug_label, drug_or_class = drug_or_class,
+        strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+        leaveout = leaveout, is_cross = is_cross,
+        ref_drug = ref_drug, test_drug = test_drug,
+        prefix_key = prefix_key,
+        feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
       ))
     }
 
-# Non-cross variants (may be stratified)
-species <- if (length(core) >= 1) core[1] else .NA_chr()
-di <- .find_drug_label_value(core)
-drug_label    <- di$drug_label
-label_end     <- di$label_end
+    # Non-cross variants (may be stratified)
+    species <- if (length(core) >= 1) core[1] else .NA_chr()
+    di <- .find_drug_label_value(core)
+    drug_label <- di$drug_label
+    label_end <- di$label_end
 
-if (!is.na(label_end)) {
+    if (!is.na(label_end)) {
+      # -------- STRATIFIED CASE --------
+      # pattern: species drug[_class] strat_label drug_value strat_value
+      if (label_end + 3 <= length(core) &&
+        core[label_end + 1] %in% c("year", "country")) {
+        strat_label <- core[label_end + 1]
+        drug_or_class <- core[label_end + 2] # <-- fixed: this is the FLQ/MAC/etc
+        strat_value <- core[label_end + 3] # <-- fixed: this is "2015-2019"
+        prefix_key <- paste(core[1:label_end], collapse = "_")
 
-  # -------- STRATIFIED CASE --------
-  # pattern: species drug[_class] strat_label drug_value strat_value
-  if (label_end + 3 <= length(core) &&
-      core[label_end + 1] %in% c("year", "country")) {
-
-    strat_label <- core[label_end + 1]
-    drug_or_class <- core[label_end + 2]     # <-- fixed: this is the FLQ/MAC/etc
-    strat_value <- core[label_end + 3]       # <-- fixed: this is "2015-2019"
-    prefix_key <- paste(core[1:label_end], collapse = "_")
-
-  # -------- UNSTRATIFIED CASE --------
-  } else {
-    drug_or_class <- di$drug_value
-    prefix_key <- paste(core[1:label_end], collapse = "_")
-  }
-}
+        # -------- UNSTRATIFIED CASE --------
+      } else {
+        drug_or_class <- di$drug_value
+        prefix_key <- paste(core[1:label_end], collapse = "_")
+      }
+    }
 
     list(
-      species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-      drug_label=drug_label, drug_or_class=drug_or_class,
-      strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-      leaveout=leaveout, is_cross=is_cross,
-      ref_drug=ref_drug, test_drug=test_drug,
-      prefix_key=prefix_key,
-      feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+      species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+      drug_label = drug_label, drug_or_class = drug_or_class,
+      strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+      leaveout = leaveout, is_cross = is_cross,
+      ref_drug = ref_drug, test_drug = test_drug,
+      prefix_key = prefix_key,
+      feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
     )
   }
 
@@ -260,7 +264,7 @@ if (!is.na(label_end)) {
     base <- basename(f)
     base_no_suffix <- sub("_performance\\.tsv$", "", base)
     if (identical(base_no_suffix, base)) {
-      base_no_suffix <- sub("\\.tsv$", "", base)  # fallback
+      base_no_suffix <- sub("\\.tsv$", "", base) # fallback
     }
 
     meta <- .parse_base(base_no_suffix)
@@ -274,23 +278,22 @@ if (!is.na(label_end)) {
     )
 
     md_cols <- tibble::tibble(
-
-      output_prefix   = base_no_suffix,
-      species         = meta$species,
-      mdr_tag         = meta$mdr_tag,
-      phenotype       = meta$phenotype,
-      drug_label      = meta$drug_label,
-      drug_or_class   = meta$drug_or_class,
-      strat_label     = meta$strat_label,
-      strat_value     = meta$strat_value,
-      strat_value_test= meta$strat_value_test,
-      leaveout        = meta$leaveout,
-      cross_test      = meta$is_cross,
-      ref_drug        = meta$ref_drug,
-      test_drug       = meta$test_drug,
-      prefix_key      = meta$prefix_key,
-      feature         = meta$feature,
-      feature_type    = meta$feature_type,
+      output_prefix = base_no_suffix,
+      species = meta$species,
+      mdr_tag = meta$mdr_tag,
+      phenotype = meta$phenotype,
+      drug_label = meta$drug_label,
+      drug_or_class = meta$drug_or_class,
+      strat_label = meta$strat_label,
+      strat_value = meta$strat_value,
+      strat_value_test = meta$strat_value_test,
+      leaveout = meta$leaveout,
+      cross_test = meta$is_cross,
+      ref_drug = meta$ref_drug,
+      test_drug = meta$test_drug,
+      prefix_key = meta$prefix_key,
+      feature = meta$feature,
+      feature_type = meta$feature_type,
       feature_subtype = meta$feature_subtype
     )
 
@@ -343,7 +346,7 @@ buildTopFeatsPq <- function(
   LOO = FALSE,
   MDR = FALSE,
   cross_test = FALSE,
-  out_parquet = NULL,   # only filename; will be written under ML_top_features/
+  out_parquet = NULL, # only filename; will be written under ML_top_features/
   compression = "zstd",
   verbose = TRUE
 ) {
@@ -368,8 +371,10 @@ buildTopFeatsPq <- function(
   # -----------------------
   # Resolve directories (ensures existence)
   # -----------------------
-  paths <- createMLResultDir(path, stratify_by = stratify_by, LOO = LOO,
-                             cross_test = cross_test, MDR = MDR)
+  paths <- createMLResultDir(path,
+    stratify_by = stratify_by, LOO = LOO,
+    cross_test = cross_test, MDR = MDR
+  )
   top_dir <- paths$ML_top_features
 
   # -----------------------
@@ -395,42 +400,46 @@ buildTopFeatsPq <- function(
     }
     i <- idx[1]
     if (i < length(tokens) && identical(tokens[i + 1], "class")) {
-      list(drug_label = "drug_class",
-           drug_value = if (i + 2 <= length(tokens)) tokens[i + 2] else .NA_chr(),
-           label_end  = i + 1)
+      list(
+        drug_label = "drug_class",
+        drug_value = if (i + 2 <= length(tokens)) tokens[i + 2] else .NA_chr(),
+        label_end = i + 1
+      )
     } else {
-      list(drug_label = "drug",
-           drug_value = if (i + 1 <= length(tokens)) tokens[i + 1] else .NA_chr(),
-           label_end  = i)
+      list(
+        drug_label = "drug",
+        drug_value = if (i + 1 <= length(tokens)) tokens[i + 1] else .NA_chr(),
+        label_end = i
+      )
     }
   }
 
   .parse_base <- function(base_no_suffix) {
     xs <- strsplit(base_no_suffix, "_", fixed = TRUE)[[1]]
-    n  <- length(xs)
+    n <- length(xs)
 
     # Initialize
-    species         <- .NA_chr()
-    mdr_tag         <- .NA_chr()
-    phenotype       <- .NA_chr()
-    drug_label      <- .NA_chr()
-    drug_or_class   <- .NA_chr()
-    strat_label     <- .NA_chr()
-    strat_value     <- .NA_chr()
-    strat_value_test<- .NA_chr()
-    leaveout        <- FALSE
-    is_cross        <- FALSE
-    ref_drug        <- .NA_chr()
-    test_drug       <- .NA_chr()
-    prefix_key      <- .NA_chr()
-    feature         <- .NA_chr()
-    feature_type    <- .NA_chr()
+    species <- .NA_chr()
+    mdr_tag <- .NA_chr()
+    phenotype <- .NA_chr()
+    drug_label <- .NA_chr()
+    drug_or_class <- .NA_chr()
+    strat_label <- .NA_chr()
+    strat_value <- .NA_chr()
+    strat_value_test <- .NA_chr()
+    leaveout <- FALSE
+    is_cross <- FALSE
+    ref_drug <- .NA_chr()
+    test_drug <- .NA_chr()
+    prefix_key <- .NA_chr()
+    feature <- .NA_chr()
+    feature_type <- .NA_chr()
     feature_subtype <- .NA_chr()
 
     # Feature from last 2 tokens
     if (n >= 2) {
-      feature         <- paste(xs[(n - 1):n], collapse = "_")
-      feature_type    <- xs[n - 1]
+      feature <- paste(xs[(n - 1):n], collapse = "_")
+      feature_type <- xs[n - 1]
       feature_subtype <- xs[n]
     }
     core <- if ((n - 2) >= 1) xs[1:(n - 2)] else character(0)
@@ -442,13 +451,13 @@ buildTopFeatsPq <- function(
       if (length(core) >= 2) phenotype <- paste(core[-1], collapse = "_")
       prefix_key <- "MDR"
       return(list(
-        species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-        drug_label=drug_label, drug_or_class=drug_or_class,
-        strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-        leaveout=leaveout, is_cross=is_cross,
-        ref_drug=ref_drug, test_drug=test_drug,
-        prefix_key=prefix_key,
-        feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+        species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+        drug_label = drug_label, drug_or_class = drug_or_class,
+        strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+        leaveout = leaveout, is_cross = is_cross,
+        ref_drug = ref_drug, test_drug = test_drug,
+        prefix_key = prefix_key,
+        feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
       ))
     }
 
@@ -460,55 +469,55 @@ buildTopFeatsPq <- function(
       if (grepl("_leaveout_tested_on_", core_str, fixed = TRUE)) {
         leaveout <- TRUE
         di <- .find_drug_label_value(core)
-        drug_label    <- di$drug_label
+        drug_label <- di$drug_label
         drug_or_class <- di$drug_value
-        label_end     <- di$label_end
+        label_end <- di$label_end
         if (!is.na(label_end)) {
           prefix_key <- paste(core[1:label_end], collapse = "_")
           i_val <- label_end + 1
           if ((i_val + 4) <= length(core) &&
-              core[i_val + 1] == "leaveout" && core[i_val + 2] == "tested" && core[i_val + 3] == "on") {
+            core[i_val + 1] == "leaveout" && core[i_val + 2] == "tested" && core[i_val + 3] == "on") {
             strat_label <- stratify_by %||% .NA_chr()
             strat_value <- core[i_val + 4]
           }
         }
         species <- if (length(core) >= 1) core[1] else .NA_chr()
         return(list(
-          species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-          drug_label=drug_label, drug_or_class=drug_or_class,
-          strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-          leaveout=leaveout, is_cross=is_cross,
-          ref_drug=ref_drug, test_drug=test_drug,
-          prefix_key=prefix_key,
-          feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+          species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+          drug_label = drug_label, drug_or_class = drug_or_class,
+          strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+          leaveout = leaveout, is_cross = is_cross,
+          ref_drug = ref_drug, test_drug = test_drug,
+          prefix_key = prefix_key,
+          feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
         ))
       }
 
       # Cross by strat group: ... <prefix_key>_<drug_value>_cross_<strat_value>_tested_on_<strat_value_test>_<feature>
       if (grepl("_cross_", core_str, fixed = TRUE)) {
         di <- .find_drug_label_value(core)
-        drug_label    <- di$drug_label
+        drug_label <- di$drug_label
         drug_or_class <- di$drug_value
-        label_end     <- di$label_end
+        label_end <- di$label_end
         if (!is.na(label_end)) {
           prefix_key <- paste(core[1:label_end], collapse = "_")
           i_val <- label_end + 1
           if ((i_val + 5) <= length(core) &&
-              core[i_val + 1] == "cross" && core[i_val + 3] == "tested" && core[i_val + 4] == "on") {
-            strat_label     <- stratify_by %||% .NA_chr()
-            strat_value     <- core[i_val + 2]
-            strat_value_test<- core[i_val + 5]
+            core[i_val + 1] == "cross" && core[i_val + 3] == "tested" && core[i_val + 4] == "on") {
+            strat_label <- stratify_by %||% .NA_chr()
+            strat_value <- core[i_val + 2]
+            strat_value_test <- core[i_val + 5]
           }
         }
         species <- if (length(core) >= 1) core[1] else .NA_chr()
         return(list(
-          species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-          drug_label=drug_label, drug_or_class=drug_or_class,
-          strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-          leaveout=leaveout, is_cross=is_cross,
-          ref_drug=ref_drug, test_drug=test_drug,
-          prefix_key=prefix_key,
-          feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+          species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+          drug_label = drug_label, drug_or_class = drug_or_class,
+          strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+          leaveout = leaveout, is_cross = is_cross,
+          ref_drug = ref_drug, test_drug = test_drug,
+          prefix_key = prefix_key,
+          feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
         ))
       }
 
@@ -518,8 +527,8 @@ buildTopFeatsPq <- function(
       if (!is.na(label_end)) {
         prefix_key <- paste(core[1:label_end], collapse = "_")
         if ((label_end + 4) <= length(core) &&
-            core[label_end + 2] == "tested" && core[label_end + 3] == "on") {
-          ref_drug  <- core[label_end + 1]
+          core[label_end + 2] == "tested" && core[label_end + 3] == "on") {
+          ref_drug <- core[label_end + 1]
           test_drug <- core[label_end + 4]
           drug_label <- if (endsWith(prefix_key, "drug_class")) "drug_class" else "drug"
           drug_or_class <- ref_drug
@@ -527,13 +536,13 @@ buildTopFeatsPq <- function(
       }
       species <- if (length(core) >= 1) core[1] else .NA_chr()
       return(list(
-        species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-        drug_label=drug_label, drug_or_class=drug_or_class,
-        strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-        leaveout=leaveout, is_cross=is_cross,
-        ref_drug=ref_drug, test_drug=test_drug,
-        prefix_key=prefix_key,
-        feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+        species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+        drug_label = drug_label, drug_or_class = drug_or_class,
+        strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+        leaveout = leaveout, is_cross = is_cross,
+        ref_drug = ref_drug, test_drug = test_drug,
+        prefix_key = prefix_key,
+        feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
       ))
     }
 
@@ -541,30 +550,30 @@ buildTopFeatsPq <- function(
     species <- if (length(core) >= 1) core[1] else .NA_chr()
     di <- .find_drug_label_value(core)
     drug_label <- di$drug_label
-    label_end  <- di$label_end
+    label_end <- di$label_end
 
     if (!is.na(label_end)) {
       # STRATIFIED pattern (fix): species drug[_class] strat_label drug_value strat_value
       if (label_end + 3 <= length(core) && core[label_end + 1] %in% c("year", "country")) {
-        strat_label  <- core[label_end + 1]
-        drug_or_class<- core[label_end + 2]      # e.g., FLQ, MAC, CIP, etc.
-        strat_value  <- core[label_end + 3]      # e.g., 2015-2019 or country name
-        prefix_key   <- paste(core[1:label_end], collapse = "_")
+        strat_label <- core[label_end + 1]
+        drug_or_class <- core[label_end + 2] # e.g., FLQ, MAC, CIP, etc.
+        strat_value <- core[label_end + 3] # e.g., 2015-2019 or country name
+        prefix_key <- paste(core[1:label_end], collapse = "_")
       } else {
         # UNSTRATIFIED pattern: species drug[_class] drug_value
         drug_or_class <- di$drug_value
-        prefix_key    <- paste(core[1:label_end], collapse = "_")
+        prefix_key <- paste(core[1:label_end], collapse = "_")
       }
     }
 
     list(
-      species=species, mdr_tag=mdr_tag, phenotype=phenotype,
-      drug_label=drug_label, drug_or_class=drug_or_class,
-      strat_label=strat_label, strat_value=strat_value, strat_value_test=strat_value_test,
-      leaveout=leaveout, is_cross=is_cross,
-      ref_drug=ref_drug, test_drug=test_drug,
-      prefix_key=prefix_key,
-      feature=feature, feature_type=feature_type, feature_subtype=feature_subtype
+      species = species, mdr_tag = mdr_tag, phenotype = phenotype,
+      drug_label = drug_label, drug_or_class = drug_or_class,
+      strat_label = strat_label, strat_value = strat_value, strat_value_test = strat_value_test,
+      leaveout = leaveout, is_cross = is_cross,
+      ref_drug = ref_drug, test_drug = test_drug,
+      prefix_key = prefix_key,
+      feature = feature, feature_type = feature_type, feature_subtype = feature_subtype
     )
   }
 
@@ -591,23 +600,22 @@ buildTopFeatsPq <- function(
 
     # Attach metadata columns
     md_cols <- tibble::tibble(
-
-      output_prefix   = base_no_suffix,
-      species         = meta$species,
-      mdr_tag         = meta$mdr_tag,
-      phenotype       = meta$phenotype,
-      drug_label      = meta$drug_label,
-      drug_or_class   = meta$drug_or_class,
-      strat_label     = meta$strat_label,
-      strat_value     = meta$strat_value,
-      strat_value_test= meta$strat_value_test,
-      leaveout        = meta$leaveout,
-      cross_test      = meta$is_cross,
-      ref_drug        = meta$ref_drug,
-      test_drug       = meta$test_drug,
-      prefix_key      = meta$prefix_key,
-      feature         = meta$feature,
-      feature_type    = meta$feature_type,
+      output_prefix = base_no_suffix,
+      species = meta$species,
+      mdr_tag = meta$mdr_tag,
+      phenotype = meta$phenotype,
+      drug_label = meta$drug_label,
+      drug_or_class = meta$drug_or_class,
+      strat_label = meta$strat_label,
+      strat_value = meta$strat_value,
+      strat_value_test = meta$strat_value_test,
+      leaveout = meta$leaveout,
+      cross_test = meta$is_cross,
+      ref_drug = meta$ref_drug,
+      test_drug = meta$test_drug,
+      prefix_key = meta$prefix_key,
+      feature = meta$feature,
+      feature_type = meta$feature_type,
       feature_subtype = meta$feature_subtype
     )
 

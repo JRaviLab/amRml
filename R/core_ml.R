@@ -73,7 +73,8 @@ NULL
 #' @return An `rsplit` object
 #' @export
 splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280) {
-  .checkArgTibble(ml_input_tibble, ml = TRUE); .checkArgSplit(split)
+  .checkArgTibble(ml_input_tibble, ml = TRUE)
+  .checkArgSplit(split)
   .checkArgSeed(seed)
 
   set.seed(seed)
@@ -85,7 +86,7 @@ splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280
     # If in CV mode:
     # Still retain a stratified testing holdout purely for final reporting metrics;
     # CV is only performed on the training portion.
-    prop_train_for_holdout <- 0.8  # 80 percent train, 20 percent reserved test
+    prop_train_for_holdout <- 0.8 # 80 percent train, 20 percent reserved test
     data_split <- rsample::initial_split(
       ml_input_tibble,
       prop   = prop_train_for_holdout,
@@ -115,7 +116,8 @@ splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280
 #' @return A `recipe` object
 #' @export
 buildRecipe <- function(train_data, use_pca = FALSE, pca_threshold = 0.95) {
-  .checkArgTibble(train_data, ml = TRUE); .checkArgUsePCA(use_pca)
+  .checkArgTibble(train_data, ml = TRUE)
+  .checkArgUsePCA(use_pca)
   .checkArgPCAThreshold(pca_threshold)
 
   target_var <- .getTargetVarName(train_data) |> as.character()
@@ -124,8 +126,10 @@ buildRecipe <- function(train_data, use_pca = FALSE, pca_threshold = 0.95) {
   nm <- names(train_data)
   id_cols <- setdiff(nm[grepl("^genome", nm)], target_var)
 
-  rec <- recipes::recipe(formula = stats::reformulate(".", response = target_var),
-                         data = train_data)
+  rec <- recipes::recipe(
+    formula = stats::reformulate(".", response = target_var),
+    data = train_data
+  )
 
   # Only update roles if we actually have ID columns to mark as metadata
   if (length(id_cols) > 0) {
@@ -146,7 +150,6 @@ buildRecipe <- function(train_data, use_pca = FALSE, pca_threshold = 0.95) {
 }
 
 
-
 #' buildLRModel()
 #'
 #' Builds a logistic regression model.
@@ -158,13 +161,17 @@ buildRecipe <- function(train_data, use_pca = FALSE, pca_threshold = 0.95) {
 buildLRModel <- function(multi_class = FALSE) {
   .checkArgMultiClass(multi_class)
 
-  if(!multi_class) {
-    lr_mod <- parsnip::logistic_reg(penalty = hardhat::tune(),
-      mixture = hardhat::tune()) |>
+  if (!multi_class) {
+    lr_mod <- parsnip::logistic_reg(
+      penalty = hardhat::tune(),
+      mixture = hardhat::tune()
+    ) |>
       parsnip::set_engine(engine = "glmnet")
-  } else if(multi_class) {
-    lr_mod <- parsnip::multinom_reg(penalty = hardhat::tune(),
-      mixture = hardhat::tune()) |>
+  } else if (multi_class) {
+    lr_mod <- parsnip::multinom_reg(
+      penalty = hardhat::tune(),
+      mixture = hardhat::tune()
+    ) |>
       parsnip::set_engine(engine = "glmnet")
   }
 
@@ -181,9 +188,11 @@ buildLRModel <- function(multi_class = FALSE) {
 #' @return A `workflow` object
 #' @export
 buildWflow <- function(parsnip_mod, recipe) {
-  .checkArgParsnipMod(parsnip_mod); .checkArgRecipe(recipe)
+  .checkArgParsnipMod(parsnip_mod)
+  .checkArgRecipe(recipe)
 
-  wflow <- workflows::workflow() |> workflows::add_model(parsnip_mod) |>
+  wflow <- workflows::workflow() |>
+    workflows::add_model(parsnip_mod) |>
     workflows::add_recipe(recipe)
 
   return(wflow)
@@ -213,21 +222,21 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' a tibble
 #' @export
 buildTuningGrid <- function(
-    model = "LR",
-    penalty_vec = 10^seq(-4, -1, length.out = 10),
-    mix_vec = 0:5 / 5
+  model = "LR",
+  penalty_vec = 10^seq(-4, -1, length.out = 10),
+  mix_vec = 0:5 / 5
 ) {
   .checkArgModel(model)
-  
+
   if (model == "LR") {
     .checkArgPenaltyVec(penalty_vec)
     .checkArgMixVec(mix_vec)
-    
+
     penalty <- rep(penalty_vec, each = length(mix_vec))
     mixture <- rep(mix_vec, length(penalty_vec))
     grid <- tibble::tibble(penalty, mixture)
   }
-  
+
   return(grid)
 }
 
@@ -247,13 +256,14 @@ buildTuningGrid <- function(
 #' @export
 tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
                      n_fold = 5) {
-  .checkArgTibble(grid); .checkArgWflow(wflow)
+  .checkArgTibble(grid)
+  .checkArgWflow(wflow)
   .checkArgDataSplit(data_split)
 
   split_class <- class(data_split)[1]
 
   # Always do CV on the training portion of the split
-  train_df   <- rsample::training(data_split)
+  train_df <- rsample::training(data_split)
   target_var <- .getTargetVarName(train_df)
 
   if (identical(split_class, "initial_split")) {
@@ -269,9 +279,9 @@ tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
   tune_res <- tune::tune_grid(
     wflow,
     resamples = resamples,
-    grid      = grid,
-    control   = tune::control_grid(save_pred = TRUE),
-    metrics   = yardstick::metric_set(
+    grid = grid,
+    control = tune::control_grid(save_pred = TRUE),
+    metrics = yardstick::metric_set(
       yardstick::f_meas,
       yardstick::pr_auc,
       yardstick::spec,
@@ -296,7 +306,8 @@ tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
 #' @return Best model workflow
 #' @export
 selectBestModel <- function(tune_res, wflow, select_best_metric = "mcc") {
-  .checkArgTuneRes(tune_res); .checkArgWflow(wflow)
+  .checkArgTuneRes(tune_res)
+  .checkArgWflow(wflow)
   .checkArgSelectBestMetric(select_best_metric)
 
   best_mod <- tune::select_best(tune_res, metric = select_best_metric)
@@ -316,7 +327,8 @@ selectBestModel <- function(tune_res, wflow, select_best_metric = "mcc") {
 #' @return Best model fit
 #' @export
 fitBestModel <- function(final_mod, train_data) {
-  .checkArgWflow(final_mod); .checkArgTibble(train_data, ml = TRUE)
+  .checkArgWflow(final_mod)
+  .checkArgTibble(train_data, ml = TRUE)
 
   fit <- final_mod |> parsnip::fit(data = train_data)
 
@@ -334,8 +346,7 @@ fitBestModel <- function(final_mod, train_data) {
 
   model <- class(fit$fit$actions$model$spec)[1]
 
-  if(model %in% c("logistic_reg", "multinom_reg")) {
-
+  if (model %in% c("logistic_reg", "multinom_reg")) {
     penalty <- fit$fit$fit$spec$args$penalty
 
     mixture <- tryCatch(
@@ -344,7 +355,6 @@ fitBestModel <- function(final_mod, train_data) {
     )
 
     tibble::tibble(penalty = penalty, mixture = mixture)
-
   } else {
     stop("The `fit` object provided must correspond to 'logistic_reg' or 'multinom_reg'.")
   }
@@ -363,7 +373,8 @@ fitBestModel <- function(final_mod, train_data) {
 #' labels
 #' @export
 predictML <- function(fit, test_data) {
-  .checkArgWflow(fit); .checkArgTibble(test_data, ml = TRUE)
+  .checkArgWflow(fit)
+  .checkArgTibble(test_data, ml = TRUE)
 
   test_data_plus_predictions <- parsnip::augment(fit, test_data)
 
@@ -406,7 +417,8 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   mcc <- test_data_plus_predictions |>
     yardstick::mcc(truth = !!target_var, estimate = .pred_class) |>
-    dplyr::select(.estimate) |> as.numeric()
+    dplyr::select(.estimate) |>
+    as.numeric()
 
   nmcc <- (mcc + 1) / 2
 
@@ -423,15 +435,21 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 .calculateF1 <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
-  if(!("genome_drug.resistant_phenotype" %in%
+  if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste("`test_data_plus_predictions` does not have a column for",
-      "`genome_drug.resistant_phenotype`."))
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   f1 <- test_data_plus_predictions |>
-    yardstick::f_meas(truth = genome_drug.resistant_phenotype,
-      estimate = .pred_class) |> dplyr::select(.estimate) |> as.numeric() |>
+    yardstick::f_meas(
+      truth = genome_drug.resistant_phenotype,
+      estimate = .pred_class
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
     round(2)
 
   return(f1)
@@ -447,16 +465,21 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 .calculateAUPRC <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
-  if(!("genome_drug.resistant_phenotype" %in%
+  if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste("`test_data_plus_predictions` does not have a column for",
-      "`genome_drug.resistant_phenotype`."))
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   auprc <- test_data_plus_predictions |>
     yardstick::pr_auc(
-      truth = genome_drug.resistant_phenotype, .pred_Resistant) |>
-      dplyr::select(.estimate) |> as.numeric() |> round(2)
+      truth = genome_drug.resistant_phenotype, .pred_Resistant
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
+    round(2)
 
   return(auprc)
 }
@@ -471,26 +494,33 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 .calculateLog2APOP <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
-  if(!("genome_drug.resistant_phenotype" %in%
+  if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste("`test_data_plus_predictions` does not have a column for",
-      "`genome_drug.resistant_phenotype`."))
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   auprc <- .calculateAUPRC(test_data_plus_predictions)
   prior <- sum(
-    test_data_plus_predictions$genome_drug.resistant_phenotype == "Resistant") /
+    test_data_plus_predictions$genome_drug.resistant_phenotype == "Resistant"
+  ) /
     nrow(test_data_plus_predictions)
 
-  if(prior > 0.3 && prior < 0.7) {
-    warning(paste("Classes are roughly balanced.",
-      "Calculation of log2(AUPRC/prior) may be inappropriate."))
-  } else if(prior >= 0.7) {
-    warning(paste("Classes are imbalanced toward the resistant phenotype.",
-      "Calculation of log2(AUPRC/prior) may be inappropriate."))
+  if (prior > 0.3 && prior < 0.7) {
+    warning(paste(
+      "Classes are roughly balanced.",
+      "Calculation of log2(AUPRC/prior) may be inappropriate."
+    ))
+  } else if (prior >= 0.7) {
+    warning(paste(
+      "Classes are imbalanced toward the resistant phenotype.",
+      "Calculation of log2(AUPRC/prior) may be inappropriate."
+    ))
   }
 
-  log2_apop <- log2(auprc/prior) |> round(2)
+  log2_apop <- log2(auprc / prior) |> round(2)
 
   return(log2_apop)
 }
@@ -505,16 +535,21 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 .calculateBalAcc <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
-  if(!("genome_drug.resistant_phenotype" %in%
+  if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste("`test_data_plus_predictions` does not have a column for",
-      "`genome_drug.resistant_phenotype`."))
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   bal_acc <- test_data_plus_predictions |>
     yardstick::bal_accuracy(
-      truth = genome_drug.resistant_phenotype, estimate = .pred_class) |>
-    dplyr::select(.estimate) |> as.numeric() |> round(2)
+      truth = genome_drug.resistant_phenotype, estimate = .pred_class
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
+    round(2)
 
   return(bal_acc)
 }
@@ -529,15 +564,21 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 .calculateSensitivity <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
-  if(!("genome_drug.resistant_phenotype" %in%
+  if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste("`test_data_plus_predictions` does not have a column for",
-      "`genome_drug.resistant_phenotype`."))
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   sens <- test_data_plus_predictions |>
-    yardstick::sens(truth = genome_drug.resistant_phenotype,
-      estimate = .pred_class) |> dplyr::select(.estimate) |> as.numeric() |>
+    yardstick::sens(
+      truth = genome_drug.resistant_phenotype,
+      estimate = .pred_class
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
     round(2)
 
   return(sens)
@@ -553,15 +594,21 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 .calculateSpecificity <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
-  if(!("genome_drug.resistant_phenotype" %in%
+  if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste("`test_data_plus_predictions` does not have a column for",
-      "`genome_drug.resistant_phenotype`."))
+    stop(paste(
+      "`test_data_plus_predictions` does not have a column for",
+      "`genome_drug.resistant_phenotype`."
+    ))
   }
 
   spec <- test_data_plus_predictions |>
-    yardstick::spec(truth = genome_drug.resistant_phenotype,
-      estimate = .pred_class) |> dplyr::select(.estimate) |> as.numeric() |>
+    yardstick::spec(
+      truth = genome_drug.resistant_phenotype,
+      estimate = .pred_class
+    ) |>
+    dplyr::select(.estimate) |>
+    as.numeric() |>
     round(2)
 
   return(spec)
@@ -608,30 +655,36 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 #' `Importance`, and a column for `Sign` (or, for multi-class, a tibble with
 #' per-class columns of importance scores for each `Variable`)
 #' @export
-extractTopFeats <- function(fit, prop_vi_top_feats = c(0, 1),
-  n_top_feats = NA) {
+extractTopFeats <- function(
+  fit, prop_vi_top_feats = c(0, 1),
+  n_top_feats = NA
+) {
   .checkArgWflow(fit)
 
-  if(!is.na(n_top_feats)) {prop_vi_top_feats <- NA}
+  if (!is.na(n_top_feats)) {
+    prop_vi_top_feats <- NA
+  }
 
   # Arg checking for every permutation of `prop_vi_top_feats` and `n_top_feats`
-  if(is.na(n_top_feats) & any(!is.na(prop_vi_top_feats))) {
+  if (is.na(n_top_feats) & any(!is.na(prop_vi_top_feats))) {
     .checkArgPropVITopFeats(prop_vi_top_feats)
-  } else if(any(is.na(prop_vi_top_feats)) & !is.na(n_top_feats)) {
+  } else if (any(is.na(prop_vi_top_feats)) & !is.na(n_top_feats)) {
     .checkArgNTopFeats(n_top_feats)
-  } else if(any(!is.na(prop_vi_top_feats)) & !is.na(n_top_feats)) {
+  } else if (any(!is.na(prop_vi_top_feats)) & !is.na(n_top_feats)) {
     stop("Set either `n_top_feats` or `prop_vi_top_feats` to `NA` but not
       both.")
-  } else if(any(is.na(prop_vi_top_feats)) & is.na(n_top_feats)) {
+  } else if (any(is.na(prop_vi_top_feats)) & is.na(n_top_feats)) {
     stop("Please specify either `n_top_feats` or `prop_vi_top_feats`.")
   }
 
-  feats_arranged <- fit |> workflowsets::extract_fit_parsnip() |> vip::vi() |>
+  feats_arranged <- fit |>
+    workflowsets::extract_fit_parsnip() |>
+    vip::vi() |>
     dplyr::arrange(dplyr::desc(Importance))
 
-  if(!is.na(n_top_feats)) {
+  if (!is.na(n_top_feats)) {
     top_feats_and_VIs <- feats_arranged |> dplyr::slice(1:n_top_feats)
-  } else if(any(!is.na(prop_vi_top_feats))) {
+  } else if (any(!is.na(prop_vi_top_feats))) {
     cum_vi_lower <- prop_vi_top_feats[1] * sum(feats_arranged$Importance)
     cum_vi_upper <- prop_vi_top_feats[2] * sum(feats_arranged$Importance)
 
@@ -648,9 +701,11 @@ extractTopFeats <- function(fit, prop_vi_top_feats = c(0, 1),
 
   # Take a different approach if using multi-class (the previous code would give
   # a less meaningful result).
-  if(class(fit$fit$actions$model$spec)[1] == "multinom_reg") {
-    warning(paste("Extracting top features from a multi-class model.",
-      "The `prop_vi_top_feats` and `n_top_feats` arguments do not apply."))
+  if (class(fit$fit$actions$model$spec)[1] == "multinom_reg") {
+    warning(paste(
+      "Extracting top features from a multi-class model.",
+      "The `prop_vi_top_feats` and `n_top_feats` arguments do not apply."
+    ))
 
     fit_penalty <- .getFitHps(fit)["penalty"] |> as.numeric()
     glmnet_fit <- parsnip::extract_fit_engine(fit)
