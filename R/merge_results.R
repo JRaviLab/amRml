@@ -269,11 +269,11 @@ if (!is.na(label_end)) {
       readr::read_tsv(f, show_col_types = FALSE, progress = FALSE),
       error = function(e) {
         if (verbose) message("Failed to read TSV: ", f, " (", conditionMessage(e), ") — using metadata only.")
-        tibble()
+        tibble::tibble()
       }
     )
 
-    md_cols <- tibble(
+    md_cols <- tibble::tibble(
 
       output_prefix   = base_no_suffix,
       species         = meta$species,
@@ -585,12 +585,12 @@ buildTopFeatsPq <- function(
       readr::read_tsv(f, show_col_types = FALSE, progress = FALSE),
       error = function(e) {
         if (verbose) message("Failed to read TSV: ", f, " (", conditionMessage(e), ") — using metadata only.")
-        tibble()
+        tibble::tibble()
       }
     )
 
     # Attach metadata columns
-    md_cols <- tibble(
+    md_cols <- tibble::tibble(
 
       output_prefix   = base_no_suffix,
       species         = meta$species,
