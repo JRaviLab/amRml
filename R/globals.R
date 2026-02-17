@@ -8,7 +8,6 @@
 "_PACKAGE"
 
 utils::globalVariables(c(
-
   # Prediction columns from tidymodels
   ".estimate",
   ".pred_Resistant",
@@ -52,7 +51,6 @@ utils::globalVariables(c(
   "pair_id",
   "parts",
   "phenotype",
-
   "precision",
   "prefix",
   "prefix_key",
