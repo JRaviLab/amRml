@@ -93,20 +93,21 @@ runMLPipeline <- function(
   .checkArgReturnPred(return_pred)
 
 
-
   # Set `n_fold` to `NA` if not using cross-validation.
   if (split[2] != 0) {
     n_fold <- NA
   }
 
   # Confirm resolved split params
-    if (verbose) {
-       mode <- if (split[2] == 0) "cv" else "splits"
-       message(sprintf("ML split mode: %s | split = c(%.2f, %.2f) | n_fold = %s | seed = %s",
-                                           mode, split[1], split[2],
-                                           ifelse(is.na(n_fold), "NA", as.character(n_fold)),
-                                           as.character(seed)))
-      }
+  if (verbose) {
+    mode <- if (split[2] == 0) "cv" else "splits"
+    message(sprintf(
+      "ML split mode: %s | split = c(%.2f, %.2f) | n_fold = %s | seed = %s",
+      mode, split[1], split[2],
+      ifelse(is.na(n_fold), "NA", as.character(n_fold)),
+      as.character(seed)
+    ))
+  }
 
   # Create a variable indicating whether external `test_data` was provided. This
   # will be set to `TRUE` later if the `test_data` argument is not `NA`.
@@ -116,10 +117,10 @@ runMLPipeline <- function(
 
   # Determine whether multi-class classification is to be performed.
   if (as.character(.getTargetVarName(ml_input_tibble)) == "resistant_classes") {
-      multi_class <- TRUE
-    } else {
-      multi_class <- FALSE
-    }
+    multi_class <- TRUE
+  } else {
+    multi_class <- FALSE
+  }
 
   if (model != "LR" & multi_class) {
     stop(paste(
@@ -262,7 +263,7 @@ runMLPipeline <- function(
       mix_vec = mix_vec
     )
   }
-  
+
   recipe <- buildRecipe(train_data,
     use_pca = use_pca,
     pca_threshold = pca_threshold
@@ -423,14 +424,16 @@ runMLPipeline <- function(
     all_results[["fit"]] <- fit
   }
 
-  if(return_pred) {
-        if(!multi_class){
+  if (return_pred) {
+    if (!multi_class) {
       all_results[["pred"]] <- test_data_plus_predictions |>
-        dplyr::select(c(genome_id, .pred_class, .pred_Resistant,
-          .pred_Susceptible, genome_drug.resistant_phenotype))
+        dplyr::select(c(
+          genome_id, .pred_class, .pred_Resistant,
+          .pred_Susceptible, genome_drug.resistant_phenotype
+        ))
     }
-     all_results[["pred"]] <- test_data_plus_predictions
-    }
+    all_results[["pred"]] <- test_data_plus_predictions
+  }
 
   return(all_results)
 }
