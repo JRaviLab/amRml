@@ -93,21 +93,20 @@ runMLPipeline <- function(
   .checkArgReturnPred(return_pred)
 
 
+
   # Set `n_fold` to `NA` if not using cross-validation.
   if (split[2] != 0) {
     n_fold <- NA
   }
 
   # Confirm resolved split params
-  if (verbose) {
-    mode <- if (split[2] == 0) "cv" else "splits"
-    message(sprintf(
-      "ML split mode: %s | split = c(%.2f, %.2f) | n_fold = %s | seed = %s",
-      mode, split[1], split[2],
-      ifelse(is.na(n_fold), "NA", as.character(n_fold)),
-      as.character(seed)
-    ))
-  }
+    if (verbose) {
+       mode <- if (split[2] == 0) "cv" else "splits"
+       message(sprintf("ML split mode: %s | split = c(%.2f, %.2f) | n_fold = %s | seed = %s",
+                                           mode, split[1], split[2],
+                                           ifelse(is.na(n_fold), "NA", as.character(n_fold)),
+                                           as.character(seed)))
+      }
 
   # Create a variable indicating whether external `test_data` was provided. This
   # will be set to `TRUE` later if the `test_data` argument is not `NA`.
@@ -117,10 +116,10 @@ runMLPipeline <- function(
 
   # Determine whether multi-class classification is to be performed.
   if (as.character(.getTargetVarName(ml_input_tibble)) == "resistant_classes") {
-    multi_class <- TRUE
-  } else {
-    multi_class <- FALSE
-  }
+      multi_class <- TRUE
+    } else {
+      multi_class <- FALSE
+    }
 
   if (model != "LR" & multi_class) {
     stop(paste(
@@ -263,7 +262,7 @@ runMLPipeline <- function(
       mix_vec = mix_vec
     )
   }
-
+  
   recipe <- buildRecipe(train_data,
     use_pca = use_pca,
     pca_threshold = pca_threshold
@@ -297,10 +296,10 @@ runMLPipeline <- function(
     log2_apop <- .calculateLog2APOP(test_data_plus_predictions)
   }
 
-  nmcc <- .calculatenMCC(test_data_plus_predictions)
+  mcc <- .calculateMCC(test_data_plus_predictions)
 
   if (verbose) {
-    message(paste("Normalized Matthews correlation coefficient:", nmcc))
+    message(paste("Matthews correlation coefficient:", mcc))
   }
 
   top_feat_tibble <- extractTopFeats(fit,
@@ -362,7 +361,7 @@ runMLPipeline <- function(
   performance_tibble <- tibble::tibble(
     num_obs = num_obs_ml_input_tibble,
     n_feat = getNumFeat(ml_input_tibble), model, train_prop = split[1],
-    val_prop = split[2], n_fold, nmcc, run_time_sec,
+    val_prop = split[2], n_fold, mcc, run_time_sec, seed,
     date = as.character(Sys.Date())
   )
 
@@ -381,20 +380,22 @@ runMLPipeline <- function(
         lower_prop_vi_top_feats = prop_vi_top_feats[1],
         .after = "val_prop"
       ) |>
-      tibble::add_column(bal_acc, .after = "nmcc") |>
-      tibble::add_column(f1, .after = "nmcc") |>
-      tibble::add_column(log2_apop, .after = "nmcc")
+      tibble::add_column(bal_acc, .after = "mcc") |>
+      tibble::add_column(f1, .after = "mcc") |>
+      tibble::add_column(log2_apop, .after = "mcc") |>
+      tibble::add_column(sens, .after = "mcc") |>
+      tibble::add_column(spec, .after = "mcc")
   }
 
   if (model == "LR") {
     performance_tibble <- performance_tibble |>
-      tibble::add_column(fit_penalty, .before = "nmcc") |>
-      tibble::add_column(fit_mixture, .before = "nmcc")
+      tibble::add_column(fit_penalty, .before = "mcc") |>
+      tibble::add_column(fit_mixture, .before = "mcc")
   } else if (model == "RF" || model == "BT") {
     performance_tibble <- performance_tibble |>
-      tibble::add_column(fit_trees, .before = "nmcc") |>
-      tibble::add_column(fit_mtry, .before = "nmcc") |>
-      tibble::add_column(fit_min_n, .before = "nmcc")
+      tibble::add_column(fit_trees, .before = "mcc") |>
+      tibble::add_column(fit_mtry, .before = "mcc") |>
+      tibble::add_column(fit_min_n, .before = "mcc")
   }
 
   if (external_test_data) {
@@ -422,16 +423,14 @@ runMLPipeline <- function(
     all_results[["fit"]] <- fit
   }
 
-  if (return_pred) {
-    if (!multi_class) {
+  if(return_pred) {
+        if(!multi_class){
       all_results[["pred"]] <- test_data_plus_predictions |>
-        dplyr::select(c(
-          genome_id, .pred_class, .pred_Resistant,
-          .pred_Susceptible, genome_drug.resistant_phenotype
-        ))
+        dplyr::select(c(genome_id, .pred_class, .pred_Resistant,
+          .pred_Susceptible, genome_drug.resistant_phenotype))
     }
-    all_results[["pred"]] <- test_data_plus_predictions
-  }
+     all_results[["pred"]] <- test_data_plus_predictions
+    }
 
   return(all_results)
 }
