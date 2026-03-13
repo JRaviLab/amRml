@@ -2,7 +2,6 @@ build_cluster_feature_map <- function(
   duckdb_parquet_path,
   output_path = NULL
 ) {
-    
   # --- helpers ---
   .standardize_cols <- function(df, mapping, required) {
     # mapping: named list like list(std_name = original_name)
@@ -20,31 +19,31 @@ build_cluster_feature_map <- function(
     df
   }
 
-    # list of columns 
-    cols = list(
-    gene_protein   = list(genome_id = "genome_ids", protein_id = "protein_ids", Gene = "Gene"),
-    struct         = list(struct    = "struct",     genome_id  = "genome_id",   value = "value"),
-    domain         = list(protein_id= "AccNum",     domain_id  = "DB.ID"),
-    cluster_members= list(cluster   = "cluster",     member     = "member")
+  # list of columns
+  cols <- list(
+    gene_protein = list(genome_id = "genome_ids", protein_id = "protein_ids", Gene = "Gene"),
+    struct = list(struct = "struct", genome_id = "genome_id", value = "value"),
+    domain = list(protein_id = "AccNum", domain_id = "DB.ID"),
+    cluster_members = list(cluster = "cluster", member = "member")
   )
-    
-   # --- connect the duckdb of parquets ---  
-    con <- DBI::dbConnect(duckdb::duckdb(), normalizePath(duckdb_parquet_path))
-    
+
+  # --- connect the duckdb of parquets ---
+  con <- DBI::dbConnect(duckdb::duckdb(), normalizePath(duckdb_parquet_path))
+
   # --- read & prep gene_protein ---
-    gene_protein_table <- "genome_gene_protein"
-    
+  gene_protein_table <- "genome_gene_protein"
+
   gp <- DBI::dbReadTable(con, gene_protein_table) |>
     tibble::as_tibble() |>
     dplyr::distinct()
-    
+
   gp <- .standardize_cols(
     gp,
     mapping  = cols$gene_protein,
     required = c("genome_id", "protein_id", "Gene")
-  ) 
+  )
   # --- read & prep struct ---
-    struct_table <- "struct"
+  struct_table <- "struct"
   st <- DBI::dbReadTable(con, struct_table) |>
     tibble::as_tibble()
   st <- .standardize_cols(
@@ -65,7 +64,7 @@ build_cluster_feature_map <- function(
     dplyr::distinct(struct, protein_id, gene_order)
 
   # --- read & prep domain ---
-    domain_table <- "domain_names"
+  domain_table <- "domain_names"
   dm <- DBI::dbReadTable(con, domain_table) |>
     tibble::as_tibble() |>
     dplyr::distinct()
@@ -84,7 +83,7 @@ build_cluster_feature_map <- function(
     dplyr::distinct(.data$protein_id, .data$domain_id, .data$Gene, .data$struct, .data$gene_order)
 
   # --- read & prep cluster members ---
-    cluster_members_table <- "protein_members"
+  cluster_members_table <- "protein_members"
   cm <- DBI::dbReadTable(con, cluster_members_table) |>
     tibble::as_tibble() |>
     dplyr::distinct()
@@ -105,10 +104,10 @@ build_cluster_feature_map <- function(
     tidyr::pivot_longer(cols = c("protein_id", "feature"), names_to = "type", values_to = "feature") |>
     dplyr::distinct(.data$cluster, .data$feature) |>
     tidyr::drop_na(.data$cluster, .data$feature)
-    
+
   out_dir <- if (is.null(output_path)) dirname(duckdb_parquet_path) else normalizePath(output_path)
-    
-cluster_feature_parquet <- file.path(out_dir, "cluster_feature.parquet")
+
+  cluster_feature_parquet <- file.path(out_dir, "cluster_feature.parquet")
 
   writeCompressedParquet <- function(df, path) {
     arrow::write_parquet(
@@ -119,9 +118,8 @@ cluster_feature_parquet <- file.path(out_dir, "cluster_feature.parquet")
       use_dictionary = TRUE
     )
   }
-    
-    cluster_feature |>  writeCompressedParquet(cluster_feature_parquet)
-    
-   DBI::dbExecute(con, sprintf("CREATE OR REPLACE VIEW gene_seqs AS SELECT * FROM read_parquet('%s')", cluster_feature_parquet))
 
+  cluster_feature |> writeCompressedParquet(cluster_feature_parquet)
+
+  DBI::dbExecute(con, sprintf("CREATE OR REPLACE VIEW gene_seqs AS SELECT * FROM read_parquet('%s')", cluster_feature_parquet))
 }
