@@ -156,7 +156,6 @@ skipImbalancedMatrix <- function(genome_ids,
                             split,
                             stratify_by = NULL,
                             verbosity = c("minimal", "debug")) {
-
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
@@ -197,8 +196,10 @@ skipImbalancedMatrix <- function(genome_ids,
   if (!dir.exists(matrix_path)) dir.create(matrix_path, recursive = TRUE)
 
   log("info", paste0("Matrix output directory: ", matrix_path))
-  log("debug", paste0("Stratification: ",
-                      ifelse(is.null(stratify_column), "None", stratify_column)))
+  log("debug", paste0(
+    "Stratification: ",
+    ifelse(is.null(stratify_column), "None", stratify_column)
+  ))
 
   # Feature and matrix types
   feature_types <- list(
@@ -220,9 +221,11 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Safe DBI-quoting
   quote_condition <- function(group_cols, group_values, con) {
-    ids <- vapply(group_cols,
-                  function(col) DBI::dbQuoteIdentifier(con, col),
-                  character(1))
+    ids <- vapply(
+      group_cols,
+      function(col) DBI::dbQuoteIdentifier(con, col),
+      character(1)
+    )
     vals <- vapply(
       group_cols,
       function(col) {
@@ -256,7 +259,6 @@ skipImbalancedMatrix <- function(genome_ids,
     log("debug", paste0("Found ", nrow(all_groups), " groups for type: ", group_type))
 
     for (i in seq_len(nrow(all_groups))) {
-
       # New connection for this group
       con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
 
@@ -268,13 +270,14 @@ skipImbalancedMatrix <- function(genome_ids,
       condition_string <- quote_condition(group_cols, group_values, con)
 
       # Strat filter
-      strat_filter <- if (!is.null(stratify_column))
+      strat_filter <- if (!is.null(stratify_column)) {
         sprintf("AND \"%s\" IS NOT NULL AND \"%s\" != ''", stratify_column, stratify_column)
-      else ""
+      } else {
+        ""
+      }
 
       # Genome selection logic
       if (group_type %in% c("drug_class", "drug_class_year", "drug_class_country")) {
-
         genome_ids <- DBI::dbGetQuery(con, sprintf("
           WITH class_phenotypes AS (
             SELECT \"genome_drug.genome_id\" AS genome_id,
@@ -290,7 +293,6 @@ skipImbalancedMatrix <- function(genome_ids,
           FROM class_phenotypes
           WHERE any_resistant = 1 OR all_susceptible = 1
         ", condition_string))[[1]]
-
       } else {
         genome_ids <- DBI::dbGetQuery(con, sprintf("
           SELECT DISTINCT \"genome_drug.genome_id\"
@@ -310,19 +312,24 @@ skipImbalancedMatrix <- function(genome_ids,
       ", condition_string))
 
       phenotype_summary <- paste(
-        apply(phenotype_counts_all, 1,
-              function(row) paste0(row["phenotype"], "=", row["count"])),
+        apply(
+          phenotype_counts_all, 1,
+          function(row) paste0(row["phenotype"], "=", row["count"])
+        ),
         collapse = "; "
       )
 
       # Apply skip logic
       if (skipImbalancedMatrix(genome_ids, phenotype_counts_all, n_fold, split,
-                               verbosity = verbosity)) {
-
+        verbosity = verbosity
+      )) {
         readr::write_lines(
-          sprintf("%s\tToo few samples for CV/split\t%d\t%s",
-                  group_label, length(genome_ids), phenotype_summary),
-          log_path, append = TRUE
+          sprintf(
+            "%s\tToo few samples for CV/split\t%d\t%s",
+            group_label, length(genome_ids), phenotype_summary
+          ),
+          log_path,
+          append = TRUE
         )
 
         DBI::dbDisconnect(con, shutdown = FALSE)
@@ -331,9 +338,12 @@ skipImbalancedMatrix <- function(genome_ids,
 
       if (length(genome_ids) < 40) {
         readr::write_lines(
-          sprintf("%s\tToo few observations\t%d\t%s",
-                  group_label, length(genome_ids), phenotype_summary),
-          log_path, append = TRUE
+          sprintf(
+            "%s\tToo few observations\t%d\t%s",
+            group_label, length(genome_ids), phenotype_summary
+          ),
+          log_path,
+          append = TRUE
         )
 
         DBI::dbDisconnect(con, shutdown = FALSE)
@@ -351,9 +361,12 @@ skipImbalancedMatrix <- function(genome_ids,
 
       if (nrow(phen2) < 2) {
         readr::write_lines(
-          sprintf("%s\tOnly one phenotype class\t%d\t%s",
-                  group_label, length(genome_ids), phenotype_summary),
-          log_path, append = TRUE
+          sprintf(
+            "%s\tOnly one phenotype class\t%d\t%s",
+            group_label, length(genome_ids), phenotype_summary
+          ),
+          log_path,
+          append = TRUE
         )
 
         DBI::dbDisconnect(con, shutdown = FALSE)
@@ -363,13 +376,14 @@ skipImbalancedMatrix <- function(genome_ids,
       # Create selected_genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
       DBI::dbWriteTable(con, "selected_genomes",
-                        data.frame(genome_id = genome_ids), append = TRUE)
+        data.frame(genome_id = genome_ids),
+        append = TRUE
+      )
 
       # Feature and matrix generation steps
       for (ftype in names(feature_types)) {
-
         fview <- feature_types[[ftype]]$view
-        fid   <- feature_types[[ftype]]$id_col
+        fid <- feature_types[[ftype]]$id_col
 
         # binary view
         DBI::dbExecute(con, sprintf("
@@ -389,13 +403,14 @@ skipImbalancedMatrix <- function(genome_ids,
         }
 
         for (mtype in names(matrix_types)) {
-
           binary_only <- matrix_types[[mtype]]$binary_only
           if (ftype == "struct" && !binary_only) next
 
-          mview      <- sprintf("%s_%s", ftype,
-                                ifelse(grepl("binary", mtype), "binary", "counts"))
-          value_col  <- matrix_types[[mtype]]$value_col
+          mview <- sprintf(
+            "%s_%s", ftype,
+            ifelse(grepl("binary", mtype), "binary", "counts")
+          )
+          value_col <- matrix_types[[mtype]]$value_col
           filter_clause <- matrix_types[[mtype]]$filter
 
           # select features with non-zero variance
@@ -409,29 +424,38 @@ skipImbalancedMatrix <- function(genome_ids,
 
           keep_features <- DBI::dbGetQuery(con, keep_query)[["feature_id"]]
           if (length(keep_features) == 0) {
-            log("info", paste0("All features filtered for ",
-                               ftype, " - ", mtype, " - ", group_label))
+            log("info", paste0(
+              "All features filtered for ",
+              ftype, " - ", mtype, " - ", group_label
+            ))
             next
           }
 
-          DBI::dbExecute(con,
-                         "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
+          DBI::dbExecute(
+            con,
+            "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)"
+          )
           DBI::dbWriteTable(con,
-                            "keep_features",
-                            data.frame(feature_id = keep_features),
-                            append = TRUE)
+            "keep_features",
+            data.frame(feature_id = keep_features),
+            append = TRUE
+          )
 
           mtype_label <- matrix_types[[mtype]]$label
 
-          long_out_path <- file.path(matrix_path,
-                                     sprintf("%s_%s_%s_%s_%s_sparse.parquet",
-                                             bug, group_type, group_label, ftype, mtype_label))
+          long_out_path <- file.path(
+            matrix_path,
+            sprintf(
+              "%s_%s_%s_%s_%s_sparse.parquet",
+              bug, group_type, group_label, ftype, mtype_label
+            )
+          )
 
           long_out_path_sql <- gsub("\\\\", "/", long_out_path)
 
           # phenotype case
           phenotype_case <- if (group_type %in%
-                                c("drug_class", "drug_class_year", "drug_class_country")) {
+            c("drug_class", "drug_class_year", "drug_class_country")) {
             "
                CASE
                   WHEN MAX(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Resistant'
@@ -451,13 +475,20 @@ skipImbalancedMatrix <- function(genome_ids,
             "
           }
 
-          strat_col_select <- if (!is.null(stratify_by))
-            sprintf(", f.\"%s\"", stratify_column) else ""
+          strat_col_select <- if (!is.null(stratify_by)) {
+            sprintf(", f.\"%s\"", stratify_column)
+          } else {
+            ""
+          }
 
-          strat_col_group <- if (!is.null(stratify_by))
-            sprintf(", f.\"%s\"", stratify_column) else ""
+          strat_col_group <- if (!is.null(stratify_by)) {
+            sprintf(", f.\"%s\"", stratify_column)
+          } else {
+            ""
+          }
 
-          copy_sql <- sprintf("
+          copy_sql <- sprintf(
+            "
             COPY (
               SELECT
                 f.\"genome_drug.genome_id\" AS genome_id,
@@ -478,18 +509,21 @@ skipImbalancedMatrix <- function(genome_ids,
             TO '%s'
             (FORMAT 'parquet', COMPRESSION 'zstd')
           ",
-                              fid, value_col, phenotype_case, strat_col_select,
-                              mview, fid, condition_string,
-                              strat_filter, fid, strat_col_group, fid,
-                              long_out_path_sql)
+            fid, value_col, phenotype_case, strat_col_select,
+            mview, fid, condition_string,
+            strat_filter, fid, strat_col_group, fid,
+            long_out_path_sql
+          )
 
           ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
 
           # On copy failure, log + continue without stopping entire pipeline
           if (inherits(ok, "try-error")) {
             readr::write_lines(
-              sprintf("%s\tCOPY_failed\t%d\t%s",
-                      group_label, length(genome_ids), phenotype_summary),
+              sprintf(
+                "%s\tCOPY_failed\t%d\t%s",
+                group_label, length(genome_ids), phenotype_summary
+              ),
               log_path,
               append = TRUE
             )
@@ -530,7 +564,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Normalize paths to forward slashes for consistency
   matrix_path <- gsub("\\\\", "/", file.path(path, paste0("matrix_", stratify_by)))
-  LOO_path    <- gsub("\\\\", "/", file.path(path, paste0("LOO_matrix_", stratify_by)))
+  LOO_path <- gsub("\\\\", "/", file.path(path, paste0("LOO_matrix_", stratify_by)))
 
   if (!dir.exists(matrix_path)) {
     log("info", paste0("The matrix directory ", matrix_path, " does not exist."))
@@ -626,9 +660,11 @@ skipImbalancedMatrix <- function(genome_ids,
 
         out_file <- gsub("\\\\", "/", file.path(
           LOO_path,
-          paste0(sub_prefix, "_", stratify_by, "_",
-                 drug_class, "_leaveout_", leave_one_out, "_",
-                 sub_feature, "_sparse.parquet")
+          paste0(
+            sub_prefix, "_", stratify_by, "_",
+            drug_class, "_leaveout_", leave_one_out, "_",
+            sub_feature, "_sparse.parquet"
+          )
         ))
         arrow::write_parquet(combined, out_file)
         created <<- c(created, out_file)
@@ -702,7 +738,7 @@ skipImbalancedMatrix <- function(genome_ids,
   # Build one matrix per feature type and matrix type
   for (ftype in names(feature_types)) {
     fview <- feature_types[[ftype]]$view
-    fid   <- feature_types[[ftype]]$id_col
+    fid <- feature_types[[ftype]]$id_col
 
     for (mtype in names(matrix_types)) {
       binary_only <- matrix_types[[mtype]]$binary_only
@@ -722,8 +758,9 @@ skipImbalancedMatrix <- function(genome_ids,
       # Selected genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
       DBI::dbWriteTable(con, "selected_genomes",
-                        data.frame(genome_id = genomes_to_keep),
-                        append = TRUE)
+        data.frame(genome_id = genomes_to_keep),
+        append = TRUE
+      )
 
       # Binary view
       DBI::dbExecute(con, sprintf("
@@ -763,13 +800,15 @@ skipImbalancedMatrix <- function(genome_ids,
 
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
       DBI::dbWriteTable(con, "keep_features",
-                        data.frame(feature_id = keep_features),
-                        append = TRUE)
+        data.frame(feature_id = keep_features),
+        append = TRUE
+      )
 
-      
-      copy_sql <- sprintf("
+
+      copy_sql <- sprintf(
+        "
         COPY (
-          SELECT 
+          SELECT
             f.\"genome_drug.genome_id\" AS genome_id,
             %s AS feature_id,
             MAX(CAST(%s AS DOUBLE)) AS value,
@@ -779,26 +818,26 @@ skipImbalancedMatrix <- function(genome_ids,
           JOIN keep_features kf ON %s = kf.feature_id
           JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
           WHERE resistant_classes <> 'Intermediate'
-          GROUP BY 
-            f.\"genome_drug.genome_id\", 
-            %s, 
+          GROUP BY
+            f.\"genome_drug.genome_id\",
+            %s,
             resistant_classes
-          ORDER BY 
-            f.\"genome_drug.genome_id\", 
+          ORDER BY
+            f.\"genome_drug.genome_id\",
             %s
         )
         TO '%s'
         (FORMAT 'parquet', COMPRESSION 'zstd')
-      ", 
-                          fid,          # %s -> feature_id expression column name
-                          value_col,    # %s -> value column to CAST
-                          mview,        # %s -> source view (binary or counts)
-                          fid,          # %s -> join to keep_features
-                          fid,          # %s -> group by feature id
-                          fid,          # %s -> order by feature id
-                          out_file_sql  # %s -> destination parquet file
+      ",
+        fid, # %s -> feature_id expression column name
+        value_col, # %s -> value column to CAST
+        mview, # %s -> source view (binary or counts)
+        fid, # %s -> join to keep_features
+        fid, # %s -> group by feature id
+        fid, # %s -> order by feature id
+        out_file_sql # %s -> destination parquet file
       )
-      
+
       ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
       if (inherits(ok, "try-error")) {
         log("info", paste0("COPY failed for MDR matrix: ", out_file))
@@ -843,7 +882,7 @@ skipImbalancedMatrix <- function(genome_ids,
   ## Paths
   ## ------------------------------------------------------------------
   matrix_path <- gsub("\\\\", "/", file.path(path, "matrix"))
-  LOO_path    <- gsub("\\\\", "/", file.path(path, "LOO_matrix_drug"))
+  LOO_path <- gsub("\\\\", "/", file.path(path, "LOO_matrix_drug"))
 
   if (!dir.exists(matrix_path)) {
     log("info", paste0("Matrix directory does not exist: ", matrix_path))
@@ -879,12 +918,18 @@ skipImbalancedMatrix <- function(genome_ids,
         if (length(w) == 0) NA_integer_ else w[1]
       }),
       feature = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 6) NA_character_
-        else paste(x[(i - 2):(i - 1)], collapse = "_")
+        if (is.na(i) || i < 6) {
+          NA_character_
+        } else {
+          paste(x[(i - 2):(i - 1)], collapse = "_")
+        }
       }),
       prefix = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 3) NA_character_
-        else paste(x[1:(i - 4)], collapse = "_")
+        if (is.na(i) || i < 3) {
+          NA_character_
+        } else {
+          paste(x[1:(i - 4)], collapse = "_")
+        }
       }),
       drug = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
         if (is.na(i)) NA_character_ else x[i - 3]
@@ -908,8 +953,7 @@ skipImbalancedMatrix <- function(genome_ids,
   created <- character(0)
 
   for (i in seq_len(nrow(prefix_feature))) {
-
-    sub_prefix  <- prefix_feature$prefix[i]
+    sub_prefix <- prefix_feature$prefix[i]
     sub_feature <- prefix_feature$feature[i]
 
     group_df <- parsed_info |>
@@ -924,7 +968,6 @@ skipImbalancedMatrix <- function(genome_ids,
     ## Leave‑one‑drug‑out with genome blocking
     ## --------------------------------------------------------------
     purrr::walk(names(grouped), function(leave_one_out) {
-
       ## Read held‑out drug to get its genome IDs
       heldout_tbl <- arrow::read_parquet(grouped[[leave_one_out]]$file)
 
@@ -1001,7 +1044,7 @@ skipImbalancedMatrix <- function(genome_ids,
   ## Paths
   ## ------------------------------------------------------------------
   matrix_path <- gsub("\\\\", "/", file.path(path, "matrix"))
-  out_path    <- gsub("\\\\", "/", file.path(path, "cross_drug_test"))
+  out_path <- gsub("\\\\", "/", file.path(path, "cross_drug_test"))
 
   if (!dir.exists(matrix_path)) {
     log("info", paste0("Matrix directory does not exist: ", matrix_path))
@@ -1036,12 +1079,18 @@ skipImbalancedMatrix <- function(genome_ids,
         if (length(w) == 0) NA_integer_ else w[1]
       }),
       feature = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 6) NA_character_
-        else paste(x[(i - 2):(i - 1)], collapse = "_")
+        if (is.na(i) || i < 6) {
+          NA_character_
+        } else {
+          paste(x[(i - 2):(i - 1)], collapse = "_")
+        }
       }),
       prefix = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 3) NA_character_
-        else paste(x[1:(i - 4)], collapse = "_")
+        if (is.na(i) || i < 3) {
+          NA_character_
+        } else {
+          paste(x[1:(i - 4)], collapse = "_")
+        }
       }),
       drug = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
         if (is.na(i)) NA_character_ else x[i - 3]
@@ -1065,8 +1114,7 @@ skipImbalancedMatrix <- function(genome_ids,
   created <- character(0)
 
   for (i in seq_len(nrow(prefix_feature))) {
-
-    sub_prefix  <- prefix_feature$prefix[i]
+    sub_prefix <- prefix_feature$prefix[i]
     sub_feature <- prefix_feature$feature[i]
 
     group_df <- parsed_info |>
@@ -1083,7 +1131,6 @@ skipImbalancedMatrix <- function(genome_ids,
     ## --------------------------------------------------------------
     for (drugA in drugs) {
       for (drugB in drugs) {
-
         if (drugA == drugB) next
 
         ## Read training (drug A)
@@ -1281,11 +1328,11 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     verbosity = verbosity
   )
 
-  .parquet2CrossDrugTestMatrix(out_path,verbosity = verbosity)
+  .parquet2CrossDrugTestMatrix(out_path, verbosity = verbosity)
 
-  .parquet2LOODrugMatrix(out_path,verbosity = verbosity)
-    
-    
+  .parquet2LOODrugMatrix(out_path, verbosity = verbosity)
+
+
   log("info", "All matrices generated and saved.")
   invisible(TRUE)
 }
