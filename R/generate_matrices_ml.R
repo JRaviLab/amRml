@@ -843,7 +843,7 @@ skipImbalancedMatrix <- function(genome_ids,
   ## Paths
   ## ------------------------------------------------------------------
   matrix_path <- gsub("\\\\", "/", file.path(path, "matrix"))
-  LOO_path    <- gsub("\\\\", "/", file.path(path, "LOO_drugmatrix"))
+  LOO_path    <- gsub("\\\\", "/", file.path(path, "LOO_matrix_drug"))
 
   if (!dir.exists(matrix_path)) {
     log("info", paste0("Matrix directory does not exist: ", matrix_path))
