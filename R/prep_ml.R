@@ -111,10 +111,8 @@ loadMLInputTibble <- function(parquet_path) {
 
   if (exists(".ml_logger")) {
     log <- .ml_logger("minimal")
-    log("debug", paste0(
-      "ML tibble constructed: ", nrow(ml_input_tibble),
-      " genomes × ", getNumFeat(ml_input_tibble), " features"
-    ))
+    log("debug", paste0("ML tibble constructed: ", nrow(ml_input_tibble),
+                        " genomes x ", getNumFeat(ml_input_tibble), " features"))
   }
 
   if (anyDuplicated(dplyr::pull(ml_input_tibble, genome_id)) != 0) {
@@ -186,6 +184,10 @@ shuffleLabels <- function(ml_input_tibble, seed = 5280) {
 #' calculateMinSamples()
 #'
 #' @inherit .calculateMinSamples description
+#' @inheritParams .calculateMinSamples
+#' @param smallest_n_obs_rs [numeric] Minimum number of observations of the
+#'   rarer class required per fold/partition. Default is 1.
+#' @return Minimum total observations required, adjusted by smallest_n_obs_rs
 #' @export
 calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) {
   base <- .calculateMinSamples(n_fold, split, res_prop)

@@ -43,6 +43,7 @@ Imports:
     ggrepel,
     glmnet,
     glue,
+    jsonlite,
     hardhat,
     parsnip,
     purrr,

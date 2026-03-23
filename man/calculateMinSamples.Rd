@@ -6,6 +6,20 @@
 \usage{
 calculateMinSamples(n_fold, split, res_prop, smallest_n_obs_rs = 1)
 }
+\arguments{
+\item{n_fold}{\link{numeric} Number of CV folds; must be >= 2 in CV mode}
+
+\item{split}{\link{numeric} Vector length 2: c(train_prop, val_prop).
+For pure CV we enforce c(1, 0). For classical splits: val > 0, test > 0.}
+
+\item{res_prop}{\link{numeric} Proportion of resistant genomes in the combo}
+
+\item{smallest_n_obs_rs}{\link{numeric} Minimum number of observations of the
+rarer class required per fold/partition. Default is 1.}
+}
+\value{
+Minimum total observations required, adjusted by smallest_n_obs_rs
+}
 \description{
 Returns the minimum number of total observations needed (one bug-drug combo)
 to have at least one observation of the rarer class in each CV fold
