@@ -10,7 +10,7 @@ make_fisher_fixture <- function() {
       "Susceptible", "Susceptible", "Susceptible", "Susceptible"
     ),
     feat_good = c(1L, 1L, 1L, 1L, 0L, 0L, 0L, 0L),
-    feat_bad  = c(1L, 0L, 1L, 0L, 1L, 0L, 1L, 0L)
+    feat_bad = c(1L, 0L, 1L, 0L, 1L, 0L, 1L, 0L)
   )
 }
 
@@ -50,8 +50,10 @@ test_that("runFisherTests orders genes by ascending p-value", {
   # feat_good perfectly separates classes, so its p-value must be
   # strictly smaller than feat_bad's.
   expect_identical(out$gene[1], "feat_good")
-  expect_lt(out$p_value[out$gene == "feat_good"],
-            out$p_value[out$gene == "feat_bad"])
+  expect_lt(
+    out$p_value[out$gene == "feat_good"],
+    out$p_value[out$gene == "feat_bad"]
+  )
   expect_true(all(out$alternative == "two.sided"))
 })
 
@@ -88,9 +90,9 @@ test_that("computeFeatureFreq adds class-conditional frequencies in [0, 1]", {
       colnames(out)
   ))
   expect_true(all(out$freq_susceptible_gene_pres >= 0 &
-                  out$freq_susceptible_gene_pres <= 1))
+    out$freq_susceptible_gene_pres <= 1))
   expect_true(all(out$freq_resistant_gene_pres >= 0 &
-                  out$freq_resistant_gene_pres <= 1))
+    out$freq_resistant_gene_pres <= 1))
 
   # feat_good is present in 100% of Resistant and 0% of Susceptible genomes.
   good <- out[out$gene == "feat_good", ]

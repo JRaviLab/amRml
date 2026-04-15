@@ -43,12 +43,15 @@ test_that("runMLPipeline returns expected structure in CV mode", {
   res <- run_pipeline(fx, seed = 42)
 
   expect_named(res, c("performance_tibble", "top_feat_tibble"),
-               ignore.order = TRUE)
+    ignore.order = TRUE
+  )
   expect_s3_class(res$performance_tibble, "tbl_df")
   expect_identical(nrow(res$performance_tibble), 1L)
   expect_true(all(
-    c("num_obs", "res_prop", "model", "train_prop", "val_prop",
-      "n_fold", "nmcc", "run_time_sec") %in%
+    c(
+      "num_obs", "res_prop", "model", "train_prop", "val_prop",
+      "n_fold", "nmcc", "run_time_sec"
+    ) %in%
       colnames(res$performance_tibble)
   ))
   expect_identical(res$performance_tibble$model, "LR")
@@ -112,7 +115,8 @@ test_that("runMLPipeline rejects non-LR models for multi-class data", {
   )
   expect_error(
     suppressMessages(runMLPipeline(
-      mc, model = "RF", split = c(1, 0), n_fold = 2, verbose = FALSE
+      mc,
+      model = "RF", split = c(1, 0), n_fold = 2, verbose = FALSE
     )),
     "[Mm]ulti-class"
   )
