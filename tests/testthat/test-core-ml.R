@@ -1,4 +1,4 @@
-# Unit tests for core building-block functions in core_ml.R. These cover
+# Unit tests for functions in core_ml.R. These cover
 # splitting, recipe/model/workflow/grid construction, and predict/eval helpers
 # without running the full grid-tuning pipeline.
 
@@ -88,7 +88,7 @@ test_that("predictML augments test data with .pred_class", {
   fx <- make_pipeline_fixture()
   set.seed(7)
 
-  # Fit a trivially-specified LR so we can exercise predict/confmat helpers.
+  # Fit a LR so we can exercise predict/confmat helpers.
   mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 0) |>
     parsnip::set_engine("glmnet")
   rec <- buildRecipe(fx)
