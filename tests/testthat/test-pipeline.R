@@ -1,5 +1,4 @@
-# End-to-end tests for runMLPipeline(). Uses a tiny, signal-rich fixture and a
-# minimal tuning grid to keep runtime low while still exercising the full
+# End-to-end tests for runMLPipeline(). Uses a small tuning grid to keep runtime low while still exercising the full
 # split -> tune -> fit -> predict -> extract path.
 #
 # Tests run in pure-CV mode (split = c(1, 0)) because the classical
@@ -72,8 +71,6 @@ test_that("runMLPipeline recovers the informative signal", {
   fx <- make_pipeline_fixture(n_per_class = 30, seed = 99)
   res <- run_pipeline(fx, seed = 99)
 
-  # Signal is strong (85/15 split), tiny dataset aside -- expect clearly
-  # above chance on the stratified 20% holdout.
   expect_gt(res$performance_tibble$nmcc, 0.6)
 })
 
@@ -99,8 +96,6 @@ test_that("runMLPipeline shuffle_labels produces a valid baseline result", {
   fx <- make_pipeline_fixture(n_per_class = 25)
   baseline <- run_pipeline(fx, seed = 1, shuffle_labels = TRUE)
 
-  # Structural expectations only -- nMCC on a shuffled 50-sample dataset is
-  # noisy, but the pipeline should still return a valid tibble.
   expect_identical(nrow(baseline$performance_tibble), 1L)
   expect_false(is.na(baseline$performance_tibble$nmcc))
 })

@@ -1,6 +1,4 @@
-# Builds a small, signal-rich ML tibble used by pipeline tests. Keeping the
-# dataset tiny keeps glmnet-based tuning fast while retaining enough samples
-# per class for stratified splits + vfold CV.
+# Builds a small ML tibble used by pipeline tests.
 make_pipeline_fixture <- function(n_per_class = 20, n_informative = 3,
                                   n_noise = 2, seed = 123) {
   set.seed(seed)

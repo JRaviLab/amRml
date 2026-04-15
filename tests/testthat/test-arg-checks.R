@@ -1,6 +1,4 @@
 # Unit tests for internal argument validators in arg_check_ml.R.
-# These validators back every public pipeline function, so their contracts
-# are worth locking in.
 
 test_that(".checkArgPath rejects non-character and missing files", {
   expect_error(amRml:::.checkArgPath(42), "character")

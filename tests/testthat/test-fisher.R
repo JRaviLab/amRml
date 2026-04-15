@@ -1,6 +1,6 @@
 # Unit tests for Fisher / Benjamini-Hochberg helpers in run_Fisher_tests.R.
 
-# Build a tiny wide binary matrix where feat_good perfectly predicts the
+# Build a tiny binary matrix where feat_good perfectly predicts the
 # phenotype and feat_bad is independent of it.
 make_fisher_fixture <- function() {
   tibble::tibble(
