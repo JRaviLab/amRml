@@ -199,7 +199,7 @@ predictions <- predict(fit, test_data)
 
 ```{r metrics}
 # Individual metrics
-mcc <- calculateMCC(predictions)   # Matthews correlation coefficient (-1 to 1)
+mcc <- calculateMCC(predictions) # Matthews correlation coefficient (-1 to 1)
 nmcc <- calculatenMCC(predictions) # Normalized MCC (0 to 1)
 f1 <- calculateF1(predictions) # F1 score
 bal_acc <- calculateBalAcc(predictions) # Balanced accuracy
