@@ -298,9 +298,10 @@ runMLPipeline <- function(
   }
 
   mcc <- .calculateMCC(test_data_plus_predictions)
+  nmcc <- .calculatenMCC(test_data_plus_predictions)
 
   if (verbose) {
-    message(paste("Matthews correlation coefficient:", mcc))
+    message(paste("Matthews correlation coefficient:", mcc, "| nMCC:", nmcc))
   }
 
   top_feat_tibble <- extractTopFeats(fit,
@@ -362,7 +363,7 @@ runMLPipeline <- function(
   performance_tibble <- tibble::tibble(
     num_obs = num_obs_ml_input_tibble,
     n_feat = getNumFeat(ml_input_tibble), model, train_prop = split[1],
-    val_prop = split[2], n_fold, mcc, run_time_sec, seed,
+    val_prop = split[2], n_fold, mcc, nmcc, run_time_sec, seed,
     date = as.character(Sys.Date())
   )
 
@@ -381,11 +382,11 @@ runMLPipeline <- function(
         lower_prop_vi_top_feats = prop_vi_top_feats[1],
         .after = "val_prop"
       ) |>
-      tibble::add_column(bal_acc, .after = "mcc") |>
-      tibble::add_column(f1, .after = "mcc") |>
-      tibble::add_column(log2_apop, .after = "mcc") |>
-      tibble::add_column(sens, .after = "mcc") |>
-      tibble::add_column(spec, .after = "mcc")
+      tibble::add_column(bal_acc, .after = "nmcc") |>
+      tibble::add_column(f1, .after = "nmcc") |>
+      tibble::add_column(log2_apop, .after = "nmcc") |>
+      tibble::add_column(sens, .after = "nmcc") |>
+      tibble::add_column(spec, .after = "nmcc")
   }
 
   if (model == "LR") {
@@ -431,8 +432,9 @@ runMLPipeline <- function(
           genome_id, .pred_class, .pred_Resistant,
           .pred_Susceptible, genome_drug.resistant_phenotype
         ))
+    } else {
+      all_results[["pred"]] <- test_data_plus_predictions
     }
-    all_results[["pred"]] <- test_data_plus_predictions
   }
 
   return(all_results)

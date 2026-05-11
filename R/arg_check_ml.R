@@ -702,7 +702,7 @@ NULL
 #' @keywords internal
 #' @param y_default_eval [chr] y value of default evaluation plot. It can be
 #' "avg_runtime_sec" or one of the following performance metrics:
-#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", or "avg_nmcc"
+#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_mcc", or "avg_nmcc"
 #'
 .checkArgYDefaultEval <- function(y_default_eval) {
   if (!is.character(y_default_eval)) {
@@ -710,11 +710,11 @@ NULL
   }
 
   if (!(y_default_eval %in%
-    c("avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_nmcc"))
+    c("avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_mcc", "avg_nmcc"))
   ) {
     stop(paste(
       "`y_default_eval` must be one of:",
-      "'avg_f1_score', 'avg_log2_apop', 'avg_bal_acc', 'avg_nmcc'."
+      "'avg_f1_score', 'avg_log2_apop', 'avg_bal_acc', 'avg_mcc', 'avg_nmcc'."
     ))
   }
 }

@@ -31,7 +31,7 @@ After data curation with `amRdata`, use `generateMLInputs()` to create ML-ready 
 The DuckDB with the parquet views is created with `cleanData()`
 
 ```{r generate-matrices}
-# Generate all ML input matrices from curated data
+# Example uses Shigella flexneri (Sfl); replace paths with your own species and drug.
 generateMLInputs(
   parquet_duckdb_path = "results/Sfl_parquet.duckdb",
   out_path = "results/",
@@ -52,7 +52,6 @@ This generates:
 For classical train/validation/test splits instead of cross-validation:
 
 ```{r generate-splits}
-# 70% train, 15% validation, 15% test
 generateMLInputs(
   parquet_duckdb_path = "results/Sfl_parquet.duckdb",
   out_path = "results/",
@@ -88,7 +87,6 @@ The package expects Parquet files in long (sparse) format with these columns:
 `loadMLInputTibble()` converts this to wide format (one row per genome, one column per feature) for ML.
 
 ```{r load-data}
-# Load a generated matrix
 ml_tibble <- loadMLInputTibble(
   parquet_path = "results/matrix/Sfl_drug_AMP_domains_binary_sparse.parquet"
 )
@@ -134,7 +132,7 @@ results$top_feat_tibble
 | `model` | Model type (LR) |
 | `train_prop`, `val_prop` | Train/validation split proportions |
 | `fit_penalty`, `fit_mixture` | Fitted hyperparameters |
-| `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
+| `mcc`, `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
 | `run_time_sec` | Runtime in seconds |
 
 **`top_feat_tibble`** - ranked feature importance:
@@ -201,7 +199,8 @@ predictions <- predict(fit, test_data)
 
 ```{r metrics}
 # Individual metrics
-nmcc <- calculatenMCC(predictions) # Normalized MCC (0-1 scale)
+mcc <- calculateMCC(predictions)   # Matthews correlation coefficient (-1 to 1)
+nmcc <- calculatenMCC(predictions) # Normalized MCC (0 to 1)
 f1 <- calculateF1(predictions) # F1 score
 bal_acc <- calculateBalAcc(predictions) # Balanced accuracy
 auprc <- calculateAUPRC(predictions) # Area under PR curve
@@ -216,7 +215,8 @@ conf_mat <- getConfusionMatrix(predictions)
 
 | Metric | Function | Description |
 |--------|----------|-------------|
-| nMCC | `calculatenMCC()` | Normalized Matthews correlation coefficient (0-1) |
+| MCC | `calculateMCC()` | Matthews correlation coefficient (-1 to 1) |
+| nMCC | `calculatenMCC()` | Normalized Matthews correlation coefficient (0 to 1) |
 | F1 | `calculateF1()` | Harmonic mean of precision and recall |
 | Balanced accuracy | `calculateBalAcc()` | Average of sensitivity and specificity |
 | AUPRC | `calculateAUPRC()` | Area under precision-recall curve |
@@ -251,7 +251,7 @@ ife_results <- runIFE(
   verbose = TRUE
 )
 
-# Results include nMCC at each iteration
+# Results include MCC and nMCC at each iteration
 ife_results$ife_performance_tibble
 ife_results$feats_removed
 
@@ -264,19 +264,19 @@ ml_tibble_reduced <- removeTopFeats(ml_tibble, top_features)
 ### Precision-recall curve
 
 ```{r plot-prc}
-test_data_plus_predictions <- readr::read_tsv(results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv)
+test_data_plus_predictions <- readr::read_tsv("results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv")
 plotPRC(test_data_plus_predictions)
 ```
 ### ROC curve
 
 ```{r plot-roc}
-test_data_plus_predictions <- readr::read_tsv(results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv)
+test_data_plus_predictions <- readr::read_tsv("results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv")
 plotROC(test_data_plus_predictions)
 ```
 ### Variable importance plot
 
 ```{r plot-vi}
-topfeat <- readr::read_tsv(results / ML_top_features / Sfl_drug_AMP_domains_binary_top_features.tsv)
+topfeat <- readr::read_tsv("results/ML_top_features/Sfl_drug_AMP_domains_binary_top_features.tsv")
 plotTopFeatsVI(topfeat)
 ```
 ### Baseline comparison barplot
@@ -306,7 +306,7 @@ As a non-ML baseline, run Fisher's exact tests with multiple testing correction:
 ```{r fisher}
 # Complete Fisher pipeline
 fisher_results <- runFishers(
-  matrix_path = "results/matrix/Cje_drug_CIP_genes_binary_sparse.parquet",
+  matrix_path = "results/matrix/Sfl_drug_AMP_genes_binary_sparse.parquet",
   Q = 0.05,
   alternative = "two.sided",
   susceptible_label = "Susceptible",

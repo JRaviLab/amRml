@@ -398,7 +398,7 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 #' ML model compared against the actual values.
 #'
 #' @inheritParams getConfusionMatrix
-#' @return Matthews correlation coefficient (MCC)
+#' @return Matthews correlation coefficient (MCC), range -1 to 1
 .calculateMCC <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
 
@@ -410,9 +410,21 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     as.numeric() |>
     round(2)
 
-  # nmcc <- (mcc + 1) / 2
-
   return(mcc)
+}
+
+#' .calculatenMCC()
+#'
+#' Returns the normalized (0 to 1) Matthews correlation coefficient (nMCC)
+#' based on the AMR phenotype predictions by an ML model compared against
+#' the actual values.
+#'
+#' @inheritParams getConfusionMatrix
+#' @return Normalized Matthews correlation coefficient (nMCC), range 0 to 1
+.calculatenMCC <- function(test_data_plus_predictions) {
+  mcc <- .calculateMCC(test_data_plus_predictions)
+  nmcc <- round((mcc + 1) / 2, 2)
+  return(nmcc)
 }
 
 #' .calculateF1()
@@ -607,12 +619,12 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 #' calculateEvalMets()
 #'
 #' Returns the F1 score, area under the precision-recall curve (AUPRC), balanced
-#' accuracy, Matthews correlation coefficient (MCC),
+#' accuracy, Matthews correlation coefficient (MCC), normalized MCC (nMCC),
 #' and log2(AUPRC/prior) based on the AMR
 #' phenotype predictions by an ML model compared against the actual values.
 #'
 #' @inheritParams getConfusionMatrix
-#' @return F1 score, AUPRC, balanced accuracy, MCC, and log2(AUPRC/prior)
+#' @return F1 score, AUPRC, balanced accuracy, MCC, nMCC, and log2(AUPRC/prior)
 #' @export
 calculateEvalMets <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
@@ -623,9 +635,10 @@ calculateEvalMets <- function(test_data_plus_predictions) {
   sens <- .calculateSensitivity(test_data_plus_predictions)
   spec <- .calculateSpecificity(test_data_plus_predictions)
   mcc <- .calculateMCC(test_data_plus_predictions)
+  nmcc <- .calculatenMCC(test_data_plus_predictions)
   log2_apop <- .calculateLog2APOP(test_data_plus_predictions)
 
-  return(c(f1, auprc, bal_acc, mcc, log2_apop))
+  return(c(f1, auprc, bal_acc, mcc, nmcc, log2_apop))
 }
 
 #' extractTopFeats()
