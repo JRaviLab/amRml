@@ -111,8 +111,10 @@ loadMLInputTibble <- function(parquet_path) {
 
   if (exists(".ml_logger")) {
     log <- .ml_logger("minimal")
-    log("debug", paste0("ML tibble constructed: ", nrow(ml_input_tibble),
-                        " genomes x ", getNumFeat(ml_input_tibble), " features"))
+    log("debug", paste0(
+      "ML tibble constructed: ", nrow(ml_input_tibble),
+      " genomes x ", getNumFeat(ml_input_tibble), " features"
+    ))
   }
 
   if (anyDuplicated(dplyr::pull(ml_input_tibble, genome_id)) != 0) {
