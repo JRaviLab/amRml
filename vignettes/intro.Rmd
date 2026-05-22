@@ -264,19 +264,19 @@ ml_tibble_reduced <- removeTopFeats(ml_tibble, top_features)
 ### Precision-recall curve
 
 ```{r plot-prc}
-test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+test_data_plus_predictions <- readr::read_tsv(results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv)
 plotPRC(test_data_plus_predictions)
 ```
 ### ROC curve
 
 ```{r plot-roc}
-test_data_plus_predictions <- readr::read_tsv(results/ML_pred/Sfl_drug_AMP_domains_binary_prediction.tsv)
+test_data_plus_predictions <- readr::read_tsv(results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv)
 plotROC(test_data_plus_predictions)
 ```
 ### Variable importance plot
 
 ```{r plot-vi}
-topfeat <- readr::read_tsv(results/ML_top_features/Sfl_drug_AMP_domains_binary_top_features.tsv)
+topfeat <- readr::read_tsv(results / ML_top_features / Sfl_drug_AMP_domains_binary_top_features.tsv)
 plotTopFeatsVI(topfeat)
 ```
 ### Baseline comparison barplot
@@ -326,7 +326,6 @@ You can label the top N features to highlight the strongest hits (default is 5) 
 ```{r}
 plotFishers(fisher_results)
 plotFishers(fisher_results, alpha = 0.01, label_top_n = 5)
-
 ```
 
 ## Wrapper to run all models 
@@ -338,14 +337,15 @@ Given a DuckDB file produced by `runDataProcessing()`, it:
 5. saves performance metrics, fitted models, predictions, and top feature rankings
 ``` {r}
 runModelingPipeline(parquet_duckdb_path,
-                                threads = 16,
-                                n_fold = 5,
-                                split = c(1, 0),
-                                min_n = 25,
-                                prop_vi_top_feats = c(0, 1),
-                                pca_threshold = 0.99,
-                                verbose = TRUE,
-                                use_saved_split = TRUE)
+  threads = 16,
+  n_fold = 5,
+  split = c(1, 0),
+  min_n = 25,
+  prop_vi_top_feats = c(0, 1),
+  pca_threshold = 0.99,
+  verbose = TRUE,
+  use_saved_split = TRUE
+)
 ```
 
 Merge the performance and top features of each kind of models into a parquet that will serve as starting data for `amRshiny` package
@@ -357,7 +357,7 @@ buildPerformancePq(
   LOO = FALSE,
   MDR = FALSE,
   cross_test = FALSE,
-  out_parquet = NULL,    
+  out_parquet = NULL,
   compression = "zstd",
   verbose = TRUE
 )
@@ -367,8 +367,8 @@ buildTopFeatsPq(
   LOO = FALSE,
   MDR = FALSE,
   cross_test = FALSE,
-  out_parquet = NULL, 
+  out_parquet = NULL,
   compression = "zstd",
   verbose = TRUE
-) 
+)
 ```

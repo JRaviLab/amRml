@@ -214,7 +214,6 @@ plotFishers <- function(
   alpha = 0.05,
   label_top_n = 5
 ) {
-
   required_cols <- c("gene", "adj_p_value", "sig_after_bh")
   missing_cols <- setdiff(required_cols, colnames(fisher_df))
 
