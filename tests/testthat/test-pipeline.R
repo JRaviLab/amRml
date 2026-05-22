@@ -18,13 +18,13 @@ minimal_grid_args <- list(
   mix_vec = c(0, 1)
 )
 
-run_pipeline <- function(fx, ...) {
+run_pipeline <- function(fx, split = c(1, 0), n_fold = 2, ...) {
   suppressMessages(suppressWarnings(
     runMLPipeline(
       fx,
       model = "LR",
-      split = c(1, 0),
-      n_fold = 2,
+      split = split,
+      n_fold = n_fold,
       n_top_feats = 2,
       prop_vi_top_feats = NA,
       penalty_vec = minimal_grid_args$penalty_vec,
@@ -63,6 +63,19 @@ test_that("runMLPipeline returns expected structure in CV mode", {
   expect_s3_class(res$top_feat_tibble, "tbl_df")
   # With n_top_feats = 2 the pipeline pads up to 2 features even if vip
   # assigned importance to fewer.
+  expect_identical(nrow(res$top_feat_tibble), 2L)
+})
+
+test_that("runMLPipeline returns expected structure in train/validation/test mode", {
+  skip_pipeline_if_missing()
+  fx <- make_pipeline_fixture(n_per_class = 25)
+
+  res <- run_pipeline(fx, split = c(0.6, 0.2), seed = 42)
+
+  expect_identical(res$performance_tibble$model, "LR")
+  expect_identical(res$performance_tibble$train_prop, 0.6)
+  expect_identical(res$performance_tibble$val_prop, 0.2)
+  expect_true(is.na(res$performance_tibble$n_fold))
   expect_identical(nrow(res$top_feat_tibble), 2L)
 })
 
