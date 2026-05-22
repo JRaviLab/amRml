@@ -260,8 +260,8 @@ tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
     # CV on training portion; final eval will use the held-out test set
     resamples <- rsample::vfold_cv(train_df, v = n_fold, strata = !!target_var)
   } else if (identical(split_class, "initial_validation_split")) {
-    # Same CV on training portion
-    resamples <- rsample::vfold_cv(train_df, v = n_fold, strata = !!target_var)
+    # Use the validation partition from the original three-way split.
+    resamples <- rsample::validation_set(data_split)
   } else {
     stop("Unsupported rsample split object: ", split_class)
   }
