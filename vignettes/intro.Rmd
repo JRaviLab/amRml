@@ -80,7 +80,7 @@ matrix_path <- file.path(
   out_dir, "matrix", "Sfl_drug_AMP_genes_binary_sparse.parquet"
 )
 
-ml_tibble  <- loadMLInputTibble(matrix_path)
+ml_tibble <- loadMLInputTibble(matrix_path)
 n_features <- getNumFeat(ml_tibble)
 target_var <- .getTargetVarName(ml_tibble)
 
@@ -148,13 +148,13 @@ The builders below are what `runMLPipeline()` chains internally. Call them direc
 ```{r split-data}
 data_split <- splitMLInputTibble(ml_tibble, split = c(0.6, 0.2), seed = 123)
 train_data <- rsample::training(data_split)
-test_data  <- rsample::testing(data_split)
+test_data <- rsample::testing(data_split)
 ```
 
 ```{r build-model}
 recipe <- buildRecipe(train_data, use_pca = FALSE)
 lr_mod <- buildLRModel(multi_class = FALSE)
-wflow  <- buildWflow(lr_mod, recipe)
+wflow <- buildWflow(lr_mod, recipe)
 
 grid <- buildTuningGrid(
   model       = "LR",
@@ -164,9 +164,9 @@ grid <- buildTuningGrid(
 ```
 
 ```{r tune-fit}
-tune_res   <- tuneGrid(wflow, data_split, grid, n_fold = 2)
+tune_res <- tuneGrid(wflow, data_split, grid, n_fold = 2)
 best_wflow <- selectBestModel(tune_res, wflow, select_best_metric = "mcc")
-fit        <- fitBestModel(best_wflow, train_data)
+fit <- fitBestModel(best_wflow, train_data)
 
 preds <- predictML(fit, test_data)
 ```

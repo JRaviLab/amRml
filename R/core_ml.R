@@ -214,7 +214,7 @@ buildLRModel <- function(multi_class = FALSE) {
 #'   feat_b = rep(c(1L, 0L), 5)
 #' )
 #' rec <- buildRecipe(train, use_pca = FALSE)
-#' lr  <- buildLRModel()
+#' lr <- buildLRModel()
 #' buildWflow(lr, rec)
 #' @export
 buildWflow <- function(parsnip_mod, recipe) {
@@ -282,9 +282,11 @@ buildTuningGrid <- function(
 #' @examples
 #' data(demo_ml_tibble)
 #' data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
-#' wflow <- buildWflow(buildLRModel(),
-#'                     buildRecipe(rsample::training(data_split)))
-#' grid  <- buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1))
+#' wflow <- buildWflow(
+#'   buildLRModel(),
+#'   buildRecipe(rsample::training(data_split))
+#' )
+#' grid <- buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1))
 #' set.seed(1)
 #' tuneGrid(wflow, data_split, grid, n_fold = 2)
 #' @export
@@ -339,12 +341,15 @@ tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
 #' @examples
 #' data(demo_ml_tibble)
 #' data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
-#' wflow <- buildWflow(buildLRModel(),
-#'                     buildRecipe(rsample::training(data_split)))
+#' wflow <- buildWflow(
+#'   buildLRModel(),
+#'   buildRecipe(rsample::training(data_split))
+#' )
 #' set.seed(1)
 #' tune_res <- tuneGrid(wflow, data_split,
-#'                      buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
-#'                      n_fold = 2)
+#'   buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
+#'   n_fold = 2
+#' )
 #' selectBestModel(tune_res, wflow, "mcc")
 #' @export
 selectBestModel <- function(tune_res, wflow, select_best_metric = "mcc") {
@@ -373,9 +378,10 @@ selectBestModel <- function(tune_res, wflow, select_best_metric = "mcc") {
 #' train <- rsample::training(data_split)
 #' wflow <- buildWflow(buildLRModel(), buildRecipe(train))
 #' set.seed(1)
-#' tune_res   <- tuneGrid(wflow, data_split,
-#'                        buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
-#'                        n_fold = 2)
+#' tune_res <- tuneGrid(wflow, data_split,
+#'   buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
+#'   n_fold = 2
+#' )
 #' best_wflow <- selectBestModel(tune_res, wflow, "mcc")
 #' fitBestModel(best_wflow, train)
 #' @export
@@ -455,8 +461,10 @@ predictML <- function(fit, test_data) {
 #'     levels = c("Resistant", "Susceptible")
 #'   ),
 #'   .pred_class = factor(
-#'     c("Resistant", "Resistant", "Susceptible", "Resistant",
-#'       "Susceptible", "Resistant", "Susceptible", "Susceptible"),
+#'     c(
+#'       "Resistant", "Resistant", "Susceptible", "Resistant",
+#'       "Susceptible", "Resistant", "Susceptible", "Susceptible"
+#'     ),
 #'     levels = c("Resistant", "Susceptible")
 #'   )
 #' )
@@ -703,11 +711,13 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 #'     levels = c("Resistant", "Susceptible")
 #'   ),
 #'   .pred_class = factor(
-#'     c("Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
-#'       "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"),
+#'     c(
+#'       "Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
+#'       "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"
+#'     ),
 #'     levels = c("Resistant", "Susceptible")
 #'   ),
-#'   .pred_Resistant   = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
+#'   .pred_Resistant = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
 #'   .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
 #' )
 #' calculateEvalMets(preds)

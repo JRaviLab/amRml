@@ -38,11 +38,13 @@ NULL
 #'     levels = c("Resistant", "Susceptible")
 #'   ),
 #'   .pred_class = factor(
-#'     c("Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
-#'       "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"),
+#'     c(
+#'       "Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
+#'       "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"
+#'     ),
 #'     levels = c("Resistant", "Susceptible")
 #'   ),
-#'   .pred_Resistant   = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
+#'   .pred_Resistant = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
 #'   .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
 #' )
 #' plotPRC(preds)
@@ -109,8 +111,10 @@ plotTopFeatsVI <- function(fit, n_top_feats = 10) {
 #'   model           = rep(c("LR", "RF"), each = 3),
 #'   avg_f1_score    = c(0.72, 0.78, 0.83, 0.70, 0.75, 0.80)
 #' )
-#' plotDefaultEval(default_eval, x_default_eval = "train_prop",
-#'                 y_default_eval = "avg_f1_score")
+#' plotDefaultEval(default_eval,
+#'   x_default_eval = "train_prop",
+#'   y_default_eval = "avg_f1_score"
+#' )
 #' @export
 plotDefaultEval <- function(
   default_eval_tibble, x_default_eval = "train_prop",
@@ -241,10 +245,13 @@ plotBaselineComparison <- function(
 #' long <- tibble::tibble(
 #'   genome_id = rep(paste0("g", 1:10), each = 2),
 #'   feature_id = rep(c("gene_a", "gene_b"), 10),
-#'   value = c(1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
-#'             0, 0, 0, 1, 0, 1, 0, 1, 0, 0),
+#'   value = c(
+#'     1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
+#'     0, 0, 0, 1, 0, 1, 0, 1, 0, 0
+#'   ),
 #'   genome_drug.resistant_phenotype = rep(
-#'     rep(c("Resistant", "Susceptible"), each = 5), each = 2
+#'     rep(c("Resistant", "Susceptible"), each = 5),
+#'     each = 2
 #'   )
 #' )
 #' tmp <- tempfile(fileext = ".parquet")

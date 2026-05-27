@@ -79,7 +79,8 @@ NULL
 #'   feature_id = rep(c("gene_a", "gene_b"), 6),
 #'   value = c(1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1),
 #'   genome_drug.resistant_phenotype = rep(
-#'     rep(c("Resistant", "Susceptible"), each = 3), each = 2
+#'     rep(c("Resistant", "Susceptible"), each = 3),
+#'     each = 2
 #'   )
 #' )
 #' tmp <- tempfile(fileext = ".parquet")
@@ -244,8 +245,10 @@ calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) 
 #' @examples
 #' ml <- tibble::tibble(
 #'   genome_id = paste0("g", 1:4),
-#'   genome_drug.resistant_phenotype = c("Resistant", "Susceptible",
-#'                                       "Resistant", "Susceptible"),
+#'   genome_drug.resistant_phenotype = c(
+#'     "Resistant", "Susceptible",
+#'     "Resistant", "Susceptible"
+#'   ),
 #'   feat_a = c(1L, 0L, 1L, 0L)
 #' )
 #' .getTargetVarName(ml)

@@ -27,8 +27,10 @@ NULL
 #' @examples
 #' df <- tibble::tibble(
 #'   genome_id = paste0("g", 1:6),
-#'   genome_drug.resistant_phenotype = c("Resistant", "Susceptible", "Resistant",
-#'                                       "Susceptible", "Resistant", "Susceptible"),
+#'   genome_drug.resistant_phenotype = c(
+#'     "Resistant", "Susceptible", "Resistant",
+#'     "Susceptible", "Resistant", "Susceptible"
+#'   ),
 #'   gene_a = c(1L, 0L, 1L, 0L, 1L, 0L),
 #'   gene_b = c(0L, 1L, 1L, 0L, 0L, 1L)
 #' )
@@ -136,7 +138,8 @@ applyBenjaminiHochberg <- function(df_fisher, Q = 0.05) {
 #' )
 #' encoded <- encodePhenotype(df)
 #' fisher <- applyBenjaminiHochberg(
-#'   runFisherTests(encoded$df, encoded$target), Q = 0.05
+#'   runFisherTests(encoded$df, encoded$target),
+#'   Q = 0.05
 #' )
 #' computeFeatureFreq(encoded$df, fisher, encoded$target)
 #' @export
@@ -176,10 +179,13 @@ computeFeatureFreq <- function(df, df_fisher, target) {
 #' long <- tibble::tibble(
 #'   genome_id = rep(paste0("g", 1:10), each = 2),
 #'   feature_id = rep(c("gene_a", "gene_b"), 10),
-#'   value = c(1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
-#'             0, 0, 0, 1, 0, 1, 0, 1, 0, 0),
+#'   value = c(
+#'     1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
+#'     0, 0, 0, 1, 0, 1, 0, 1, 0, 0
+#'   ),
 #'   genome_drug.resistant_phenotype = rep(
-#'     rep(c("Resistant", "Susceptible"), each = 5), each = 2
+#'     rep(c("Resistant", "Susceptible"), each = 5),
+#'     each = 2
 #'   )
 #' )
 #' tmp <- tempfile(fileext = ".parquet")

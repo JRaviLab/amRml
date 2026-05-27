@@ -677,7 +677,9 @@ skipImbalancedMatrix <- function(genome_ids,
         arrow::write_parquet(combined, out_file)
         log("debug", paste0("Created LOO file: ", out_file))
         out_file
-      }) |> purrr::compact() |> unlist()
+      }) |>
+        purrr::compact() |>
+        unlist()
     }) |> unlist()
 
     created <- c(created, new_files)

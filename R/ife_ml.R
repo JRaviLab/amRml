@@ -74,7 +74,8 @@ removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
 #' data(demo_ml_tibble)
 #' set.seed(1)
 #' runIFE(
-#'   demo_ml_tibble, by_num = TRUE, by_vi = FALSE,
+#'   demo_ml_tibble,
+#'   by_num = TRUE, by_vi = FALSE,
 #'   percent_removal_vec = c(25, 50), mix_vec = 0,
 #'   return_feats = TRUE, verbose = FALSE
 #' )
