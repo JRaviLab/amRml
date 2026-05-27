@@ -18,3 +18,14 @@ A \code{workflow} object
 \description{
 Builds a \code{tidymodels} workflow based on an input model and recipe.
 }
+\examples{
+train <- tibble::tibble(
+  genome_id = paste0("g", 1:10),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 5),
+  feat_a = rep(c(0L, 1L), 5),
+  feat_b = rep(c(1L, 0L), 5)
+)
+rec <- buildRecipe(train, use_pca = FALSE)
+lr  <- buildLRModel()
+buildWflow(lr, rec)
+}

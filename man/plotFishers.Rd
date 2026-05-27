@@ -35,9 +35,18 @@ Color explicitly encodes whether a feature passes the BH threshold.
 Labels are applied only to the top-ranked features to preserve clarity.
 }
 \examples{
-\dontrun{
-plotFishers(fisher_results)
-plotFishers(fisher_results, label_top_n = 0)
-}
+long <- tibble::tibble(
+  genome_id = rep(paste0("g", 1:10), each = 2),
+  feature_id = rep(c("gene_a", "gene_b"), 10),
+  value = c(1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
+            0, 0, 0, 1, 0, 1, 0, 1, 0, 0),
+  genome_drug.resistant_phenotype = rep(
+    rep(c("Resistant", "Susceptible"), each = 5), each = 2
+  )
+)
+tmp <- tempfile(fileext = ".parquet")
+arrow::write_parquet(long, tmp)
+fisher_results <- runFishers(tmp, Q = 0.05)
+plotFishers(fisher_results, alpha = 0.05, label_top_n = 2)
 
 }

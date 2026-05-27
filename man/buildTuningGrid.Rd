@@ -11,13 +11,13 @@ buildTuningGrid(
 )
 }
 \arguments{
-\item{model}{\link[rlang:vector-construction]{rlang::chr}  Currently, logistic regression ("LR") is supported.}
+\item{model}{\link[rlang:chr]{chr}  Currently, logistic regression ("LR") is supported.}
 
-\item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
+\item{penalty_vec}{\link[pillar:num]{num} A vector containing \code{penalty} (regularization
 strength) values to try (for logistic regression). Recommended range:
 10^-4 to 10^4.}
 
-\item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
+\item{mix_vec}{\link[pillar:num]{num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 intermediate values (0, 1) correspond to elastic net.}
 }
@@ -26,4 +26,11 @@ A logistic regression tuning grid as a tibble
 }
 \description{
 Builds a tuning grid according to the input model.
+}
+\examples{
+buildTuningGrid(
+  model       = "LR",
+  penalty_vec = 10^c(-3, -1),
+  mix_vec     = c(0, 0.5, 1)
+)
 }

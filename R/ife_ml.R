@@ -17,6 +17,16 @@ NULL
 #' `runMLPipeline()`, containing all features to be removed from the
 #' `ml_input_tibble`
 #' @return An amR pangenome with top features removed
+#' @examples
+#' ml <- tibble::tibble(
+#'   genome_id = paste0("g", 1:6),
+#'   genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 3),
+#'   feat_a = c(1L, 0L, 1L, 0L, 1L, 0L),
+#'   feat_b = c(0L, 1L, 0L, 1L, 0L, 1L),
+#'   feat_c = c(1L, 1L, 0L, 0L, 1L, 0L)
+#' )
+#' top <- tibble::tibble(Variable = c("feat_a", "feat_c"))
+#' removeTopFeats(ml, top)
 #' @export
 removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
   .checkArgTibble(ml_input_tibble)
@@ -60,6 +70,14 @@ removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
 #' @param verbose [bool] The function will stay quiet if set to `FALSE`.
 #' @return A tibble with IFE performance (note: this will be returned within a
 #' list along with top features removed per iteration if `return_feats = TRUE`.)
+#' @examples
+#' data(demo_ml_tibble)
+#' set.seed(1)
+#' runIFE(
+#'   demo_ml_tibble, by_num = TRUE, by_vi = FALSE,
+#'   percent_removal_vec = c(25, 50), mix_vec = 0,
+#'   return_feats = TRUE, verbose = FALSE
+#' )
 #' @export
 runIFE <- function(
   ml_input_tibble, by_num = TRUE, by_vi = FALSE,

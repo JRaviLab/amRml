@@ -52,7 +52,7 @@ NULL (invisible). Called for side effects (model training and result saving).
 }
 \description{
 Executes machine learning pipeline for MDR analysis using logistic regression
-with parallel processing via the future backend. Trains models on all MDR
+with parallel processing via BiocParallel. Trains models on all MDR
 parquet files and saves results to designated output directories.
 }
 \examples{
@@ -62,13 +62,15 @@ runMDRmodels("/path/to/results")
 
 # Run with more threads and minimal output
 runMDRmodels("/path/to/results",
-             threads = 32,
-             verbose = FALSE)
+  threads = 32,
+  verbose = FALSE
+)
 
 # Run without saving model fits (save disk space)
 runMDRmodels("/path/to/results",
-             threads = 16,
-             return_fit = FALSE)
+  threads = 16,
+  return_fit = FALSE
+)
 }
 
 }

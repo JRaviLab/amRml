@@ -14,10 +14,10 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{split}{\link[pillar:num]{pillar::num} Vector of length 2 indicating the proportion of data to
+\item{split}{\link[pillar:num]{num} Vector of length 2 indicating the proportion of data to
 be designated as training and validation, respectively.}
 
-\item{seed}{\link[pillar:num]{pillar::num} For reproducible analysis}
+\item{seed}{\link[pillar:num]{num} For reproducible analysis}
 }
 \value{
 An \code{rsplit} object
@@ -25,4 +25,13 @@ An \code{rsplit} object
 \description{
 Splits an ML-ready tibble into training and testing (and in some cases
 validation) sets.
+}
+\examples{
+ml <- tibble::tibble(
+  genome_id = paste0("g", 1:20),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 10),
+  feat_a = rep(c(0L, 1L), 10),
+  feat_b = rep(c(1L, 0L), 10)
+)
+splitMLInputTibble(ml, split = c(1, 0), seed = 42)
 }

@@ -30,6 +30,22 @@ NULL
 #' @param test_data_plus_predictions Test data (tibble) with an added column for
 #' predicted phenotype labels, such as the output of `predict()`.
 #' @return A precision-recall curve as a `ggplot2` object
+#' @examples
+#' preds <- tibble::tibble(
+#'   genome_id = paste0("g", 1:10),
+#'   genome_drug.resistant_phenotype = factor(
+#'     rep(c("Resistant", "Susceptible"), each = 5),
+#'     levels = c("Resistant", "Susceptible")
+#'   ),
+#'   .pred_class = factor(
+#'     c("Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
+#'       "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"),
+#'     levels = c("Resistant", "Susceptible")
+#'   ),
+#'   .pred_Resistant   = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
+#'   .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
+#' )
+#' plotPRC(preds)
 #' @export
 plotPRC <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
@@ -54,6 +70,9 @@ plotPRC <- function(test_data_plus_predictions) {
 #' @param fit Best model fit, such as the output of `fitBestModel()`
 #' @param n_top_feats [num] Number of top features to plot
 #' @return Variable importance plot (a `ggplot2` object)
+#' @examples
+#' data(demo_fit)
+#' plotTopFeatsVI(demo_fit, n_top_feats = 10)
 #' @export
 plotTopFeatsVI <- function(fit, n_top_feats = 10) {
   .checkArgWflow(fit)
@@ -83,6 +102,15 @@ plotTopFeatsVI <- function(fit, n_top_feats = 10) {
 #' @param ylab [chr] Label for y axis
 #' @return A `ggplot2` scatterplot (performance metric or runtime vs.
 #' `train_prop` or `n_fold`), colored by model
+#' @examples
+#' default_eval <- tibble::tibble(
+#'   train_prop      = c(0.5, 0.6, 0.7, 0.5, 0.6, 0.7),
+#'   n_fold          = rep(5, 6),
+#'   model           = rep(c("LR", "RF"), each = 3),
+#'   avg_f1_score    = c(0.72, 0.78, 0.83, 0.70, 0.75, 0.80)
+#' )
+#' plotDefaultEval(default_eval, x_default_eval = "train_prop",
+#'                 y_default_eval = "avg_f1_score")
 #' @export
 plotDefaultEval <- function(
   default_eval_tibble, x_default_eval = "train_prop",
@@ -138,6 +166,16 @@ plotDefaultEval <- function(
 #' @param shuffled_label_results Output of `runMLPipeline()`
 #' (`shuffle_labels = TRUE`)
 #' @return A bar plot with balanced accuracy comparisons per antibiotic
+#' @examples
+#' non_shuffled <- tibble::tibble(
+#'   antibiotic = c("AMP", "CIP", "CRO"),
+#'   bal_acc    = c(0.88, 0.81, 0.92)
+#' )
+#' shuffled <- tibble::tibble(
+#'   antibiotic = c("AMP", "CIP", "CRO"),
+#'   bal_acc    = c(0.52, 0.49, 0.55)
+#' )
+#' plotBaselineComparison(non_shuffled, shuffled)
 #' @export
 plotBaselineComparison <- function(
   non_shuffled_label_results,
@@ -200,10 +238,19 @@ plotBaselineComparison <- function(
 #' Labels are applied only to the top-ranked features to preserve clarity.
 #'
 #' @examples
-#' \dontrun{
-#' plotFishers(fisher_results)
-#' plotFishers(fisher_results, label_top_n = 0)
-#' }
+#' long <- tibble::tibble(
+#'   genome_id = rep(paste0("g", 1:10), each = 2),
+#'   feature_id = rep(c("gene_a", "gene_b"), 10),
+#'   value = c(1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
+#'             0, 0, 0, 1, 0, 1, 0, 1, 0, 0),
+#'   genome_drug.resistant_phenotype = rep(
+#'     rep(c("Resistant", "Susceptible"), each = 5), each = 2
+#'   )
+#' )
+#' tmp <- tempfile(fileext = ".parquet")
+#' arrow::write_parquet(long, tmp)
+#' fisher_results <- runFishers(tmp, Q = 0.05)
+#' plotFishers(fisher_results, alpha = 0.05, label_top_n = 2)
 #'
 #' @import ggplot2
 #' @import dplyr

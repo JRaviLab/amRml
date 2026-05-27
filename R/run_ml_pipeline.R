@@ -74,6 +74,15 @@ NULL
 #' `top_feat_tibble`. Tuning results, the fit object, and model predictions may
 #' also be returned if `return_tune_res`, `return_fit`, and/or `return_pred`,
 #' respectively, are set to `TRUE`.
+#' @examples
+#' data(demo_ml_tibble)
+#' set.seed(1)
+#' runMLPipeline(
+#'   ml_input_tibble = demo_ml_tibble, model = "LR",
+#'   split = c(1, 0), n_fold = 2,
+#'   penalty_vec = 10^c(-3, -1), mix_vec = c(0, 0.5, 1),
+#'   n_top_feats = 10, verbose = FALSE
+#' )
 #' @export
 runMLPipeline <- function(
   ml_input_tibble, model = "LR", split = c(0.6, 0.2),

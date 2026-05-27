@@ -23,3 +23,12 @@ either \code{rlang::sym("genome_drug.resistant_phenotype")} or
 Returns the name of the target variable to be used for machine learning:
 either \code{genome_drug.resistant_phenotype} or \code{resistant_classes}
 }
+\examples{
+ml <- tibble::tibble(
+  genome_id = paste0("g", 1:4),
+  genome_drug.resistant_phenotype = c("Resistant", "Susceptible",
+                                      "Resistant", "Susceptible"),
+  feat_a = c(1L, 0L, 1L, 0L)
+)
+.getTargetVarName(ml)
+}

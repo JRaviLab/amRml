@@ -15,16 +15,16 @@ plotDefaultEval(
 \arguments{
 \item{default_eval_tibble}{Output of \code{findOptimalMLDefaults()}}
 
-\item{x_default_eval}{\link[rlang:vector-construction]{rlang::chr} x value of default evaluation plot: "train_prop"
+\item{x_default_eval}{\link[rlang:chr]{chr} x value of default evaluation plot: "train_prop"
 or "n_fold"}
 
-\item{y_default_eval}{\link[rlang:vector-construction]{rlang::chr} y value of default evaluation plot. It can be
+\item{y_default_eval}{\link[rlang:chr]{chr} y value of default evaluation plot. It can be
 "avg_runtime_sec" or one of the following performance metrics:
 "avg_f1_score", "avg_log2_apop", "avg_bal_acc", or "avg_nmcc"}
 
-\item{xlab}{\link[rlang:vector-construction]{rlang::chr} Label for x axis}
+\item{xlab}{\link[rlang:chr]{chr} Label for x axis}
 
-\item{ylab}{\link[rlang:vector-construction]{rlang::chr} Label for y axis}
+\item{ylab}{\link[rlang:chr]{chr} Label for y axis}
 }
 \value{
 A \code{ggplot2} scatterplot (performance metric or runtime vs.
@@ -33,4 +33,14 @@ A \code{ggplot2} scatterplot (performance metric or runtime vs.
 \description{
 Plots performance metric or runtime vs. training data proportion or number
 of cross-validation folds, colored by model.
+}
+\examples{
+default_eval <- tibble::tibble(
+  train_prop      = c(0.5, 0.6, 0.7, 0.5, 0.6, 0.7),
+  n_fold          = rep(5, 6),
+  model           = rep(c("LR", "RF"), each = 3),
+  avg_f1_score    = c(0.72, 0.78, 0.83, 0.70, 0.75, 0.80)
+)
+plotDefaultEval(default_eval, x_default_eval = "train_prop",
+                y_default_eval = "avg_f1_score")
 }

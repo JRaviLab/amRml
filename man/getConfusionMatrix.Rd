@@ -17,3 +17,18 @@ Confusion matrix of class \code{conf_mat}
 Returns the confusion matrix based on the AMR phenotype predictions by an ML
 model compared against the actual values.
 }
+\examples{
+preds <- tibble::tibble(
+  genome_id = paste0("g", 1:8),
+  genome_drug.resistant_phenotype = factor(
+    rep(c("Resistant", "Susceptible"), each = 4),
+    levels = c("Resistant", "Susceptible")
+  ),
+  .pred_class = factor(
+    c("Resistant", "Resistant", "Susceptible", "Resistant",
+      "Susceptible", "Resistant", "Susceptible", "Susceptible"),
+    levels = c("Resistant", "Susceptible")
+  )
+)
+getConfusionMatrix(preds)
+}

@@ -11,7 +11,7 @@ selectBestModel(tune_res, wflow, select_best_metric = "mcc")
 
 \item{wflow}{A \code{workflows} object, such as the output of \code{buildWflow()}}
 
-\item{select_best_metric}{\link[rlang:vector-construction]{rlang::chr} Metric to select best model: "f_meas",
+\item{select_best_metric}{\link[rlang:chr]{chr} Metric to select best model: "f_meas",
 "pr_auc", "mcc", or "bal_accuracy"}
 }
 \value{
@@ -19,4 +19,15 @@ Best model workflow
 }
 \description{
 Selects best model by F1 score, AUPRC, MCC, or balanced accuracy.
+}
+\examples{
+data(demo_ml_tibble)
+data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+wflow <- buildWflow(buildLRModel(),
+                    buildRecipe(rsample::training(data_split)))
+set.seed(1)
+tune_res <- tuneGrid(wflow, data_split,
+                     buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
+                     n_fold = 2)
+selectBestModel(tune_res, wflow, "mcc")
 }

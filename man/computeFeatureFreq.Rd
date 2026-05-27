@@ -19,3 +19,16 @@ The BH Fisher data table with added feature frequency columns
 \description{
 computeFeatureFreq
 }
+\examples{
+df <- tibble::tibble(
+  genome_id = paste0("g", 1:10),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 5),
+  gene_a = c(1, 1, 1, 1, 0, 0, 0, 0, 0, 0),
+  gene_b = c(0, 0, 0, 1, 1, 1, 1, 1, 1, 0)
+)
+encoded <- encodePhenotype(df)
+fisher <- applyBenjaminiHochberg(
+  runFisherTests(encoded$df, encoded$target), Q = 0.05
+)
+computeFeatureFreq(encoded$df, fisher, encoded$target)
+}
