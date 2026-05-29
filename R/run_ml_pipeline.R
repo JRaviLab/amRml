@@ -432,9 +432,8 @@ runMLPipeline <- function(
           genome_id, .pred_class, .pred_Resistant,
           .pred_Susceptible, genome_drug.resistant_phenotype
         ))
-    } else {
-      all_results[["pred"]] <- test_data_plus_predictions
     }
+    all_results[["pred"]] <- test_data_plus_predictions
   }
 
   return(all_results)

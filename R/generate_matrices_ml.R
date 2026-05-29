@@ -240,6 +240,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
   con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
   on.exit(DBI::dbDisconnect(con0, shutdown = FALSE), add = TRUE)
+  DBI::dbExecute(con0, sprintf(
+    "SET file_search_path='%s'",
+    dirname(parquet_duckdb_path)
+  ))
 
   bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
   log("info", paste0("Connected to DuckDB for bug: ", bug))
@@ -261,6 +265,10 @@ skipImbalancedMatrix <- function(genome_ids,
     for (i in seq_len(nrow(all_groups))) {
       # New connection for this group
       con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+      DBI::dbExecute(con, sprintf(
+        "SET file_search_path='%s'",
+        dirname(parquet_duckdb_path)
+      ))
 
       group_values <- all_groups[i, , drop = FALSE]
       group_label <- paste(group_values, collapse = "_")
@@ -715,6 +723,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Connect to DuckDB
   con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+  DBI::dbExecute(con0, sprintf(
+    "SET file_search_path='%s'",
+    dirname(parquet_duckdb_path)
+  ))
   # Discover bug name and which genomes to include
   bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
   metadata_all <- DBI::dbGetQuery(con0, "SELECT * FROM metadata")
@@ -754,6 +766,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
       # Fresh connection for this matrix
       con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+      DBI::dbExecute(con, sprintf(
+        "SET file_search_path='%s'",
+        dirname(parquet_duckdb_path)
+      ))
 
       # Selected genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
