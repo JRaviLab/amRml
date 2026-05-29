@@ -24,8 +24,8 @@ NULL
 #' Plot a Precision-Recall Curve
 #'
 #' Generates a precision-recall curve (PRC) for AMR phenotype prediction results.
-#' @param test_data_plus_predictions A tibble containing test data with added
-#' prediction columns, typically the output of `runMLmodels()`.
+#' @param test_data_plus_predictions_file A file containing test data with added
+#' prediction columns, typically the output of `runMLmodels(return_pred=TRUE)`.
 #'
 #' @return A `ggplot2` object showing the precision-recall curve.
 #'
@@ -35,12 +35,13 @@ NULL
 #'
 #' @examples
 #' \dontrun{
-#' test_data_plus_predictions <- readr::read_tsv(results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv)
-#' plotPRC(test_data_plus_predictions)
+#' test_data_plus_predictions_file <- "results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv"
+#' plotPRC(test_data_plus_predictions_file)
 #' }
 #'
 #'  @export
-plotPRC <- function(test_data_plus_predictions) {
+plotPRC <- function(test_data_plus_predictions_file) {
+ test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -66,13 +67,14 @@ plotPRC <- function(test_data_plus_predictions) {
 #'
 #' Generates a ROC curve for AMR phenotype prediction results.
 #'
-#' @param test_data_plus_predictions A tibble with test data and prediction
-#' columns (output of `runMLmodels()`).
+#' @param test_data_plus_predictions_file A file with test data and prediction
+#' columns (output of `runMLmodels(return_pred=TRUE)`).
 #'
 #' @return A ROC curve plotted using `ggplot2::autoplot()`.
 #'
 #' @export
-plotROC <- function(test_data_plus_predictions) {
+plotROC <- function(test_data_plus_predictions_file) {
+   test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -96,13 +98,14 @@ plotROC <- function(test_data_plus_predictions) {
 #'
 #' Produces a heatmap visualization of the confusion matrix for AMR predictions.
 #'
-#' @param test_data_plus_predictions A tibble containing true and predicted
+#' @param test_data_plus_predictions_file A file containing true and predicted
 #' phenotype labels.
 #'
 #' @return A heatmap (`ggplot2` object) showing the confusion matrix.
 #'
 #' @export
-plotCM <- function(test_data_plus_predictions) {
+plotCM <- function(test_data_plus_predictions_file) {
+    test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -123,32 +126,12 @@ plotCM <- function(test_data_plus_predictions) {
     ggplot2::autoplot(type = "heatmap")
 }
 
-#' Plot Density of Predicted Class Probabilities
-#'
-#' Visualizes how predicted class probabilities differ between resistant and
-#' susceptible genome-drug combinations.
-#'
-#' @param test_data_plus_predictions Tibble with prediction probabilities and
-#' true labels.
-#'
-#' @return A ggplot2 density plot.
-#'
-#' @export
-plotDensity <- function(test_data_plus_predictions) {
-  test_data_plus_predictions |>
-    ggplot2::ggplot(ggplot2::aes(
-      x = .pred_Resistant,
-      fill = genome_drug.resistant_phenotype
-    )) +
-    ggplot2::geom_density(alpha = 0.5)
-}
-
 #' Plot Top Feature Importances
 #'
 #' Creates a bar plot showing the most important features affecting
 #' AMR phenotype predictions.
 #'
-#' @param topfeat A tibble containing feature importance scores
+#' @param topfeat_file A file containing feature importance scores
 #' (output of `runMLmodels()`).
 #' @param n_top_feats Number of top features to display (default: 10).
 #'
@@ -156,12 +139,13 @@ plotDensity <- function(test_data_plus_predictions) {
 #'
 #' @examples
 #' \dontrun{
-#' topfeat <- readr::read_tsv(results / ML_top_features / Sfl_drug_AMP_domains_binary_top_features.tsv)
-#' plotTopFeatsVI(topfeat)
+#' topfeat_file <- "results / ML_top_features / Sfl_drug_AMP_domains_binary_top_features.tsv"
+#' plotTopFeatsVI(topfeat_file)
 #' }
 #'
 #' @export
-plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
+plotTopFeatsVI <- function(topfeat_file, n_top_feats = 10) {
+  topfeat <- readr::read_tsv(topfeat_file)
   .checkArgNTopFeats(n_top_feats)
 
   vip <- topfeat |>
@@ -279,8 +263,8 @@ plotFishers <- function(
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
   }
 
-  plot_df <- fisher_df %>%
-    dplyr::arrange(adj_p_value) %>%
+  plot_df <- fisher_df |>
+    dplyr::arrange(adj_p_value) |>
     dplyr::mutate(
       rank = dplyr::row_number(),
       neg_log10_adj_p = -log10(adj_p_value),
@@ -312,7 +296,7 @@ plotFishers <- function(
     )
 
   if (label_top_n > 0) {
-    label_df <- plot_df %>%
+    label_df <- plot_df |>
       dplyr::slice_head(n = label_top_n)
 
     p <- p +
