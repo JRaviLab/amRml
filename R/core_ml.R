@@ -105,7 +105,7 @@ splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = NULL
       strata = !!target_var
     )
   } else {
-    data_split <-rsample::initial_validation_split(
+    data_split <- rsample::initial_validation_split(
       ml_input_tibble,
       prop   = split,
       strata = !!target_var
