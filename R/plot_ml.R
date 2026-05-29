@@ -41,7 +41,7 @@ NULL
 #'
 #'  @export
 plotPRC <- function(test_data_plus_predictions_file) {
- test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
+  test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -74,7 +74,7 @@ plotPRC <- function(test_data_plus_predictions_file) {
 #'
 #' @export
 plotROC <- function(test_data_plus_predictions_file) {
-   test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
+  test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -105,7 +105,7 @@ plotROC <- function(test_data_plus_predictions_file) {
 #'
 #' @export
 plotCM <- function(test_data_plus_predictions_file) {
-    test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
+  test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
