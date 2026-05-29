@@ -27,9 +27,11 @@ specified.
 \examples{
 data(demo_ml_tibble)
 data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
-wflow <- buildWflow(buildLRModel(),
-                    buildRecipe(rsample::training(data_split)))
-grid  <- buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1))
+wflow <- buildWflow(
+  buildLRModel(),
+  buildRecipe(rsample::training(data_split))
+)
+grid <- buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1))
 set.seed(1)
 tuneGrid(wflow, data_split, grid, n_fold = 2)
 }

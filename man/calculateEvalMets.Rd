@@ -27,11 +27,13 @@ preds <- tibble::tibble(
     levels = c("Resistant", "Susceptible")
   ),
   .pred_class = factor(
-    c("Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
-      "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"),
+    c(
+      "Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
+      "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"
+    ),
     levels = c("Resistant", "Susceptible")
   ),
-  .pred_Resistant   = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
+  .pred_Resistant = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
   .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
 )
 calculateEvalMets(preds)

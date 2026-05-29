@@ -26,6 +26,6 @@ train <- tibble::tibble(
   feat_b = rep(c(1L, 0L), 5)
 )
 rec <- buildRecipe(train, use_pca = FALSE)
-lr  <- buildLRModel()
+lr <- buildLRModel()
 buildWflow(lr, rec)
 }

@@ -20,7 +20,8 @@ runMLmodels(
   return_pred = TRUE,
   use_saved_split = TRUE,
   shuffle_labels = FALSE,
-  use_pca = FALSE
+  use_pca = FALSE,
+  seed = 5280
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ runMLmodels(
 \item{shuffle_labels}{Logical. Randomly shuffle labels for baseline runs. Default FALSE.}
 
 \item{use_pca}{Logical. Use PCA on predictors. Default FALSE.}
+
+\item{seed}{Integer. Seed for the parallel RNG streams (\code{BiocParallel}). Default 5280.}
 }
 \value{
 NULL (invisible). Called for side effects (model training and result saving).

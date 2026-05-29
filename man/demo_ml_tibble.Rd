@@ -3,20 +3,20 @@
 \docType{data}
 \name{demo_ml_tibble}
 \alias{demo_ml_tibble}
-\title{Small demo ML input tibble}
+\title{Demo ML input tibble}
 \format{
 A tibble with 60 rows and 82 columns: \code{genome_id},
 \code{genome_drug.resistant_phenotype}, and 80 binary feature columns.
 }
 \source{
-Built by \code{inst/scripts/make_demo_data.R}.
+\code{inst/scripts/make_demo_data.R}.
 }
 \usage{
 data(demo_ml_tibble)
 }
 \description{
-A subset of the AMP-genes-binary matrix generated from the bundled
-\code{Sfl_parquet.duckdb} fixture, trimmed to 60 rows (30 Resistant, 30
-Susceptible) and ~80 feature columns for use in package examples.
+Stratified subset (30 Resistant + 30 Susceptible) of the AMP-genes-binary
+matrix from the bundled \code{Sfl_parquet.duckdb}, restricted to 80 feature
+columns.
 }
 \keyword{datasets}

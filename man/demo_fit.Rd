@@ -3,18 +3,17 @@
 \docType{data}
 \name{demo_fit}
 \alias{demo_fit}
-\title{Small demo LR fit}
+\title{Demo LR fit}
 \format{
 A fitted \code{workflow} object (output of \code{\link[=fitBestModel]{fitBestModel()}}).
 }
 \source{
-Built by \code{inst/scripts/make_demo_data.R}.
+\code{inst/scripts/make_demo_data.R}.
 }
 \usage{
 data(demo_fit)
 }
 \description{
-A tuned logistic-regression workflow fitted on \link{demo_ml_tibble}, for use
-in package examples that require a pre-fitted model.
+A tuned logistic-regression workflow fitted on \link{demo_ml_tibble}.
 }
 \keyword{datasets}

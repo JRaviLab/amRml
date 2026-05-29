@@ -100,7 +100,11 @@ runMLPipeline <- function(
   .checkArgReturnTuneRes(return_tune_res)
   .checkArgReturnFit(return_fit)
   .checkArgReturnPred(return_pred)
+  .checkArgSeed(seed)
 
+  # Seed once for the whole pipeline so the split, CV folds, tuning, and fit
+  # share one continuous RNG stream (restored to the caller's state on exit).
+  withr::local_seed(seed)
 
   # Set `n_fold` to `NA` if not using cross-validation.
   if (split[2] != 0) {
@@ -223,7 +227,7 @@ runMLPipeline <- function(
       dplyr::select(where(~ !any(is.na(.))))
   }
 
-  data_split <- splitMLInputTibble(ml_input_tibble, split = split, seed = seed)
+  data_split <- splitMLInputTibble(ml_input_tibble, split = split)
 
   # Now correct `data_split` if external `test_data` is provided.
   if (external_test_data & split[2] != 0) {

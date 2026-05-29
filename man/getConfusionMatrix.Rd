@@ -25,8 +25,10 @@ preds <- tibble::tibble(
     levels = c("Resistant", "Susceptible")
   ),
   .pred_class = factor(
-    c("Resistant", "Resistant", "Susceptible", "Resistant",
-      "Susceptible", "Resistant", "Susceptible", "Susceptible"),
+    c(
+      "Resistant", "Resistant", "Susceptible", "Resistant",
+      "Susceptible", "Resistant", "Susceptible", "Susceptible"
+    ),
     levels = c("Resistant", "Susceptible")
   )
 )

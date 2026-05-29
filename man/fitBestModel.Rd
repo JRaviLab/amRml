@@ -25,9 +25,10 @@ data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
 train <- rsample::training(data_split)
 wflow <- buildWflow(buildLRModel(), buildRecipe(train))
 set.seed(1)
-tune_res   <- tuneGrid(wflow, data_split,
-                       buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
-                       n_fold = 2)
+tune_res <- tuneGrid(wflow, data_split,
+  buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
+  n_fold = 2
+)
 best_wflow <- selectBestModel(tune_res, wflow, "mcc")
 fitBestModel(best_wflow, train)
 }

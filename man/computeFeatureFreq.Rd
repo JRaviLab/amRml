@@ -28,7 +28,8 @@ df <- tibble::tibble(
 )
 encoded <- encodePhenotype(df)
 fisher <- applyBenjaminiHochberg(
-  runFisherTests(encoded$df, encoded$target), Q = 0.05
+  runFisherTests(encoded$df, encoded$target),
+  Q = 0.05
 )
 computeFeatureFreq(encoded$df, fisher, encoded$target)
 }

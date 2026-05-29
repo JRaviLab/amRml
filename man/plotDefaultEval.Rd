@@ -41,6 +41,8 @@ default_eval <- tibble::tibble(
   model           = rep(c("LR", "RF"), each = 3),
   avg_f1_score    = c(0.72, 0.78, 0.83, 0.70, 0.75, 0.80)
 )
-plotDefaultEval(default_eval, x_default_eval = "train_prop",
-                y_default_eval = "avg_f1_score")
+plotDefaultEval(default_eval,
+  x_default_eval = "train_prop",
+  y_default_eval = "avg_f1_score"
+)
 }

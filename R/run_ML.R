@@ -542,6 +542,7 @@ createMLinputList <- function(path,
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`). Default 5280.
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -580,7 +581,8 @@ runMDRmodels <- function(path,
                          return_pred = TRUE,
                          use_saved_split = TRUE,
                          shuffle_labels = FALSE,
-                         use_pca = FALSE) {
+                         use_pca = FALSE,
+                         seed = 5280) {
   files <- createMLinputList(path,
     stratify_by = NULL,
     LOO         = FALSE,
@@ -593,7 +595,7 @@ runMDRmodels <- function(path,
     return(invisible(NULL))
   }
 
-  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = 42)
+  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = seed)
 
   if (isTRUE(verbose)) {
     message("runMDRmodels(): enabling SnowParam with workers = ", threads)
@@ -724,6 +726,7 @@ runMDRmodels <- function(path,
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`). Default 5280.
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -843,7 +846,8 @@ runMLmodels <- function(path,
                         return_pred = TRUE,
                         use_saved_split = TRUE,
                         shuffle_labels = FALSE,
-                        use_pca = FALSE) {
+                        use_pca = FALSE,
+                        seed = 5280) {
   if (!is.null(stratify_by)) {
     if (!is.character(stratify_by) || length(stratify_by) != 1L) {
       stop("`stratify_by` must be NULL or a single string: 'year' or 'country'.")
@@ -865,7 +869,7 @@ runMLmodels <- function(path,
     return(invisible(NULL))
   }
 
-  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = 42)
+  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = seed)
 
   if (isTRUE(verbose)) {
     message("runMLmodels(): enabling SnowParam with workers = ", threads)

@@ -70,7 +70,10 @@ NULL
 #' genome is resistant), but not both.
 #' @param split [num] Vector of length 2 indicating the proportion of data to
 #' be designated as training and validation, respectively.
-#' @param seed [num] For reproducible analysis
+#' @param seed [num] Optional. If supplied, the split is seeded (and the
+#' caller's RNG state restored afterward) for standalone reproducibility. When
+#' `NULL` (the default, as used by `runMLPipeline()`), the split inherits the
+#' ambient RNG stream so it can share one seed with downstream tuning and fitting.
 #' @return An `rsplit` object
 #' @examples
 #' ml <- tibble::tibble(
@@ -81,34 +84,33 @@ NULL
 #' )
 #' splitMLInputTibble(ml, split = c(1, 0), seed = 42)
 #' @export
-splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280) {
+splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = NULL) {
   .checkArgTibble(ml_input_tibble, ml = TRUE)
   .checkArgSplit(split)
-  .checkArgSeed(seed)
+  if (!is.null(seed)) {
+    .checkArgSeed(seed)
+    withr::local_seed(seed)
+  }
 
   target_var <- .getTargetVarName(ml_input_tibble)
 
   # Split the data, maintaining R/S proportions.
-  data_split <- withr::with_seed(seed, {
-    if (split[2] == 0) {
-      # If in CV mode:
-      # Still retain a stratified testing holdout purely for final reporting metrics;
-      # CV is only performed on the training portion.
-      prop_train_for_holdout <- 0.8 # 80 percent train, 20 percent reserved test
-      rsample::initial_split(
-        ml_input_tibble,
-        prop   = prop_train_for_holdout,
-        strata = !!target_var
-      )
-    } else {
-      rsample::initial_validation_split(
-        ml_input_tibble,
-        prop   = split,
-        strata = !!target_var
-      )
-    }
-  })
-
+  if (split[2] == 0) {
+    # CV mode: retain a stratified testing holdout purely for final reporting
+    # metrics; CV is only performed on the training portion.
+    prop_train_for_holdout <- 0.8 # 80 percent train, 20 percent reserved test
+    data_split <- rsample::initial_split(
+      ml_input_tibble,
+      prop   = prop_train_for_holdout,
+      strata = !!target_var
+    )
+  } else {
+    data_split <-rsample::initial_validation_split(
+      ml_input_tibble,
+      prop   = split,
+      strata = !!target_var
+    )
+  }
   return(data_split)
 }
 

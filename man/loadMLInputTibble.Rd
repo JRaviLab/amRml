@@ -24,7 +24,8 @@ long <- tibble::tibble(
   feature_id = rep(c("gene_a", "gene_b"), 6),
   value = c(1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1),
   genome_drug.resistant_phenotype = rep(
-    rep(c("Resistant", "Susceptible"), each = 3), each = 2
+    rep(c("Resistant", "Susceptible"), each = 3),
+    each = 2
   )
 )
 tmp <- tempfile(fileext = ".parquet")
