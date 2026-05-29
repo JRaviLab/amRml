@@ -27,7 +27,7 @@ parse_ml_filename <- function(filename) {
   # Strip known suffix
   base <- sub("_(top_features|performance)\\.tsv$", "", filename)
   xs <- strsplit(base, "_", fixed = TRUE)[[1]]
-  
+
   out <- list(
     shuffled = FALSE,
     species = NA_character_,
@@ -39,9 +39,9 @@ parse_ml_filename <- function(filename) {
     feature_subtype = NA_character_,
     seed = NA_integer_
   )
-  
+
   i <- 1
-  
+
   # ---------------------------
   # 1. Shuffled detection
   # ---------------------------
@@ -49,12 +49,13 @@ parse_ml_filename <- function(filename) {
     out$shuffled <- TRUE
     i <- i + 1
   }
-  
+
   # ---------------------------
   # 2. Species
   # ---------------------------
-  out$species <- xs[i]; i <- i + 1
-  
+  out$species <- xs[i]
+  i <- i + 1
+
   # ---------------------------
   # 3. Drug or drug_class
   # ---------------------------
@@ -64,7 +65,7 @@ parse_ml_filename <- function(filename) {
       out$drug_label <- "drug_class"
       out$drug_or_class <- xs[i + 2]
       i <- i + 3
-    } 
+    }
     # Case B: simple drug
     else {
       out$drug_label <- "drug"
@@ -74,21 +75,25 @@ parse_ml_filename <- function(filename) {
   } else {
     stop("ERROR: expected 'drug' token after species")
   }
-  
+
   # ---------------------------
   # 4. Stratified?
   # ---------------------------
   if (i <= length(xs) && xs[i] %in% c("year", "country")) {
-    out$strat_label <- xs[i]; i <- i + 1
-    out$strat_value <- xs[i]; i <- i + 1
+    out$strat_label <- xs[i]
+    i <- i + 1
+    out$strat_value <- xs[i]
+    i <- i + 1
   }
-  
+
   # ---------------------------
   # 5. Feature type + subtype
   # ---------------------------
-  out$feature_type <- xs[i]; i <- i + 1
-  out$feature_subtype <- xs[i]; i <- i + 1
-  
+  out$feature_type <- xs[i]
+  i <- i + 1
+  out$feature_subtype <- xs[i]
+  i <- i + 1
+
   # ---------------------------
   # 6. Trailing strat label (mirror)
   # ---------------------------
@@ -96,12 +101,12 @@ parse_ml_filename <- function(filename) {
     stopifnot(xs[i] == out$strat_label)
     i <- i + 1
   }
-  
+
   # ---------------------------
   # 7. Seed
   # ---------------------------
   out$seed <- as.integer(xs[i])
-  
+
   return(out)
 }
 
@@ -126,20 +131,20 @@ parse_ml_filename <- function(filename) {
 #'
 #' @export
 buildTopFeatsPq <- function(
-    path,
-    stratify_by = NULL,
-    LOO = FALSE,
-    MDR = FALSE,
-    cross_test = FALSE,
-    out_parquet = "all_top_features.parquet",
-    compression = "zstd",
-    verbose = TRUE
+  path,
+  stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE,
+  out_parquet = "all_top_features.parquet",
+  compression = "zstd",
+  verbose = TRUE
 ) {
   if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
     stop("`path` must be a non-empty character scalar.")
   }
   path <- normalizePath(path)
-  
+
   if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
     stop("`stratify_by` must be NULL, 'year', or 'country'.")
   }
@@ -149,44 +154,46 @@ buildTopFeatsPq <- function(
   if (isTRUE(MDR) && (!is.null(stratify_by) || isTRUE(LOO) || isTRUE(cross_test))) {
     stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
   }
-  
+
   # -----------------------
   # Resolve directories (ensures existence)
   # -----------------------
   paths <- createMLResultDir(path,
-                             stratify_by = stratify_by, LOO = LOO,
-                             cross_test = cross_test, MDR = MDR
+    stratify_by = stratify_by, LOO = LOO,
+    cross_test = cross_test, MDR = MDR
   )
   top_dir <- paths$ML_top_features
-  
+
   files <- list.files(
     top_dir,
     pattern = "_top_features\\.tsv$",
     full.names = TRUE,
     recursive = TRUE
   )
-  
-  if (!length(files)) return(tibble::tibble())
-  
+
+  if (!length(files)) {
+    return(tibble::tibble())
+  }
+
   out <- purrr::map_dfr(files, function(f) {
     meta <- parse_ml_filename(basename(f))
-    df <- readr::read_tsv(f,                         
-                          col_types = readr::cols(
-                            Variable   = readr::col_character(),
-                            Importance = readr::col_double(),
-                            Sign       = readr::col_character()
-                          ),
-                          show_col_types = FALSE,
-                          na = c("NA", "", "NaN")
+    df <- readr::read_tsv(f,
+      col_types = readr::cols(
+        Variable   = readr::col_character(),
+        Importance = readr::col_double(),
+        Sign       = readr::col_character()
+      ),
+      show_col_types = FALSE,
+      na = c("NA", "", "NaN")
     )
-    
+
     meta_tbl <- tibble::as_tibble(meta)
     dplyr::bind_cols(meta_tbl[rep(1, nrow(df)), ], df)
   })
-  
+
   out_path <- file.path(top_dir, basename(out_parquet))
   arrow::write_parquet(out, out_path, compression = compression)
-  
+
   if (verbose) message("Wrote ", out_path)
   out
 }
@@ -205,20 +212,20 @@ buildTopFeatsPq <- function(
 #'
 #' @export
 buildPerfPq <- function(
-    path,
-    stratify_by = NULL,
-    LOO = FALSE,
-    MDR = FALSE,
-    cross_test = FALSE,
-    out_parquet = "all_performance.parquet",
-    compression = "zstd",
-    verbose = TRUE
+  path,
+  stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE,
+  out_parquet = "all_performance.parquet",
+  compression = "zstd",
+  verbose = TRUE
 ) {
   if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
     stop("`path` must be a non-empty character scalar.")
   }
   path <- normalizePath(path)
-  
+
   if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
     stop("`stratify_by` must be NULL, 'year', or 'country'.")
   }
@@ -228,43 +235,45 @@ buildPerfPq <- function(
   if (isTRUE(MDR) && (!is.null(stratify_by) || isTRUE(LOO) || isTRUE(cross_test))) {
     stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
   }
-  
+
   # -----------------------
   # Resolve directories from your function (ensures they exist)
   # -----------------------
   paths <- createMLResultDir(path,
-                             stratify_by = stratify_by, LOO = LOO,
-                             cross_test = cross_test, MDR = MDR
+    stratify_by = stratify_by, LOO = LOO,
+    cross_test = cross_test, MDR = MDR
   )
   perf_dir <- paths$ML_performance
-  
+
   files <- list.files(
     perf_dir,
     pattern = "_performance\\.tsv$",
     full.names = TRUE,
     recursive = TRUE
   )
-  
-  if (!length(files)) return(tibble::tibble())
-  
+
+  if (!length(files)) {
+    return(tibble::tibble())
+  }
+
   out <- purrr::map_dfr(files, function(f) {
     meta <- parse_ml_filename(basename(f))
     df <- readr::read_tsv(f, show_col_types = FALSE)
-    
+
     # ---- SAFETY FIX ----
     # If TSV already has seed, drop parsed seed
     if ("seed" %in% names(df)) {
       meta$seed <- NULL
     }
     # --------------------
-    
+
     meta_tbl <- tibble::as_tibble(meta)
     dplyr::bind_cols(meta_tbl[rep(1, nrow(df)), ], df)
   })
-  
+
   out_path <- file.path(perf_dir, basename(out_parquet))
   arrow::write_parquet(out, out_path, compression = compression)
-  
+
   if (verbose) message("Wrote ", out_path)
   out
 }
@@ -281,15 +290,15 @@ buildPerfPq <- function(
 #' buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_country_performance/")
 #' @export
 buildPerfPqYearCountry <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
       into = c(
@@ -307,11 +316,11 @@ buildPerfPqYearCountry <- function(
       remove = FALSE
     ) |>
     dplyr::select(-c("strat_label2", "seed_from_name"))
-  
+
   strat_label <- merged_df |>
     dplyr::distinct(strat_label) |>
     dplyr::pull()
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, paste0(strat_label, "_perf.parquet")))
 }
 
@@ -326,21 +335,21 @@ buildPerfPqYearCountry <- function(
 #'
 #' @export
 buildPerfPqCrossDrug <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
       into = c("species", "drug_or_class", "tested_on", "feature_type", "feature_subtype"),
       regex = "cross_test_([A-Za-z0-9-]+)_drug_([A-Z]+)_cross_tested_on_([A-Z-]+)_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "cross_drug_perf.parquet"))
 }
 
@@ -355,23 +364,22 @@ buildPerfPqCrossDrug <- function(
 #'
 #' @export
 buildPerfPqCrossYear <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
       into = c("species", "drug_label", "drug_or_class", "train_year", "test_year", "feature_type", "feature_subtype"),
       regex = "cross_test_([A-Za-z0-9-]+)_(drug|drug_class)_([A-Za-z0-9-]+)_cross_([0-9]{4}-[0-9]{4})_tested_on_([0-9]{4}-[0-9]{4})_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "cross_year_perf.parquet"))
-  
 }
 
 #' Build Parquet file from cross country testing ML performances
@@ -385,23 +393,22 @@ buildPerfPqCrossYear <- function(
 #'
 #' @export
 buildPerfPqCrossCountry <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
       into = c("species", "drug_label", "drug_or_class", "train_country", "test_country", "feature_type", "feature_subtype"),
       regex = "cross_test_([A-Za-z0-9-]+)_(drug|drug_class)_([A-Za-z0-9-]+)_cross_([A-Z]{3})_tested_on_([A-Z]{3})_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "cross_country_perf.parquet"))
-  
 }
 
 #' Build Parquet file from LOO drug ML performances
@@ -416,23 +423,22 @@ buildPerfPqCrossCountry <- function(
 #'
 #' @export
 buildPerfPqLOODrug <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
       into = c("species", "drug_or_class", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_drug_leaveout_([A-Z]+)_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "LOO_drug_perf.parquet"))
-  
 }
 
 #' Build Parquet file from year/country ML top features
@@ -450,18 +456,18 @@ buildPerfPqLOODrug <- function(
 #'
 #' @export
 buildTopFeatsPqYearCountry <- function(
-    top_feat_dir_path) {
-  
+  top_feat_dir_path
+) {
   files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |>
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(
-                       Importance = as.numeric(Importance),
-                       filename = basename(.x)
-                     )) |>
+      dplyr::mutate(
+        Importance = as.numeric(Importance),
+        filename = basename(.x)
+      )) |>
     tidyr::extract(
       filename,
       into = c(
@@ -479,11 +485,11 @@ buildTopFeatsPqYearCountry <- function(
       remove = FALSE
     ) |>
     dplyr::select(-c("strat_label2", "seed_from_name"))
-  
+
   strat_label <- merged_df |>
     dplyr::distinct(strat_label) |>
     dplyr::pull()
-  
+
   arrow::write_parquet(merged_df, file.path(top_feat_dir_path, paste0(strat_label, "_top_features.parquet")))
 }
 
@@ -499,23 +505,22 @@ buildTopFeatsPqYearCountry <- function(
 #'
 #' @export
 buildTopFeatsPqLOODrug <- function(
-    top_feat_dir_path) {
-  
+  top_feat_dir_path
+) {
   files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
       into = c("species", "drug_or_class", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_drug_leaveout_([A-Z]+)_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "LOO_drug_top_features.parquet"))
-  
 }
 
 #' Build Parquet file from MDR ML top features
@@ -530,22 +535,21 @@ buildTopFeatsPqLOODrug <- function(
 #'
 #' @export
 buildTopFeatsPqMDR <- function(
-    top_feat_dir_path) {
-  
+  top_feat_dir_path
+) {
   files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     dplyr::mutate(
       feature_type = stringr::str_extract(filename, "args|cogs|genes|domains|proteins|struct"),
       feature_subtype = stringr::str_extract(filename, "binary|counts")
-    ) 
-  
+    )
+
   arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "MDR_top_features.parquet"))
-  
 }
 
 #' Build Parquet file from MDR ML performances
@@ -561,22 +565,21 @@ buildTopFeatsPqMDR <- function(
 #'
 #' @export
 buildPerfPqMDR <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     dplyr::mutate(
       feature_type = stringr::str_extract(filename, "args|cogs|genes|domains|proteins|struct"),
       feature_subtype = stringr::str_extract(filename, "binary|counts")
-    ) 
-  
+    )
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "MDR_perf.parquet"))
-  
 }
 
 #' Build Parquet file from LOO country ML performances
@@ -591,23 +594,22 @@ buildPerfPqMDR <- function(
 #'
 #' @export
 buildPerfPqLOOCountry <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species","drug_label", "drug_or_class", "leaveout_country", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_country", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_country_([A-Za-z0-9-]+)_leaveout_([A-Z]{3})_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "LOO_country_perf.parquet"))
-  
 }
 
 #' Build Parquet file from LOO year ML performances
@@ -622,23 +624,22 @@ buildPerfPqLOOCountry <- function(
 #'
 #' @export
 buildPerfPqLOOYear <- function(
-    perf_dir_path) {
-  
+  perf_dir_path
+) {
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species","drug_label", "drug_or_class", "leaveout_year", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_year", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_year_([A-Za-z0-9-]+)_leaveout_([0-9]{4}-[0-9]{4})_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "LOO_year_perf.parquet"))
-  
 }
 
 #' Build Parquet file from LOO country ML top features
@@ -652,26 +653,24 @@ buildPerfPqLOOYear <- function(
 #' # LOO country
 #' buildTopFeatsPqLOOCountry(top_feat_dir_path = "data/Campylobacter/LOO_ML_country_top_features/")
 #'
-#'
 #' @export
 buildTopFeatsPqLOOCountry <- function(
-    top_feat_dir_path) {
-  
+  top_feat_dir_path
+) {
   files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species","drug_label", "drug_or_class", "leaveout_country", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_country", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_country_([A-Za-z0-9-]+)_leaveout_([A-Z]{3})_([a-z]+)_(binary|counts)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "LOO_country_top_features.parquet"))
-  
 }
 
 #' Build Parquet file from LOO year ML top features
@@ -685,25 +684,22 @@ buildTopFeatsPqLOOCountry <- function(
 #' # LOO year
 #' buildTopFeatsPqLOOYear(top_feat_dir_path = "data/Campylobacter/LOO_ML_year_top_features/")
 #'
-#'
 #' @export
 buildTopFeatsPqLOOYear <- function(
-    top_feat_dir_path) {
-  
+  top_feat_dir_path
+) {
   files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-  
+
   # Read and combine
-  merged_df <- files|>
-    purrr::set_names() |>   # keeps file names attached
+  merged_df <- files |>
+    purrr::set_names() |> # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-                     dplyr::mutate(filename = basename(.x))) |>
+      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species","drug_label", "drug_or_class", "leaveout_year", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_year", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_year_([A-Za-z0-9-]+)_leaveout_([0-9]{4}-[0-9]{4})_([a-z]+)_(binary|counts)"
     )
-  
-  arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "LOO_year_top_features.parquet"))
-  
-}
 
+  arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "LOO_year_top_features.parquet"))
+}
