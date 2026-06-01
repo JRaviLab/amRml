@@ -84,7 +84,8 @@ when available via <code>.resolveSplitParams()</code>.</p>
 <span>  return_pred <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  use_saved_split <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  shuffle_labels <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  use_pca <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  use_pca <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">5280</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -155,6 +156,10 @@ when available via <code>.resolveSplitParams()</code>.</p>
 <dt id="arg-use-pca">use_pca<a class="anchor" aria-label="anchor" href="#arg-use-pca"></a></dt>
 <dd><p>Logical. Use PCA on predictors. Default FALSE.</p></dd>
 
+
+<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
+<dd><p>Integer. Seed for the parallel RNG streams (<code>BiocParallel</code>). Default 5280.</p></dd>
+
 </dl></div>
     <div id="value">
     <h2>Value</h2>
@@ -189,8 +194,7 @@ Files are saved with prefixes and suffixes indicating the configuration:</p><ul>
     </div>
     <div id="note">
     <h2>Note</h2>
-    <p>This function requires the following packages:</p><ul><li><p><span class="pkg">future</span> - for parallel processing backend</p></li>
-<li><p><span class="pkg">future.apply</span> - for parallel lapply</p></li>
+    <p>This function requires the following packages:</p><ul><li><p><span class="pkg">BiocParallel</span> - for parallel processing backend</p></li>
 <li><p><span class="pkg">readr</span> - for reading/writing TSV files</p></li>
 <li><p><span class="pkg">dplyr</span>, <span class="pkg">purrr</span>, <span class="pkg">stringr</span>, <span class="pkg">tibble</span> - for data manipulation</p></li>
 </ul><p>Ensure that <code><a href="loadMLInputTibble.html">loadMLInputTibble()</a></code>, <code><a href="runMLPipeline.html">runMLPipeline()</a></code>, and
@@ -217,21 +221,24 @@ Files are saved with prefixes and suffixes indicating the configuration:</p><ul>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Cross-test with year stratification</span></span></span>
 <span class="r-in"><span><span class="fu">runMLmodels</span><span class="op">(</span><span class="st">"/path/to/results"</span>,</span></span>
-<span class="r-in"><span>            stratify_by <span class="op">=</span> <span class="st">"year"</span>,</span></span>
-<span class="r-in"><span>            cross_test <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
-<span class="r-in"><span>            threads <span class="op">=</span> <span class="fl">32</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  stratify_by <span class="op">=</span> <span class="st">"year"</span>,</span></span>
+<span class="r-in"><span>  cross_test <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>  threads <span class="op">=</span> <span class="fl">32</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># LOO analysis stratified by country with cross-testing</span></span></span>
 <span class="r-in"><span><span class="fu">runMLmodels</span><span class="op">(</span><span class="st">"/path/to/results"</span>,</span></span>
-<span class="r-in"><span>            stratify_by <span class="op">=</span> <span class="st">"country"</span>,</span></span>
-<span class="r-in"><span>            LOO <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
-<span class="r-in"><span>            cross_test <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
-<span class="r-in"><span>            verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  stratify_by <span class="op">=</span> <span class="st">"country"</span>,</span></span>
+<span class="r-in"><span>  LOO <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>  cross_test <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Run without saving model fits (save disk space)</span></span></span>
 <span class="r-in"><span><span class="fu">runMLmodels</span><span class="op">(</span><span class="st">"/path/to/results"</span>,</span></span>
-<span class="r-in"><span>            stratify_by <span class="op">=</span> <span class="st">"year"</span>,</span></span>
-<span class="r-in"><span>            return_fit <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  stratify_by <span class="op">=</span> <span class="st">"year"</span>,</span></span>
+<span class="r-in"><span>  return_fit <span class="op">=</span> <span class="cn">FALSE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

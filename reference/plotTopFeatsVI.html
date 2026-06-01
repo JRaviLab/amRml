@@ -74,7 +74,7 @@ scores.</p>
 
 
 <dt id="arg-n-top-feats">n_top_feats<a class="anchor" aria-label="anchor" href="#arg-n-top-feats"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> Number of top features to plot</p></dd>
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> Number of top features to plot</p></dd>
 
 </dl></div>
     <div id="value">
@@ -82,6 +82,13 @@ scores.</p>
     <p>Variable importance plot (a <code>ggplot2</code> object)</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">demo_fit</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">plotTopFeatsVI</span><span class="op">(</span><span class="va">demo_fit</span>, n_top_feats <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-plt img"><img src="plotTopFeatsVI-1.png" alt="" width="700" height="433"></span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

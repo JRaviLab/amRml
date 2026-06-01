@@ -89,6 +89,22 @@
 <li><p><code>target</code>: a binarized vector of the encoded AMR phenotypes</p></li>
 </ul></div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">df</span> <span class="op">&lt;-</span> <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  genome_id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"g"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  genome_drug.resistant_phenotype <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>    <span class="st">"Resistant"</span>, <span class="st">"Susceptible"</span>, <span class="st">"Resistant"</span>,</span></span>
+<span class="r-in"><span>    <span class="st">"Susceptible"</span>, <span class="st">"Resistant"</span>, <span class="st">"Susceptible"</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span>,</span></span>
+<span class="r-in"><span>  gene_a <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fl">0L</span>, <span class="fl">1L</span>, <span class="fl">0L</span>, <span class="fl">1L</span>, <span class="fl">0L</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  gene_b <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0L</span>, <span class="fl">1L</span>, <span class="fl">1L</span>, <span class="fl">0L</span>, <span class="fl">0L</span>, <span class="fl">1L</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">encoded</span> <span class="op">&lt;-</span> <span class="fu">encodePhenotype</span><span class="op">(</span><span class="va">df</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">encoded</span><span class="op">$</span><span class="va">target</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1 0 1 0 1 0</span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

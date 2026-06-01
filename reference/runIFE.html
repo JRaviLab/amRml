@@ -84,17 +84,17 @@ returns nMCC at each iteration.</p>
 
 
 <dt id="arg-by-num">by_num<a class="anchor" aria-label="anchor" href="#arg-by-num"></a></dt>
-<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">arrow::bool</a> Set to <code>TRUE</code> if removing top features as a percentage
+<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">bool</a> Set to <code>TRUE</code> if removing top features as a percentage
 of the total number of features.</p></dd>
 
 
 <dt id="arg-by-vi">by_vi<a class="anchor" aria-label="anchor" href="#arg-by-vi"></a></dt>
-<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">arrow::bool</a> Set to <code>TRUE</code> if removing top features by their
+<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">bool</a> Set to <code>TRUE</code> if removing top features by their
 contribution to the total variable importance.</p></dd>
 
 
 <dt id="arg-percent-removal-vec">percent_removal_vec<a class="anchor" aria-label="anchor" href="#arg-percent-removal-vec"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> A vector of percentages of total top
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> A vector of percentages of total top
 features removed (if <code>by_num = TRUE</code> and <code>by_vi = FALSE</code>) or percent
 contributions of top features removed to the total variable importance (if
 <code>by_vi = TRUE</code> and <code>by_num = FALSE</code>) at each iteration. The function will
@@ -103,19 +103,19 @@ specify 0 in this vector.</p></dd>
 
 
 <dt id="arg-mix-vec">mix_vec<a class="anchor" aria-label="anchor" href="#arg-mix-vec"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> A vector containing mixture values (0 corresponds
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> A vector containing mixture values (0 corresponds
 to L2 regularization; 1 corresponds to L1; intermediate values correspond to
 elastic net) to try. The default corresponds to L2 for the purpose of IFE
 analysis.</p></dd>
 
 
 <dt id="arg-return-feats">return_feats<a class="anchor" aria-label="anchor" href="#arg-return-feats"></a></dt>
-<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">arrow::bool</a> Whether to return top features from each iteration
+<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">bool</a> Whether to return top features from each iteration
 of IFE.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
-<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">arrow::bool</a> The function will stay quiet if set to <code>FALSE</code>.</p></dd>
+<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">bool</a> The function will stay quiet if set to <code>FALSE</code>.</p></dd>
 
 </dl></div>
     <div id="value">
@@ -124,6 +124,25 @@ of IFE.</p></dd>
 list along with top features removed per iteration if <code>return_feats = TRUE</code>.)</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">demo_ml_tibble</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">runIFE</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="va">demo_ml_tibble</span>,</span></span>
+<span class="r-in"><span>  by_num <span class="op">=</span> <span class="cn">TRUE</span>, by_vi <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
+<span class="r-in"><span>  percent_removal_vec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">25</span>, <span class="fl">50</span><span class="op">)</span>, mix_vec <span class="op">=</span> <span class="fl">0</span>,</span></span>
+<span class="r-in"><span>  return_feats <span class="op">=</span> <span class="cn">TRUE</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Classes are roughly balanced. Calculation of log2(AUPRC/prior) may be inappropriate.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Classes are roughly balanced. Calculation of log2(AUPRC/prior) may be inappropriate.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> → <span style="color: #BB0000; font-weight: bold;">A</span> | <span style="color: #BB0000;">error</span>:   x should be a matrix with 2 or more columns</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> There were issues with some computations   <span style="color: #BB0000; font-weight: bold;">A</span>: x1</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>All models failed. Run `show_notes(.Last.tune.result)` for more information.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> There were issues with some computations   <span style="color: #BB0000; font-weight: bold;">A</span>: x1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

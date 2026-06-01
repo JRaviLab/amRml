@@ -19,6 +19,8 @@
 <url><loc>/reference/computeFeatureFreq.html</loc></url>
 <url><loc>/reference/createMLResultDir.html</loc></url>
 <url><loc>/reference/createMLinputList.html</loc></url>
+<url><loc>/reference/demo_fit.html</loc></url>
+<url><loc>/reference/demo_ml_tibble.html</loc></url>
 <url><loc>/reference/dot-calculateAUPRC.html</loc></url>
 <url><loc>/reference/dot-calculateBalAcc.html</loc></url>
 <url><loc>/reference/dot-calculateF1.html</loc></url>

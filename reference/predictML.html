@@ -85,6 +85,36 @@ testing. This can be the output of
 labels</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">demo_ml_tibble</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">demo_fit</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">data_split</span> <span class="op">&lt;-</span> <span class="fu"><a href="splitMLInputTibble.html">splitMLInputTibble</a></span><span class="op">(</span><span class="va">demo_ml_tibble</span>, split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">predictML</span><span class="op">(</span><span class="va">demo_fit</span>, <span class="fu">rsample</span><span class="fu">::</span><span class="fu"><a href="https://rsample.tidymodels.org/reference/initial_split.html" class="external-link">testing</a></span><span class="op">(</span><span class="va">data_split</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 12 × 85</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    .pred_class .pred_Resistant .pred_Susceptible genome_id</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>                 <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>             <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 1</span> Susceptible      0.000<span style="text-decoration: underline;">003</span>30             1.000 623.1384 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 2</span> Susceptible      0.002<span style="text-decoration: underline;">45</span>                0.998 623.1309 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 3</span> Resistant        0.715                  0.285 623.1284 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 4</span> Resistant        0.715                  0.285 623.1393 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 5</span> Resistant        0.715                  0.285 623.1334 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 6</span> Resistant        0.715                  0.285 623.1281 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 7</span> Resistant        0.715                  0.285 623.1696 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 8</span> Resistant        0.715                  0.285 623.1686 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 9</span> Susceptible      0.006<span style="text-decoration: underline;">88</span>                0.993 623.1827 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">10</span> Resistant        0.715                  0.285 623.1297 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">11</span> Susceptible      0.004<span style="text-decoration: underline;">85</span>                0.995 623.1372 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">12</span> Susceptible      0.001<span style="text-decoration: underline;">98</span>                0.998 623.1812 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ℹ 81 more variables: genome_drug.resistant_phenotype &lt;fct&gt;, group_100 &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   group_10000 &lt;dbl&gt;, group_10001 &lt;dbl&gt;, group_10002 &lt;dbl&gt;, group_10003 &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   group_10004 &lt;dbl&gt;, group_10005 &lt;dbl&gt;, group_10006 &lt;dbl&gt;, group_10007 &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   group_10008 &lt;dbl&gt;, group_10009 &lt;dbl&gt;, group_10010 &lt;dbl&gt;, group_10011 &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   group_10012 &lt;dbl&gt;, group_10013 &lt;dbl&gt;, group_10014 &lt;dbl&gt;, group_10015 &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   group_10016 &lt;dbl&gt;, group_10017 &lt;dbl&gt;, group_10018 &lt;dbl&gt;, group_10019 &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   group_10020 &lt;dbl&gt;, group_10021 &lt;dbl&gt;, group_10022 &lt;dbl&gt;, …</span></span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

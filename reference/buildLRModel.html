@@ -68,7 +68,7 @@
 
 
 <dl><dt id="arg-multi-class">multi_class<a class="anchor" aria-label="anchor" href="#arg-multi-class"></a></dt>
-<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">arrow::bool</a> Whether to construct a model for multi-class
+<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">bool</a> Whether to construct a model for multi-class
 classification</p></dd>
 
 </dl></div>
@@ -77,6 +77,28 @@ classification</p></dd>
     <p>A <code>parsnip</code> <code>logistic_reg</code> object</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">buildLRModel</span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Logistic Regression Model Specification (classification)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Main Arguments:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   penalty = hardhat::tune()</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   mixture = hardhat::tune()</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Computational engine: glmnet </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-in"><span><span class="fu">buildLRModel</span><span class="op">(</span>multi_class <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Multinomial Regression Model Specification (classification)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Main Arguments:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   penalty = hardhat::tune()</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   mixture = hardhat::tune()</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Computational engine: glmnet </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

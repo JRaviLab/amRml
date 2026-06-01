@@ -89,63 +89,450 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p><code>amRml</code> is part of a 3-package suite for predicting
-antimicrobial resistance (AMR) using machine learning models trained on
-bacterial genomic features.</p>
-<p>This vignette demonstrates how to generate ML input matrices, train
-models, and visualize results.</p>
+<p><code>amRml</code> predicts antimicrobial resistance (AMR) from
+bacterial genomic features. It consumes a DuckDB produced by
+<code>amRdata</code> and produces ML matrices, tuned logistic regression
+models, per-genome predictions, feature importances, and Fisher’s exact
+tests as a non-ML baseline.</p>
+<p>This vignette uses the <em>Shigella flexneri</em> (<code>Sfl</code>)
+DuckDB bundled in <code>inst/extdata</code>.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fixture</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"Sfl_parquet.duckdb"</span>, package <span class="op">=</span> <span class="st">"amRml"</span><span class="op">)</span></span>
+<span><span class="va">out_dir</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"amRml_vignette"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">out_dir</span>, showWarnings <span class="op">=</span> <span class="cn">FALSE</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="generating-ml-input-matrices">Generating ML input matrices<a class="anchor" aria-label="anchor" href="#generating-ml-input-matrices"></a>
 </h2>
-<p>After data curation with <code>amRdata</code>, use
-<code><a href="../reference/generateMLInputs.html">generateMLInputs()</a></code> to create ML-ready matrices from the
-DuckDB containing metadata and feature parquets. The DuckDB with the
-parquet views is created with <code>cleanData()</code></p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Generate all ML input matrices from curated data</span></span>
-<span><span class="fu"><a href="../reference/generateMLInputs.html">generateMLInputs</a></span><span class="op">(</span></span>
-<span>  parquet_duckdb_path <span class="op">=</span> <span class="st">"results/Sfl_parquet.duckdb"</span>,</span>
-<span>  out_path <span class="op">=</span> <span class="st">"results/"</span>,</span>
-<span>  n_fold <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>, <span class="co"># CV mode (or use split = 0 as shorthand)</span></span>
-<span>  min_n <span class="op">=</span> <span class="fl">25</span>,</span>
-<span>  verbosity <span class="op">=</span> <span class="st">"minimal"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>This generates:</p>
-<ul>
-<li>Drug and drug-class matrices for all feature types (genes, proteins,
-domains, struct)</li>
-<li>Year-stratified and country-stratified matrices</li>
-<li>Leave-one-out (LOO) matrices for temporal/geographic holdouts</li>
-<li>Multi-drug resistance (MDR) matrices</li>
-</ul>
-<p>For classical train/validation/test splits instead of
-cross-validation:</p>
+<p><code><a href="../reference/generateMLInputs.html">generateMLInputs()</a></code> reads the bug-level DuckDB (metadata
++ feature parquets) and writes one long-format sparse parquet per drug ×
+feature × encoding combination into <code>out_path/matrix/</code>. With
+<code>stratify_by</code>, it additionally writes year- or
+country-stratified matrices into <code>matrix_year/</code> or
+<code>matrix_country/</code>.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 70% train, 15% validation, 15% test</span></span>
-<span><span class="fu"><a href="../reference/generateMLInputs.html">generateMLInputs</a></span><span class="op">(</span></span>
-<span>  parquet_duckdb_path <span class="op">=</span> <span class="st">"results/Sfl_parquet.duckdb"</span>,</span>
-<span>  out_path <span class="op">=</span> <span class="st">"results/"</span>,</span>
-<span>  n_fold <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.15</span><span class="op">)</span>,</span>
-<span>  verbosity <span class="op">=</span> <span class="st">"debug"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>Use <code><a href="../reference/skipImbalancedMatrix.html">skipImbalancedMatrix()</a></code> to check if a drug-bug
-combination has sufficient samples:</p>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/generateMLInputs.html">generateMLInputs</a></span><span class="op">(</span></span>
+<span>  parquet_duckdb_path <span class="op">=</span> <span class="va">fixture</span>,</span>
+<span>  out_path            <span class="op">=</span> <span class="va">out_dir</span>,</span>
+<span>  n_fold              <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  split               <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
+<span>  min_n               <span class="op">=</span> <span class="fl">25</span>,</span>
+<span>  verbosity           <span class="op">=</span> <span class="st">"minimal"</span></span>
+<span><span class="op">)</span></span>
+<span><span class="co">#&gt; Selected mode: CV (n_fold = 5), train = 1, val = 0, test = 0</span></span>
+<span><span class="co">#&gt; Matrix output directory: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year</span></span>
+<span><span class="co">#&gt; Connected to DuckDB for bug: Sfl</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: FOX_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: TET_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CRO_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: FEP_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: TMP_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_TMP_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: GEN_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: AMP_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AMP_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: AMX-CLA_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CAZ_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: SMX_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CRO_2010-2014</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: NAL_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CIP_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_CIP_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CTX_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CHL_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: MEM_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: AZM_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_year_AZM_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_year: CST_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: PEN_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_PEN_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: TMD_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_TMD_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: SUL_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: AMG_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: CEP_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: AMF_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: POL_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: FLQ_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_FLQ_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: PEN-BLI_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: TET_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: CAR_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: QUI_2015-2019</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: MAC_2015-2019</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_year/Sfl_drug_class_year_MAC_2015-2019_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_year: CEP_2010-2014</span></span>
+<span><span class="co">#&gt; All LOO matrices generated and saved.</span></span>
+<span><span class="co">#&gt; Matrix output directory: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country</span></span>
+<span><span class="co">#&gt; Connected to DuckDB for bug: Sfl</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: NAL_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CIP_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CTX_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CHL_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: MEM_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CRO_AUS</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CRO_THA</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: FEP_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: TMP_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: GEN_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: AMP_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AMP_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: AMP_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: AMX-CLA_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CAZ_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: SMX_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: TMP_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_TMP_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: GEN_AUS</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: FOX_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: TET_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CIP_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_CIP_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: MEM_AUS</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: AZM_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_country_AZM_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_country: CST_THA</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: QUI_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: FLQ_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_FLQ_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: CAR_AUS</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: PEN_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: TMD_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: SUL_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: AMG_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: CEP_AUS</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: POL_THA</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: CEP_THA</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: CEP_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: AMF_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: PEN_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_PEN_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: TMD_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_TMD_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: AMG_AUS</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: FLQ_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: PEN-BLI_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: TET_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: CAR_PRT</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class_country: MAC_AUS</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix_country/Sfl_drug_class_country_MAC_AUS_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; All LOO matrices generated and saved.</span></span>
+<span><span class="co">#&gt; Matrix output directory: /tmp/RtmpaDp8kK/amRml_vignette/matrix</span></span>
+<span><span class="co">#&gt; Connected to DuckDB for bug: Sfl</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: NAL</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: CIP</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CIP_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: GEN</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: CRO</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_CRO_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: AMP</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AMP_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: AMX-CLA</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: TMP</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_TMP_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: SXZ</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: AZM</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_AZM_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: CAZ</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: TET</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: CHL</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: TMP-SMX</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: CST</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: CTX</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: FOX</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: FEP</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: SMX</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug: MEM</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: SUL</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: TMD-SUL</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: MAC</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_MAC_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: POL</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: AMF</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: FLQ</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_FLQ_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: PEN</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_PEN_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: PEN-BLI</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: CEP</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_CEP_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: TET</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: TMD</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported matrix: /tmp/RtmpaDp8kK/amRml_vignette/matrix/Sfl_drug_class_TMD_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: AMG</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: CAR</span></span>
+<span><span class="co">#&gt; Building ML matrices for drug_class: QUI</span></span>
+<span><span class="co">#&gt; Building MDR matrices for classes: PEN, PEN_TMD, TMD_MAC_PEN, TMD_PEN, TMD_PEN_MAC</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_genes_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_genes_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_proteins_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_proteins_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_domains_counts_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_domains_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; Exported MDR matrix: /tmp/RtmpaDp8kK/amRml_vignette/MDR_matrix/Sfl_MDR_resistant_classes_struct_binary_sparse.parquet</span></span>
+<span><span class="co">#&gt; The MDR matrix has been generated and saved.</span></span>
+<span><span class="co">#&gt; All matrices generated and saved.</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">out_dir</span>, <span class="st">"matrix"</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span>
+<span><span class="co">#&gt; [1] "Sfl_drug_AMP_domains_binary_sparse.parquet" </span></span>
+<span><span class="co">#&gt; [2] "Sfl_drug_AMP_domains_counts_sparse.parquet" </span></span>
+<span><span class="co">#&gt; [3] "Sfl_drug_AMP_genes_binary_sparse.parquet"   </span></span>
+<span><span class="co">#&gt; [4] "Sfl_drug_AMP_genes_counts_sparse.parquet"   </span></span>
+<span><span class="co">#&gt; [5] "Sfl_drug_AMP_proteins_binary_sparse.parquet"</span></span></code></pre></div>
+<p>For a classical train/validation/test split instead of
+cross-validation, set <code>n_fold = NULL</code> and pass a length-2
+<code>split</code> of <code>c(train_prop, val_prop)</code>; the test
+proportion is the remainder.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">skip</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/skipImbalancedMatrix.html">skipImbalancedMatrix</a></span><span class="op">(</span></span>
-<span>  genome_ids <span class="op">=</span> <span class="va">genome_ids</span>,</span>
-<span>  phenotype_counts <span class="op">=</span> <span class="va">phenotype_counts</span>,</span>
-<span>  n_fold <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  min_total_obs <span class="op">=</span> <span class="fl">40</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/generateMLInputs.html">generateMLInputs</a></span><span class="op">(</span></span>
+<span>  parquet_duckdb_path <span class="op">=</span> <span class="va">fixture</span>,</span>
+<span>  out_path            <span class="op">=</span> <span class="va">out_dir</span>,</span>
+<span>  n_fold              <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  split               <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.7</span>, <span class="fl">0.15</span><span class="op">)</span>,</span>
+<span>  verbosity           <span class="op">=</span> <span class="st">"debug"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="loading-ml-matrices">Loading ML matrices<a class="anchor" aria-label="anchor" href="#loading-ml-matrices"></a>
+<h2 id="loading-a-single-matrix">Loading a single matrix<a class="anchor" aria-label="anchor" href="#loading-a-single-matrix"></a>
 </h2>
-<p>The package expects Parquet files in long (sparse) format with these
+<p>The generated parquets are long-format sparse tibbles with these
 columns:</p>
 <table class="table">
 <thead><tr class="header">
@@ -163,53 +550,82 @@ columns:</p>
 </tr>
 <tr class="odd">
 <td><code>value</code></td>
-<td>Binary presence/absence (0 or 1) or count</td>
+<td>Binary presence/absence (0/1) or count</td>
 </tr>
 <tr class="even">
 <td><code>genome_drug.resistant_phenotype</code></td>
-<td>“Resistant” or “Susceptible”</td>
+<td>
+<code>"Resistant"</code> or <code>"Susceptible"</code>
+</td>
 </tr>
 </tbody>
 </table>
-<p><code><a href="../reference/loadMLInputTibble.html">loadMLInputTibble()</a></code> converts this to wide format (one
-row per genome, one column per feature) for ML.</p>
+<p><code><a href="../reference/loadMLInputTibble.html">loadMLInputTibble()</a></code> converts one of them to wide format
+(one row per genome, one column per feature) ready for ML.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Load a generated matrix</span></span>
-<span><span class="va">ml_tibble</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/loadMLInputTibble.html">loadMLInputTibble</a></span><span class="op">(</span></span>
-<span>  parquet_path <span class="op">=</span> <span class="st">"results/matrix/Sfl_drug_AMP_domains_binary_sparse.parquet"</span></span>
+<code class="sourceCode R"><span><span class="va">matrix_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span></span>
+<span>  <span class="va">out_dir</span>, <span class="st">"matrix"</span>, <span class="st">"Sfl_drug_AMP_genes_binary_sparse.parquet"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Check dimensions</span></span>
+<span><span class="va">ml_tibble</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/loadMLInputTibble.html">loadMLInputTibble</a></span><span class="op">(</span><span class="va">matrix_path</span><span class="op">)</span></span>
 <span><span class="va">n_features</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getNumFeat.html">getNumFeat</a></span><span class="op">(</span><span class="va">ml_tibble</span><span class="op">)</span></span>
-<span><span class="va">target_var</span> <span class="op">&lt;-</span> <span class="fu">getTargetVarName</span><span class="op">(</span><span class="va">ml_tibble</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">target_var</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/dot-getTargetVarName.html">.getTargetVarName</a></span><span class="op">(</span><span class="va">ml_tibble</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>n_features <span class="op">=</span> <span class="va">n_features</span>, target_var <span class="op">=</span> <span class="va">target_var</span><span class="op">)</span></span>
+<span><span class="co">#&gt; $n_features</span></span>
+<span><span class="co">#&gt; [1] 6946</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $target_var</span></span>
+<span><span class="co">#&gt; genome_drug.resistant_phenotype</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="main-pipeline">Main pipeline<a class="anchor" aria-label="anchor" href="#main-pipeline"></a>
+<h2 id="per-matrix-pipeline">Per-matrix pipeline<a class="anchor" aria-label="anchor" href="#per-matrix-pipeline"></a>
 </h2>
-<p>The primary entry point is <code><a href="../reference/runMLPipeline.html">runMLPipeline()</a></code>, which
-orchestrates the entire ML workflow:</p>
+<p><code><a href="../reference/runMLPipeline.html">runMLPipeline()</a></code> runs the train/tune/fit/predict pipeline
+on a single matrix in memory. Use it to iterate on one drug-feature
+combo before scaling to all of them.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runMLPipeline.html">runMLPipeline</a></span><span class="op">(</span></span>
-<span>  ml_input_tibble <span class="op">=</span> <span class="va">ml_tibble</span>,</span>
-<span>  model <span class="op">=</span> <span class="st">"LR"</span>,</span>
-<span>  split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.2</span><span class="op">)</span>,</span>
-<span>  n_fold <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  n_top_feats <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>  ml_input_tibble    <span class="op">=</span> <span class="va">ml_tibble</span>,</span>
+<span>  model              <span class="op">=</span> <span class="st">"LR"</span>,</span>
+<span>  split              <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
+<span>  n_fold             <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  n_top_feats        <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>  penalty_vec        <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">3</span>, <span class="op">-</span><span class="fl">1</span><span class="op">)</span>,</span>
+<span>  mix_vec            <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  select_best_metric <span class="op">=</span> <span class="st">"mcc"</span>,</span>
-<span>  return_fit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  return_pred <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  return_fit         <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  return_pred        <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  verbose            <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning in .calculateLog2APOP(test_data_plus_predictions): Classes are</span></span>
+<span><span class="co">#&gt; imbalanced toward the resistant phenotype. Calculation of log2(AUPRC/prior) may</span></span>
+<span><span class="co">#&gt; be inappropriate.</span></span>
 <span></span>
-<span><span class="co"># View results</span></span>
 <span><span class="va">results</span><span class="op">$</span><span class="va">performance_tibble</span></span>
-<span><span class="va">results</span><span class="op">$</span><span class="va">top_feat_tibble</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 18</span></span></span>
+<span><span class="co">#&gt;   num_obs res_prop n_feat model train_prop val_prop lower_prop_vi_top_feats</span></span>
+<span><span class="co">#&gt;     <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>                   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span>     331     0.89   <span style="text-decoration: underline;">6</span>946 LR             1        0                       0</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># ℹ 11 more variables: upper_prop_vi_top_feats &lt;dbl&gt;, n_feats_returned &lt;int&gt;,</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;">#   n_fold &lt;dbl&gt;, fit_penalty &lt;dbl&gt;, fit_mixture &lt;dbl&gt;, nmcc &lt;dbl&gt;,</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;">#   log2_apop &lt;dbl&gt;, f1 &lt;dbl&gt;, bal_acc &lt;dbl&gt;, run_time_sec &lt;dbl&gt;, date &lt;chr&gt;</span></span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">top_feat_tibble</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 3</span></span></span>
+<span><span class="co">#&gt;   Variable   Importance Sign </span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> group_8463      1.16  NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> group_8464      0.599 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> group_6726      0.282 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> group_8320      0.251 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> group_7233      0.233 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> group_8372      0.231 NEG</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="output-structure">Output structure<a class="anchor" aria-label="anchor" href="#output-structure"></a>
 </h3>
-<p><code><a href="../reference/runMLPipeline.html">runMLPipeline()</a></code> returns a list with:</p>
-<p><strong><code>performance_tibble</code></strong> - model performance
-metrics:</p>
+<p><code><a href="../reference/runMLPipeline.html">runMLPipeline()</a></code> returns a named list:</p>
+<p><strong><code>performance_tibble</code></strong> — one row of model
+performance metrics:</p>
 <table class="table">
 <thead><tr class="header">
 <th>Column</th>
@@ -230,7 +646,7 @@ metrics:</p>
 </tr>
 <tr class="even">
 <td><code>model</code></td>
-<td>Model type (LR)</td>
+<td>Model type (<code>"LR"</code>)</td>
 </tr>
 <tr class="odd">
 <td>
@@ -257,7 +673,7 @@ metrics:</p>
 </tr>
 </tbody>
 </table>
-<p><strong><code>top_feat_tibble</code></strong> - ranked feature
+<p><strong><code>top_feat_tibble</code></strong> — ranked feature
 importance:</p>
 <table class="table">
 <colgroup>
@@ -279,7 +695,8 @@ importance:</p>
 </tr>
 <tr class="odd">
 <td><code>Sign</code></td>
-<td>Direction of effect (POS = resistance, NEG = susceptibility)</td>
+<td>Direction of effect (<code>POS</code> = associated with resistance,
+<code>NEG</code> = with susceptibility)</td>
 </tr>
 </tbody>
 </table>
@@ -287,11 +704,11 @@ importance:</p>
 TRUE):</p>
 <ul>
 <li>
-<code>tune_res</code> - tuning results from grid search</li>
+<code>tune_res</code> — tuning results from grid search</li>
 <li>
-<code>fit</code> - fitted model workflow object</li>
+<code>fit</code> — the fitted workflow object</li>
 <li>
-<code>pred</code> - predictions with <code>.pred_class</code>,
+<code>pred</code> — predictions with <code>.pred_class</code>,
 <code>.pred_Resistant</code>, <code>.pred_Susceptible</code>
 </li>
 </ul>
@@ -300,260 +717,256 @@ TRUE):</p>
 <div class="section level2">
 <h2 id="step-by-step-model-building">Step-by-step model building<a class="anchor" aria-label="anchor" href="#step-by-step-model-building"></a>
 </h2>
-<p>For more control, use the individual tidymodels-based functions:</p>
+<p>The builders below are what <code><a href="../reference/runMLPipeline.html">runMLPipeline()</a></code> chains
+internally. Call them directly when you need control over any individual
+step.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Split data</span></span>
-<span><span class="va">data_split</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/splitMLInputTibble.html">splitMLInputTibble</a></span><span class="op">(</span><span class="va">ml_tibble</span>, split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.2</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rsample.tidymodels.org" class="external-link">rsample</a></span><span class="op">)</span></span>
-<span><span class="va">train_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rsample.tidymodels.org/reference/initial_split.html" class="external-link">training</a></span><span class="op">(</span><span class="va">data_split</span><span class="op">)</span></span>
-<span><span class="va">test_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rsample.tidymodels.org/reference/initial_split.html" class="external-link">testing</a></span><span class="op">(</span><span class="va">data_split</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">data_split</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/splitMLInputTibble.html">splitMLInputTibble</a></span><span class="op">(</span><span class="va">ml_tibble</span>, split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.2</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">train_data</span> <span class="op">&lt;-</span> <span class="fu">rsample</span><span class="fu">::</span><span class="fu"><a href="https://rsample.tidymodels.org/reference/initial_split.html" class="external-link">training</a></span><span class="op">(</span><span class="va">data_split</span><span class="op">)</span></span>
+<span><span class="va">test_data</span> <span class="op">&lt;-</span> <span class="fu">rsample</span><span class="fu">::</span><span class="fu"><a href="https://rsample.tidymodels.org/reference/initial_split.html" class="external-link">testing</a></span><span class="op">(</span><span class="va">data_split</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Build recipe (preprocessing)</span></span>
-<span><span class="va">recipe</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildRecipe.html">buildRecipe</a></span><span class="op">(</span><span class="va">train_data</span>, use_pca <span class="op">=</span> <span class="cn">FALSE</span>, pca_threshold <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">recipe</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildRecipe.html">buildRecipe</a></span><span class="op">(</span><span class="va">train_data</span>, use_pca <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">lr_mod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildLRModel.html">buildLRModel</a></span><span class="op">(</span>multi_class <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">wflow</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildWflow.html">buildWflow</a></span><span class="op">(</span><span class="va">lr_mod</span>, <span class="va">recipe</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Build logistic regression model</span></span>
-<span><span class="va">lr_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildLRModel.html">buildLRModel</a></span><span class="op">(</span>multi_class <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Build workflow</span></span>
-<span><span class="va">wflow</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildWflow.html">buildWflow</a></span><span class="op">(</span><span class="va">lr_model</span>, <span class="va">recipe</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Build tuning grid</span></span>
 <span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buildTuningGrid.html">buildTuningGrid</a></span><span class="op">(</span></span>
-<span>  model <span class="op">=</span> <span class="st">"LR"</span>,</span>
-<span>  penalty_vec <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">4</span>, <span class="op">-</span><span class="fl">1</span>, length.out <span class="op">=</span> <span class="fl">10</span><span class="op">)</span>,</span>
-<span>  mix_vec <span class="op">=</span> <span class="fl">0</span><span class="op">:</span><span class="fl">5</span> <span class="op">/</span> <span class="fl">5</span></span>
+<span>  model       <span class="op">=</span> <span class="st">"LR"</span>,</span>
+<span>  penalty_vec <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">3</span>, <span class="op">-</span><span class="fl">1</span><span class="op">)</span>,</span>
+<span>  mix_vec     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Tune hyperparameters</span></span>
-<span><span class="va">tune_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tuneGrid.html">tuneGrid</a></span><span class="op">(</span><span class="va">wflow</span>, <span class="va">data_split</span>, <span class="va">grid</span>, n_fold <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Select and fit best model</span></span>
+<code class="sourceCode R"><span><span class="va">tune_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tuneGrid.html">tuneGrid</a></span><span class="op">(</span><span class="va">wflow</span>, <span class="va">data_split</span>, <span class="va">grid</span>, n_fold <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="va">best_wflow</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/selectBestModel.html">selectBestModel</a></span><span class="op">(</span><span class="va">tune_res</span>, <span class="va">wflow</span>, select_best_metric <span class="op">=</span> <span class="st">"mcc"</span><span class="op">)</span></span>
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitBestModel.html">fitBestModel</a></span><span class="op">(</span><span class="va">best_wflow</span>, <span class="va">train_data</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Get fitted hyperparameters</span></span>
-<span><span class="va">fit_hps</span> <span class="op">&lt;-</span> <span class="fu">getFitHps</span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Make predictions</span></span>
-<span><span class="va">predictions</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, <span class="va">test_data</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">preds</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/predictML.html">predictML</a></span><span class="op">(</span><span class="va">fit</span>, <span class="va">test_data</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="performance-metrics">Performance metrics<a class="anchor" aria-label="anchor" href="#performance-metrics"></a>
 </h2>
+<p><code><a href="../reference/calculateEvalMets.html">calculateEvalMets()</a></code> returns all of nMCC, F1, balanced
+accuracy, AUPRC, log2(AUPRC/prior), sensitivity, and specificity from a
+tibble of predictions + truth.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Individual metrics</span></span>
-<span><span class="va">nmcc</span> <span class="op">&lt;-</span> <span class="fu">calculatenMCC</span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span> <span class="co"># Normalized MCC (0-1 scale)</span></span>
-<span><span class="va">f1</span> <span class="op">&lt;-</span> <span class="fu">calculateF1</span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span> <span class="co"># F1 score</span></span>
-<span><span class="va">bal_acc</span> <span class="op">&lt;-</span> <span class="fu">calculateBalAcc</span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span> <span class="co"># Balanced accuracy</span></span>
-<span><span class="va">auprc</span> <span class="op">&lt;-</span> <span class="fu">calculateAUPRC</span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span> <span class="co"># Area under PR curve</span></span>
-<span><span class="va">log2_apop</span> <span class="op">&lt;-</span> <span class="fu">calculateLog2APOP</span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span> <span class="co"># log2(AUPRC/prior)</span></span>
-<span></span>
-<span><span class="co"># All metrics at once</span></span>
-<span><span class="va">all_metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calculateEvalMets.html">calculateEvalMets</a></span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Confusion matrix</span></span>
-<span><span class="va">conf_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getConfusionMatrix.html">getConfusionMatrix</a></span><span class="op">(</span><span class="va">predictions</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<colgroup>
-<col width="25%">
-<col width="32%">
-<col width="41%">
-</colgroup>
-<thead><tr class="header">
-<th>Metric</th>
-<th>Function</th>
-<th>Description</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td>nMCC</td>
-<td><code>calculatenMCC()</code></td>
-<td>Normalized Matthews correlation coefficient (0-1)</td>
-</tr>
-<tr class="even">
-<td>F1</td>
-<td><code>calculateF1()</code></td>
-<td>Harmonic mean of precision and recall</td>
-</tr>
-<tr class="odd">
-<td>Balanced accuracy</td>
-<td><code>calculateBalAcc()</code></td>
-<td>Average of sensitivity and specificity</td>
-</tr>
-<tr class="even">
-<td>AUPRC</td>
-<td><code>calculateAUPRC()</code></td>
-<td>Area under precision-recall curve</td>
-</tr>
-<tr class="odd">
-<td>log2(AUPRC/prior)</td>
-<td><code>calculateLog2APOP()</code></td>
-<td>Class-imbalance adjusted AUPRC</td>
-</tr>
-</tbody>
-</table>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/calculateEvalMets.html">calculateEvalMets</a></span><span class="op">(</span><span class="va">preds</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning in .calculateLog2APOP(test_data_plus_predictions): Classes are</span></span>
+<span><span class="co">#&gt; imbalanced toward the resistant phenotype. Calculation of log2(AUPRC/prior) may</span></span>
+<span><span class="co">#&gt; be inappropriate.</span></span>
+<span><span class="co">#&gt; [1] 0.99 1.00 0.99 0.96 0.16</span></span>
+<span><span class="fu"><a href="../reference/getConfusionMatrix.html">getConfusionMatrix</a></span><span class="op">(</span><span class="va">preds</span><span class="op">)</span></span>
+<span><span class="co">#&gt;              Truth</span></span>
+<span><span class="co">#&gt; Prediction    Resistant Susceptible</span></span>
+<span><span class="co">#&gt;   Resistant          59           0</span></span>
+<span><span class="co">#&gt;   Susceptible         1           7</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="feature-importance">Feature importance<a class="anchor" aria-label="anchor" href="#feature-importance"></a>
 </h2>
+<p><code><a href="../reference/extractTopFeats.html">extractTopFeats()</a></code> ranks features by absolute coefficient
+(for LR). Use <code>n_top_feats</code> for a fixed count or
+<code>prop_vi_top_feats</code> for a percentile range.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Extract top features from fitted model by number</span></span>
-<span><span class="va">top_features</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/extractTopFeats.html">extractTopFeats</a></span><span class="op">(</span><span class="va">fit</span>, n_top_feats <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Or by proportion of variable importance</span></span>
-<span><span class="va">top_features</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/extractTopFeats.html">extractTopFeats</a></span><span class="op">(</span><span class="va">fit</span>, prop_vi_top_feats <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Columns: Variable, Importance, Sign</span></span>
-<span><span class="co"># Positive Sign = associated with resistance</span></span>
-<span><span class="co"># Negative Sign = associated with susceptibility</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="iterative-feature-elimination-ife">Iterative feature elimination (IFE)<a class="anchor" aria-label="anchor" href="#iterative-feature-elimination-ife"></a>
-</h2>
-<p>IFE iteratively removes top features to identify the most predictive
-subset:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">ife_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runIFE.html">runIFE</a></span><span class="op">(</span></span>
-<span>  <span class="va">ml_tibble</span>,</span>
-<span>  by_num <span class="op">=</span> <span class="cn">TRUE</span>, <span class="co"># Remove by number of features</span></span>
-<span>  by_vi <span class="op">=</span> <span class="cn">FALSE</span>, <span class="co"># Or remove by variable importance</span></span>
-<span>  percent_removal_vec <span class="op">=</span> <span class="fl">10</span> <span class="op">*</span> <span class="fl">1</span><span class="op">:</span><span class="fl">9</span>, <span class="co"># Remove 10%, 20%, ..., 90%</span></span>
-<span>  mix_vec <span class="op">=</span> <span class="fl">0</span>, <span class="co"># L2 regularization for IFE</span></span>
-<span>  return_feats <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Results include nMCC at each iteration</span></span>
-<span><span class="va">ife_results</span><span class="op">$</span><span class="va">ife_performance_tibble</span></span>
-<span><span class="va">ife_results</span><span class="op">$</span><span class="va">feats_removed</span></span>
-<span></span>
-<span><span class="co"># Remove specific features manually</span></span>
-<span><span class="va">ml_tibble_reduced</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/removeTopFeats.html">removeTopFeats</a></span><span class="op">(</span><span class="va">ml_tibble</span>, <span class="va">top_features</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">top_features</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/extractTopFeats.html">extractTopFeats</a></span><span class="op">(</span><span class="va">fit</span>, n_top_feats <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">top_features</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 3</span></span></span>
+<span><span class="co">#&gt;   Variable   Importance Sign </span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> group_8463      1.06  NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> group_8464      0.553 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> group_6726      0.283 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> group_8320      0.269 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> group_8372      0.248 NEG  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> group_7233      0.240 NEG</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="visualization">Visualization<a class="anchor" aria-label="anchor" href="#visualization"></a>
 </h2>
-<div class="section level3">
-<h3 id="precision-recall-curve">Precision-recall curve<a class="anchor" aria-label="anchor" href="#precision-recall-curve"></a>
-</h3>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plotPRC.html">plotPRC</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">pred</span><span class="op">)</span></span></code></pre></div>
+<p><img src="intro_files/figure-html/plot-prc-1.png" class="r-plt" alt="" width="480"></p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">test_data_plus_predictions</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_tsv</a></span><span class="op">(</span><span class="va">results</span> <span class="op">/</span> <span class="va">ML_pred</span> <span class="op">/</span> <span class="va">Sfl_drug_AMP_domains_binary_prediction.tsv</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/plotPRC.html">plotPRC</a></span><span class="op">(</span><span class="va">test_data_plus_predictions</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="roc-curve">ROC curve<a class="anchor" aria-label="anchor" href="#roc-curve"></a>
-</h3>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plotTopFeatsVI.html">plotTopFeatsVI</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">fit</span>, n_top_feats <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></code></pre></div>
+<p><img src="intro_files/figure-html/plot-vi-1.png" class="r-plt" alt="" width="480"></p>
+<p>For a baseline comparison against random labels, fit a shuffled-label
+pipeline and compare:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">test_data_plus_predictions</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_tsv</a></span><span class="op">(</span><span class="va">results</span> <span class="op">/</span> <span class="va">ML_pred</span> <span class="op">/</span> <span class="va">Sfl_drug_AMP_domains_binary_prediction.tsv</span><span class="op">)</span></span>
-<span><span class="fu">plotROC</span><span class="op">(</span><span class="va">test_data_plus_predictions</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="variable-importance-plot">Variable importance plot<a class="anchor" aria-label="anchor" href="#variable-importance-plot"></a>
-</h3>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">topfeat</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_tsv</a></span><span class="op">(</span><span class="va">results</span> <span class="op">/</span> <span class="va">ML_top_features</span> <span class="op">/</span> <span class="va">Sfl_drug_AMP_domains_binary_top_features.tsv</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/plotTopFeatsVI.html">plotTopFeatsVI</a></span><span class="op">(</span><span class="va">topfeat</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="baseline-comparison-barplot">Baseline comparison barplot<a class="anchor" aria-label="anchor" href="#baseline-comparison-barplot"></a>
-</h3>
-<p>non_shuffled_label_results Output of
-<code>runMLPipeline(shuffle_labels = FALSE)</code>
-shuffled_label_results Output of
-<code>runMLPipeline(shuffle_labels = TRUE)</code></p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Run with shuffled labels for baseline</span></span>
-<span><span class="va">baseline_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runMLPipeline.html">runMLPipeline</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="va">shuffled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runMLPipeline.html">runMLPipeline</a></span><span class="op">(</span></span>
 <span>  ml_input_tibble <span class="op">=</span> <span class="va">ml_tibble</span>,</span>
-<span>  model <span class="op">=</span> <span class="st">"LR"</span>,</span>
-<span>  split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.2</span><span class="op">)</span>,</span>
-<span>  shuffle_labels <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  model           <span class="op">=</span> <span class="st">"LR"</span>,</span>
+<span>  split           <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
+<span>  n_fold          <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  shuffle_labels  <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  return_pred     <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span></span>
-<span><span class="co"># Compare performance</span></span>
-<span><span class="fu">getBaselineComparisonBarplot</span><span class="op">(</span></span>
+<span><span class="fu"><a href="../reference/plotBaselineComparison.html">plotBaselineComparison</a></span><span class="op">(</span></span>
 <span>  non_shuffled_label_results <span class="op">=</span> <span class="va">results</span><span class="op">$</span><span class="va">performance_tibble</span>,</span>
-<span>  shuffled_label_results <span class="op">=</span> <span class="va">baseline_results</span><span class="op">$</span><span class="va">performance_tibble</span></span>
+<span>  shuffled_label_results     <span class="op">=</span> <span class="va">shuffled</span><span class="op">$</span><span class="va">performance_tibble</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
-</div>
 <div class="section level2">
-<h2 id="fishers-exact-tests-baseline-comparison">Fisher’s exact tests (baseline comparison)<a class="anchor" aria-label="anchor" href="#fishers-exact-tests-baseline-comparison"></a>
+<h2 id="iterative-feature-elimination">Iterative feature elimination<a class="anchor" aria-label="anchor" href="#iterative-feature-elimination"></a>
 </h2>
-<p>As a non-ML baseline, run Fisher’s exact tests with multiple testing
-correction:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Complete Fisher pipeline</span></span>
-<span><span class="va">fisher_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runFishers.html">runFishers</a></span><span class="op">(</span></span>
-<span>  matrix_path <span class="op">=</span> <span class="st">"results/matrix/Cje_drug_CIP_genes_binary_sparse.parquet"</span>,</span>
-<span>  Q <span class="op">=</span> <span class="fl">0.05</span>,</span>
-<span>  alternative <span class="op">=</span> <span class="st">"two.sided"</span>,</span>
-<span>  susceptible_label <span class="op">=</span> <span class="st">"Susceptible"</span>,</span>
-<span>  resistant_label <span class="op">=</span> <span class="st">"Resistant"</span></span>
+<p><code><a href="../reference/runIFE.html">runIFE()</a></code> retrains the model after iteratively removing
+top-ranked features, helping identify the minimal predictive subset. It
+runs the pipeline once per percentile in
+<code>percent_removal_vec</code></p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ife_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runIFE.html">runIFE</a></span><span class="op">(</span></span>
+<span>  <span class="va">ml_tibble</span>,</span>
+<span>  by_num              <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  by_vi               <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  percent_removal_vec <span class="op">=</span> <span class="fl">10</span> <span class="op">*</span> <span class="fl">1</span><span class="op">:</span><span class="fl">9</span>,</span>
+<span>  mix_vec             <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  return_feats        <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  verbose             <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Or step-by-step:</span></span>
-<span><span class="va">encoded</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/encodePhenotype.html">encodePhenotype</a></span><span class="op">(</span><span class="va">ml_tibble</span><span class="op">)</span></span>
-<span><span class="va">fisher_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runFisherTests.html">runFisherTests</a></span><span class="op">(</span><span class="va">encoded</span><span class="op">$</span><span class="va">df</span>, <span class="va">encoded</span><span class="op">$</span><span class="va">target</span>, alternative <span class="op">=</span> <span class="st">"two.sided"</span><span class="op">)</span></span>
-<span><span class="va">fisher_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/applyBenjaminiHochberg.html">applyBenjaminiHochberg</a></span><span class="op">(</span><span class="va">fisher_res</span>, Q <span class="op">=</span> <span class="fl">0.05</span><span class="op">)</span></span>
-<span><span class="va">fisher_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeFeatureFreq.html">computeFeatureFreq</a></span><span class="op">(</span><span class="va">encoded</span><span class="op">$</span><span class="va">df</span>, <span class="va">fisher_res</span>, <span class="va">encoded</span><span class="op">$</span><span class="va">target</span><span class="op">)</span></span></code></pre></div>
-<div class="section level3">
-<h3 id="plot-fishers-results">Plot Fisher’s results<a class="anchor" aria-label="anchor" href="#plot-fishers-results"></a>
-</h3>
-<p>You can label the top N features to highlight the strongest hits
-(default is 5) or change the BH-adjusted p-value threshold with the
-alpha argument</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plotFishers.html">plotFishers</a></span><span class="op">(</span><span class="va">fisher_results</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/plotFishers.html">plotFishers</a></span><span class="op">(</span><span class="va">fisher_results</span>, alpha <span class="op">=</span> <span class="fl">0.01</span>, label_top_n <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
-</div>
+<span><span class="va">ife_results</span><span class="op">$</span><span class="va">ife_performance_tibble</span></span>
+<span><span class="va">ife_results</span><span class="op">$</span><span class="va">feats_removed</span></span></code></pre></div>
+<p><code><a href="../reference/removeTopFeats.html">removeTopFeats()</a></code> strips a given set of features from a
+matrix tibble if you want to do this manually:</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">trimmed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/removeTopFeats.html">removeTopFeats</a></span><span class="op">(</span><span class="va">ml_tibble</span>, <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">top_features</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">ml_tibble</span><span class="op">)</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">trimmed</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 5</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="wrapper-to-run-all-models">Wrapper to run all models<a class="anchor" aria-label="anchor" href="#wrapper-to-run-all-models"></a>
+<h2 id="fishers-exact-tests-non-ml-baseline">Fisher’s exact tests (non-ML baseline)<a class="anchor" aria-label="anchor" href="#fishers-exact-tests-non-ml-baseline"></a>
 </h2>
-<p>Given a DuckDB file produced by <code>runDataProcessing()</code>, it:
-1. generates all ML feature matrices (drug, class, year, country, MDR,
-LOO) 2. creates all ML directory structures 3. prepares ML input lists
-for every mode 4. runs logistic regression ML models (standard +
-stratified + MDR) 5. saves performance metrics, fitted models,
-predictions, and top feature rankings</p>
+<p><code><a href="../reference/runFishers.html">runFishers()</a></code> runs a Fisher’s exact test of feature
+presence vs. phenotype for each feature, applies Benjamini–Hochberg
+correction, and computes per-class frequencies.</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fisher_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runFishers.html">runFishers</a></span><span class="op">(</span></span>
+<span>  matrix_path       <span class="op">=</span> <span class="va">matrix_path</span>,</span>
+<span>  Q                 <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>  alternative       <span class="op">=</span> <span class="st">"two.sided"</span>,</span>
+<span>  susceptible_label <span class="op">=</span> <span class="st">"Susceptible"</span>,</span>
+<span>  resistant_label   <span class="op">=</span> <span class="st">"Resistant"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">fisher_results</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 8</span></span></span>
+<span><span class="co">#&gt;   gene        p_value adj_p_value sig_after_bh alternative     Q</span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> group_8463 2.14<span style="color: #949494;">e</span><span style="color: #BB0000;">-32</span>    1.49<span style="color: #949494;">e</span><span style="color: #BB0000;">-28</span> TRUE         two.sided    0.05</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> group_8464 1.17<span style="color: #949494;">e</span><span style="color: #BB0000;">-26</span>    4.06<span style="color: #949494;">e</span><span style="color: #BB0000;">-23</span> TRUE         two.sided    0.05</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> group_6726 7.70<span style="color: #949494;">e</span><span style="color: #BB0000;">-23</span>    1.78<span style="color: #949494;">e</span><span style="color: #BB0000;">-19</span> TRUE         two.sided    0.05</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> group_6877 4.51<span style="color: #949494;">e</span><span style="color: #BB0000;">-21</span>    7.84<span style="color: #949494;">e</span><span style="color: #BB0000;">-18</span> TRUE         two.sided    0.05</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> group_7233 1.02<span style="color: #949494;">e</span><span style="color: #BB0000;">-20</span>    1.42<span style="color: #949494;">e</span><span style="color: #BB0000;">-17</span> TRUE         two.sided    0.05</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> group_6847 3.56<span style="color: #949494;">e</span><span style="color: #BB0000;">-20</span>    3.67<span style="color: #949494;">e</span><span style="color: #BB0000;">-17</span> TRUE         two.sided    0.05</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># ℹ 2 more variables: freq_susceptible_gene_pres &lt;dbl&gt;,</span></span></span>
+<span><span class="co">#&gt; <span style="color: #949494;">#   freq_resistant_gene_pres &lt;dbl&gt;</span></span></span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plotFishers.html">plotFishers</a></span><span class="op">(</span><span class="va">fisher_results</span>, alpha <span class="op">=</span> <span class="fl">0.05</span>, label_top_n <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
+<p><img src="intro_files/figure-html/plot-fishers-1.png" class="r-plt" alt="" width="480"></p>
+</div>
+<div class="section level2">
+<h2 id="training-all-models-with-runmlmodels">Training all models with <code>runMLmodels</code><a class="anchor" aria-label="anchor" href="#training-all-models-with-runmlmodels"></a>
+</h2>
+<p><code><a href="../reference/runMLmodels.html">runMLmodels()</a></code> trains a model on every matrix produced by
+<code><a href="../reference/generateMLInputs.html">generateMLInputs()</a></code> and writes performance TSVs into
+<code>out_path/ML_performance/</code>, predictions into
+<code>ML_pred/</code>, and top features into
+<code>ML_top_features/</code>. Takes over an hour on Sfl with default
+settings.</p>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/runModelingPipeline.html">runModelingPipeline</a></span><span class="op">(</span><span class="va">parquet_duckdb_path</span>,</span>
-<span>  threads <span class="op">=</span> <span class="fl">16</span>,</span>
-<span>  n_fold <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  min_n <span class="op">=</span> <span class="fl">25</span>,</span>
-<span>  prop_vi_top_feats <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span>,</span>
-<span>  pca_threshold <span class="op">=</span> <span class="fl">0.99</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/runMLmodels.html">runMLmodels</a></span><span class="op">(</span></span>
+<span>  path            <span class="op">=</span> <span class="va">out_dir</span>,</span>
+<span>  stratify_by     <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  LOO             <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  cross_test      <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  threads         <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span><span class="op">)</span>,</span>
+<span>  split           <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
+<span>  n_fold          <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  verbose         <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  return_pred     <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  use_saved_split <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p>Merge the performance and top features of each kind of models into a
-parquet that will serve as starting data for <code>amRshiny</code>
-package</p>
+</div>
+<div class="section level2">
+<h2 id="end-to-end-runmodelingpipeline">End-to-end: <code>runModelingPipeline</code><a class="anchor" aria-label="anchor" href="#end-to-end-runmodelingpipeline"></a>
+</h2>
+<p>For the full pipeline from a DuckDB to all outputs in one call:</p>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">buildPerformancePq</span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"results/ML_perf"</span>,</span>
-<span>  stratify_by <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  LOO <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  MDR <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  cross_test <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  out_parquet <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  compression <span class="op">=</span> <span class="st">"zstd"</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">buildTopFeatsPq</span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"results/ML_top_features"</span>,</span>
-<span>  stratify_by <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  LOO <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  MDR <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  cross_test <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  out_parquet <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  compression <span class="op">=</span> <span class="st">"zstd"</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/runModelingPipeline.html">runModelingPipeline</a></span><span class="op">(</span></span>
+<span>  parquet_duckdb_path <span class="op">=</span> <span class="va">fixture</span>,</span>
+<span>  threads             <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span><span class="op">)</span>,</span>
+<span>  n_fold              <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  split               <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>,</span>
+<span>  min_n               <span class="op">=</span> <span class="fl">25</span>,</span>
+<span>  prop_vi_top_feats   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  pca_threshold       <span class="op">=</span> <span class="fl">0.99</span>,</span>
+<span>  verbose             <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  use_saved_split     <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="session-info">Session info<a class="anchor" aria-label="anchor" href="#session-info"></a>
+</h2>
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; R version 4.6.0 (2026-04-24)</span></span>
+<span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>
+<span><span class="co">#&gt; Running under: Ubuntu 24.04.4 LTS</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Matrix products: default</span></span>
+<span><span class="co">#&gt; BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 </span></span>
+<span><span class="co">#&gt; LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; locale:</span></span>
+<span><span class="co">#&gt;  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       </span></span>
+<span><span class="co">#&gt;  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   </span></span>
+<span><span class="co">#&gt;  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          </span></span>
+<span><span class="co">#&gt; [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   </span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; time zone: UTC</span></span>
+<span><span class="co">#&gt; tzcode source: system (glibc)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; attached base packages:</span></span>
+<span><span class="co">#&gt; [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; other attached packages:</span></span>
+<span><span class="co">#&gt; [1] amRml_0.99.0     BiocStyle_2.40.0</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
+<span><span class="co">#&gt;   [1] DBI_1.3.0           rlang_1.2.0         magrittr_2.0.5     </span></span>
+<span><span class="co">#&gt;   [4] tailor_0.1.0        furrr_0.4.0         sgof_2.3.5         </span></span>
+<span><span class="co">#&gt;   [7] compiler_4.6.0      systemfonts_1.3.2   vctrs_0.7.3        </span></span>
+<span><span class="co">#&gt;  [10] stringr_1.6.0       tune_2.1.0          crayon_1.5.3       </span></span>
+<span><span class="co">#&gt;  [13] pkgconfig_2.0.3     shape_1.4.6.1       fastmap_1.2.0      </span></span>
+<span><span class="co">#&gt;  [16] labeling_0.4.3      utf8_1.2.6          rmarkdown_2.31     </span></span>
+<span><span class="co">#&gt;  [19] prodlim_2026.03.11  tzdb_0.5.0          ragg_1.5.2         </span></span>
+<span><span class="co">#&gt;  [22] purrr_1.2.2         bit_4.6.0           xfun_0.57          </span></span>
+<span><span class="co">#&gt;  [25] glmnet_5.0          cachem_1.1.0        jsonlite_2.0.0     </span></span>
+<span><span class="co">#&gt;  [28] recipes_1.3.3       vip_0.4.6           parallel_4.6.0     </span></span>
+<span><span class="co">#&gt;  [31] R6_2.6.1            bslib_0.11.0        stringi_1.8.7      </span></span>
+<span><span class="co">#&gt;  [34] rsample_1.3.2       RColorBrewer_1.1-3  parallelly_1.47.0  </span></span>
+<span><span class="co">#&gt;  [37] rpart_4.1.27        lubridate_1.9.5     jquerylib_0.1.4    </span></span>
+<span><span class="co">#&gt;  [40] Rcpp_1.1.1-1.1      bookdown_0.46       assertthat_0.2.1   </span></span>
+<span><span class="co">#&gt;  [43] dials_1.4.3         iterators_1.0.14    knitr_1.51         </span></span>
+<span><span class="co">#&gt;  [46] future.apply_1.20.2 poibin_1.6          readr_2.2.0        </span></span>
+<span><span class="co">#&gt;  [49] Matrix_1.7-5        splines_4.6.0       nnet_7.3-20        </span></span>
+<span><span class="co">#&gt;  [52] timechange_0.4.0    tidyselect_1.2.1    yaml_2.3.12        </span></span>
+<span><span class="co">#&gt;  [55] timeDate_4052.112   codetools_0.2-20    listenv_0.10.1     </span></span>
+<span><span class="co">#&gt;  [58] lattice_0.22-9      tibble_3.3.1        withr_3.0.2        </span></span>
+<span><span class="co">#&gt;  [61] S7_0.2.2            evaluate_1.0.5      future_1.70.0      </span></span>
+<span><span class="co">#&gt;  [64] desc_1.4.3          survival_3.8-6      pillar_1.11.1      </span></span>
+<span><span class="co">#&gt;  [67] BiocManager_1.30.27 foreach_1.5.2       generics_0.1.4     </span></span>
+<span><span class="co">#&gt;  [70] vroom_1.7.1         hms_1.1.4           ggplot2_4.0.3      </span></span>
+<span><span class="co">#&gt;  [73] scales_1.4.0        globals_0.19.1      class_7.3-23       </span></span>
+<span><span class="co">#&gt;  [76] glue_1.8.1          tools_4.6.0         data.table_1.18.4  </span></span>
+<span><span class="co">#&gt;  [79] gower_1.0.2         fs_2.1.0            grid_4.6.0         </span></span>
+<span><span class="co">#&gt;  [82] yardstick_1.4.0     tidyr_1.3.2         workflowsets_1.1.1 </span></span>
+<span><span class="co">#&gt;  [85] ipred_0.9-15        duckdb_1.5.2        cli_3.6.6          </span></span>
+<span><span class="co">#&gt;  [88] DiceDesign_1.10     textshaping_1.0.5   workflows_1.3.0    </span></span>
+<span><span class="co">#&gt;  [91] parsnip_1.6.0       lava_1.9.1          arrow_24.0.0       </span></span>
+<span><span class="co">#&gt;  [94] dplyr_1.2.1         gtable_0.3.6        sass_0.4.10        </span></span>
+<span><span class="co">#&gt;  [97] digest_0.6.39       ggrepel_0.9.8       farver_2.1.2       </span></span>
+<span><span class="co">#&gt; [100] htmltools_0.5.9     pkgdown_2.2.0       lifecycle_1.0.5    </span></span>
+<span><span class="co">#&gt; [103] hardhat_1.4.3       sparsevctrs_0.3.6   bit64_4.8.2        </span></span>
+<span><span class="co">#&gt; [106] MASS_7.3-65</span></span></code></pre></div>
 </div>
   </div>
 

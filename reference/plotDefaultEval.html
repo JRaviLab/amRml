@@ -80,22 +80,22 @@ of cross-validation folds, colored by model.</p>
 
 
 <dt id="arg-x-default-eval">x_default_eval<a class="anchor" aria-label="anchor" href="#arg-x-default-eval"></a></dt>
-<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">rlang::chr</a> x value of default evaluation plot: "train_prop"
+<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">chr</a> x value of default evaluation plot: "train_prop"
 or "n_fold"</p></dd>
 
 
 <dt id="arg-y-default-eval">y_default_eval<a class="anchor" aria-label="anchor" href="#arg-y-default-eval"></a></dt>
-<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">rlang::chr</a> y value of default evaluation plot. It can be
+<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">chr</a> y value of default evaluation plot. It can be
 "avg_runtime_sec" or one of the following performance metrics:
 "avg_f1_score", "avg_log2_apop", "avg_bal_acc", or "avg_nmcc"</p></dd>
 
 
 <dt id="arg-xlab">xlab<a class="anchor" aria-label="anchor" href="#arg-xlab"></a></dt>
-<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">rlang::chr</a> Label for x axis</p></dd>
+<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">chr</a> Label for x axis</p></dd>
 
 
 <dt id="arg-ylab">ylab<a class="anchor" aria-label="anchor" href="#arg-ylab"></a></dt>
-<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">rlang::chr</a> Label for y axis</p></dd>
+<dd><p><a href="https://rlang.r-lib.org/reference/vector-construction.html" class="external-link">chr</a> Label for y axis</p></dd>
 
 </dl></div>
     <div id="value">
@@ -104,6 +104,25 @@ or "n_fold"</p></dd>
 <code>train_prop</code> or <code>n_fold</code>), colored by model</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">default_eval</span> <span class="op">&lt;-</span> <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  train_prop      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.6</span>, <span class="fl">0.7</span>, <span class="fl">0.5</span>, <span class="fl">0.6</span>, <span class="fl">0.7</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  n_fold          <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">6</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  model           <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"LR"</span>, <span class="st">"RF"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  avg_f1_score    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.72</span>, <span class="fl">0.78</span>, <span class="fl">0.83</span>, <span class="fl">0.70</span>, <span class="fl">0.75</span>, <span class="fl">0.80</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">plotDefaultEval</span><span class="op">(</span><span class="va">default_eval</span>,</span></span>
+<span class="r-in"><span>  x_default_eval <span class="op">=</span> <span class="st">"train_prop"</span>,</span></span>
+<span class="r-in"><span>  y_default_eval <span class="op">=</span> <span class="st">"avg_f1_score"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Please use `linewidth` instead.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> The deprecated feature was likely used in the <span style="color: #0000BB;">amRml</span> package.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span>   Please report the issue at <span style="color: #0000BB; font-style: italic;">&lt;https://github.com/JRaviLab/amRml/issues&gt;</span>.</span>
+<span class="r-plt img"><img src="plotDefaultEval-1.png" alt="" width="700" height="433"></span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

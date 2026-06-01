@@ -84,7 +84,7 @@ specified.</p>
 
 
 <dt id="arg-n-fold">n_fold<a class="anchor" aria-label="anchor" href="#arg-n-fold"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> Number of folds of cross-validation</p></dd>
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> Number of folds of cross-validation</p></dd>
 
 </dl></div>
     <div id="value">
@@ -92,6 +92,26 @@ specified.</p>
     <p>Results of grid tuning</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">demo_ml_tibble</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">data_split</span> <span class="op">&lt;-</span> <span class="fu"><a href="splitMLInputTibble.html">splitMLInputTibble</a></span><span class="op">(</span><span class="va">demo_ml_tibble</span>, split <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">wflow</span> <span class="op">&lt;-</span> <span class="fu"><a href="buildWflow.html">buildWflow</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="buildLRModel.html">buildLRModel</a></span><span class="op">(</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  <span class="fu"><a href="buildRecipe.html">buildRecipe</a></span><span class="op">(</span><span class="fu">rsample</span><span class="fu">::</span><span class="fu"><a href="https://rsample.tidymodels.org/reference/initial_split.html" class="external-link">training</a></span><span class="op">(</span><span class="va">data_split</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="buildTuningGrid.html">buildTuningGrid</a></span><span class="op">(</span><span class="st">"LR"</span>, <span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">3</span>, <span class="op">-</span><span class="fl">1</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">tuneGrid</span><span class="op">(</span><span class="va">wflow</span>, <span class="va">data_split</span>, <span class="va">grid</span>, n_fold <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> # Tuning results</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> # 2-fold cross-validation using stratification </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 2 × 5</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   splits          id    .metrics          .notes           .predictions      </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;list&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span> <span style="color: #949494; font-style: italic;">&lt;list&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;list&gt;</span>           <span style="color: #949494; font-style: italic;">&lt;list&gt;</span>            </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> <span style="color: #949494;">&lt;split [24/24]&gt;</span> Fold1 <span style="color: #949494;">&lt;tibble [36 × 6]&gt;</span> <span style="color: #949494;">&lt;tibble [0 × 4]&gt;</span> <span style="color: #949494;">&lt;tibble [144 × 8]&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> <span style="color: #949494;">&lt;split [24/24]&gt;</span> Fold2 <span style="color: #949494;">&lt;tibble [36 × 6]&gt;</span> <span style="color: #949494;">&lt;tibble [0 × 4]&gt;</span> <span style="color: #949494;">&lt;tibble [144 × 8]&gt;</span></span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

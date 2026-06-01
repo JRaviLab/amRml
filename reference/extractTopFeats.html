@@ -74,7 +74,7 @@ predicting the AMR phenotype of a given pathogen.</p>
 
 
 <dt id="arg-prop-vi-top-feats">prop_vi_top_feats<a class="anchor" aria-label="anchor" href="#arg-prop-vi-top-feats"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> A vector of length 2 with elements together
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> A vector of length 2 with elements together
 indicating the proportion of total variable importance the top features
 should comprise. To get the features that contribute to the top 10 to 20% of
 total variable importance, for example, set
@@ -83,7 +83,7 @@ Returns all features by default.</p></dd>
 
 
 <dt id="arg-n-top-feats">n_top_feats<a class="anchor" aria-label="anchor" href="#arg-n-top-feats"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> Number of top features to extract</p></dd>
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> Number of top features to extract</p></dd>
 
 </dl></div>
     <div id="value">
@@ -93,6 +93,25 @@ Returns all features by default.</p></dd>
 per-class columns of importance scores for each <code>Variable</code>)</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">demo_fit</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">extractTopFeats</span><span class="op">(</span><span class="va">demo_fit</span>, n_top_feats <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 10 × 3</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    Variable    Importance Sign </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 1</span> group_1006        3.50 NEG  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 2</span> group_10051       2.68 POS  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 3</span> group_10040       2.31 POS  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 4</span> group_10013       2.26 POS  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 5</span> group_10033       2.26 NEG  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 6</span> group_10056       1.88 POS  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 7</span> group_10047       1.73 POS  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 8</span> group_10061       1.57 NEG  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 9</span> group_10046       1.39 NEG  </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">10</span> group_10001       1.18 NEG  </span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>

@@ -74,11 +74,11 @@ training. This can be the output of
 
 
 <dt id="arg-use-pca">use_pca<a class="anchor" aria-label="anchor" href="#arg-use-pca"></a></dt>
-<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">arrow::bool</a> Set to <code>TRUE</code> to use PCA instead of all features.</p></dd>
+<dd><p><a href="https://arrow.apache.org/docs/r/reference/data-type.html" class="external-link">bool</a> Set to <code>TRUE</code> to use PCA instead of all features.</p></dd>
 
 
 <dt id="arg-pca-threshold">pca_threshold<a class="anchor" aria-label="anchor" href="#arg-pca-threshold"></a></dt>
-<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">pillar::num</a> The proportion of total variance for which the
+<dd><p><a href="https://pillar.r-lib.org/reference/num.html" class="external-link">num</a> The proportion of total variance for which the
 principle components account</p></dd>
 
 </dl></div>
@@ -87,6 +87,29 @@ principle components account</p></dd>
     <p>A <code>recipe</code> object</p>
     </div>
 
+    <div id="ref-examples">
+    <h2>Examples</h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">train</span> <span class="op">&lt;-</span> <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  genome_id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"g"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  genome_drug.resistant_phenotype <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Resistant"</span>, <span class="st">"Susceptible"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">5</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  feat_a <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0L</span>, <span class="fl">1L</span><span class="op">)</span>, <span class="fl">5</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  feat_b <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fl">0L</span><span class="op">)</span>, <span class="fl">5</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">buildRecipe</span><span class="op">(</span><span class="va">train</span>, use_pca <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">Recipe</span> <span style="color: #00BBBB;">──────────────────────────────────────────────────────────────────────</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> ── Inputs </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Number of variables by role</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> outcome:   1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> predictor: 2</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> metadata:  1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> ── Operations </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Zero variance filter on: <span style="color: #0000BB;">recipes::all_predictors()</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> Centering and scaling for: <span style="color: #0000BB;">recipes::all_predictors()</span></span>
+</code></pre></div>
+    </div>
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <nav id="toc" data-toggle="toc" class="sticky-top"><h2 data-toc-skip>Contents</h2>
