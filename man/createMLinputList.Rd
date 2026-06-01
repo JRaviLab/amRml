@@ -49,8 +49,9 @@ inputs <- createMLinputList("/path/to/results")
 
 # Cross-test with year stratification
 inputs_ct <- createMLinputList("/path/to/results",
-                               stratify_by = "year",
-                               cross_test = TRUE)
+  stratify_by = "year",
+  cross_test = TRUE
+)
 
 # MDR analysis
 inputs_mdr <- createMLinputList("/path/to/results", MDR = TRUE)

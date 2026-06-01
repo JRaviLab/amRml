@@ -19,6 +19,7 @@ minimal_grid_args <- list(
 )
 
 run_pipeline <- function(fx, split = c(1, 0), n_fold = 2, ...) {
+  set.seed(1)
   suppressMessages(suppressWarnings(
     runMLPipeline(
       fx,

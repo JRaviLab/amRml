@@ -35,10 +35,10 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{model}{\link[rlang:vector-construction]{rlang::chr} Logistic regression ("LR"), random forest ("RF"), or
+\item{model}{\link[rlang:chr]{chr} Logistic regression ("LR"), random forest ("RF"), or
 boosted tree ("BT")}
 
-\item{split}{\link[pillar:num]{pillar::num} Vector of length 2 indicating the proportion of data to
+\item{split}{\link[pillar:num]{num} Vector of length 2 indicating the proportion of data to
 be designated as training and validation, respectively. Note: if \code{test_data}
 is provided, these numbers will be scaled so that they sum to 1 and will
 still represent fractions of \code{ml_input_tibble} (not including the input
@@ -47,26 +47,26 @@ function is not equipped to handle this. If cross-validation is enabled here
 \code{split = c(1,0)}, we will still retain a 20\% test holdout for final reporting.
 Cross-validation is run on the 80\% training portion, and not on the testing set.}
 
-\item{n_fold}{\link[pillar:num]{pillar::num} Number of folds of cross-validation}
+\item{n_fold}{\link[pillar:num]{num} Number of folds of cross-validation}
 
-\item{prop_vi_top_feats}{\link[pillar:num]{pillar::num} A vector of length 2 with elements together
+\item{prop_vi_top_feats}{\link[pillar:num]{num} A vector of length 2 with elements together
 indicating the proportion of total variable importance the top features
 should comprise. To get the features that contribute to the top 10 to 20\% of
 total variable importance, for example,
 \verb{set prop_vi_top_feats = c(0.1, 0.2)}. Returns all features by default.}
 
-\item{n_top_feats}{\link[pillar:num]{pillar::num} Number of top features to extract per drug}
+\item{n_top_feats}{\link[pillar:num]{num} Number of top features to extract per drug}
 
-\item{use_pca}{\link[arrow:data-type]{arrow::bool} Set to \code{TRUE} to use PCA instead of all features.}
+\item{use_pca}{\link[arrow:bool]{bool} Set to \code{TRUE} to use PCA instead of all features.}
 
-\item{pca_threshold}{\link[pillar:num]{pillar::num} The proportion of total variance for which the
+\item{pca_threshold}{\link[pillar:num]{num} The proportion of total variance for which the
 principle components account}
 
-\item{penalty_vec}{\link[pillar:num]{pillar::num} A vector containing \code{penalty} (regularization
+\item{penalty_vec}{\link[pillar:num]{num} A vector containing \code{penalty} (regularization
 strength) values to try (for logistic regression). It is recommended to
 choose values \code{10^-4} to \code{10^4}.}
 
-\item{mix_vec}{\link[pillar:num]{pillar::num} A vector containing \code{mixture} values to try for logistic
+\item{mix_vec}{\link[pillar:num]{num} A vector containing \code{mixture} values to try for logistic
 regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 intermediate values correspond to elastic net.}
 
@@ -78,12 +78,12 @@ or boosted tree. It is recommended to choose values in the range 1 to 100.}
 \code{trees} in random forest or boosted tree. It is recommended to choose values
 in the range 100 to 1000.}
 
-\item{select_best_metric}{\link[rlang:vector-construction]{rlang::chr} Metric to select best model: "f_meas",
+\item{select_best_metric}{\link[rlang:chr]{chr} Metric to select best model: "f_meas",
 "pr_auc", or "bal_accuracy"}
 
-\item{seed}{\link[pillar:num]{pillar::num} For reproducible analysis}
+\item{seed}{\link[pillar:num]{num} For reproducible analysis}
 
-\item{shuffle_labels}{\link[arrow:data-type]{arrow::bool} Set to \code{TRUE} to randomly shuffle AMR phenotype
+\item{shuffle_labels}{\link[arrow:bool]{bool} Set to \code{TRUE} to randomly shuffle AMR phenotype
 labels for baseline comparisons.}
 
 \item{test_data}{A tibble to use as testing data instead of a subset of
@@ -91,14 +91,14 @@ labels for baseline comparisons.}
 or temporal holdouts. The \code{split} argument still tells how \code{ml_input_tibble}
 should be divided for training and validation.}
 
-\item{return_tune_res}{\link[arrow:data-type]{arrow::bool} Set to \code{TRUE} to return tuning results.}
+\item{return_tune_res}{\link[arrow:bool]{bool} Set to \code{TRUE} to return tuning results.}
 
-\item{return_fit}{\link[arrow:data-type]{arrow::bool} Set to \code{TRUE} to return the model \code{fit}.}
+\item{return_fit}{\link[arrow:bool]{bool} Set to \code{TRUE} to return the model \code{fit}.}
 
-\item{return_pred}{\link[arrow:data-type]{arrow::bool} Set to \code{TRUE} to return the predicted and actual
+\item{return_pred}{\link[arrow:bool]{bool} Set to \code{TRUE} to return the predicted and actual
 AMR phenotypes.}
 
-\item{verbose}{\link[arrow:data-type]{arrow::bool} The function will stay quiet if set to \code{FALSE}.}
+\item{verbose}{\link[arrow:bool]{bool} The function will stay quiet if set to \code{FALSE}.}
 }
 \value{
 A list with two elements: A \code{performance_tibble} and a
@@ -108,4 +108,14 @@ respectively, are set to \code{TRUE}.
 }
 \description{
 Stitches together core ML functions into one pipeline.
+}
+\examples{
+data(demo_ml_tibble)
+set.seed(1)
+runMLPipeline(
+  ml_input_tibble = demo_ml_tibble, model = "LR",
+  split = c(1, 0), n_fold = 2,
+  penalty_vec = 10^c(-3, -1), mix_vec = c(0, 0.5, 1),
+  n_top_feats = 10, verbose = FALSE
+)
 }

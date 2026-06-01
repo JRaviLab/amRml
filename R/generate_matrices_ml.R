@@ -654,10 +654,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
     grouped <- split(group_df, group_df$drug_or_class)
 
-    purrr::walk(names(grouped), function(drug_class) {
+    new_files <- purrr::map(names(grouped), function(drug_class) {
       group <- grouped[[drug_class]]
 
-      purrr::walk(unique(group$stratification), function(leave_one_out) {
+      purrr::map(unique(group$stratification), function(leave_one_out) {
         subset <- dplyr::filter(group, stratification != leave_one_out)
         if (nrow(subset) == 0) {
           return(NULL)
@@ -675,11 +675,14 @@ skipImbalancedMatrix <- function(genome_ids,
           )
         ))
         arrow::write_parquet(combined, out_file)
-        created <<- c(created, out_file)
-
         log("debug", paste0("Created LOO file: ", out_file))
-      })
-    })
+        out_file
+      }) |>
+        purrr::compact() |>
+        unlist()
+    }) |> unlist()
+
+    created <- c(created, new_files)
   }
 
   log("info", "All LOO matrices generated and saved.")

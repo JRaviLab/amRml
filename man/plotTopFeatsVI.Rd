@@ -9,7 +9,7 @@ plotTopFeatsVI(fit, n_top_feats = 10)
 \arguments{
 \item{fit}{Best model fit, such as the output of \code{fitBestModel()}}
 
-\item{n_top_feats}{\link[pillar:num]{pillar::num} Number of top features to plot}
+\item{n_top_feats}{\link[pillar:num]{num} Number of top features to plot}
 }
 \value{
 Variable importance plot (a \code{ggplot2} object)
@@ -17,4 +17,8 @@ Variable importance plot (a \code{ggplot2} object)
 \description{
 Generates a plot showing the top features and their variable importance
 scores.
+}
+\examples{
+data(demo_fit)
+plotTopFeatsVI(demo_fit, n_top_feats = 10)
 }
