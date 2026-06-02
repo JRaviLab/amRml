@@ -1,5 +1,6 @@
 # This script contains functions to check the arguments of ML functions.
 
+#' @importFrom methods is
 #' @importFrom tibble is_tibble
 NULL
 
@@ -254,7 +255,7 @@ NULL
 #' `buildLRModel()` (random forest and boosted tree support planned)
 #'
 .checkArgParsnipMod <- function(parsnip_mod) {
-  if (class(parsnip_mod)[2] != "model_spec") {
+  if (!is(parsnip_mod, "model_spec")) {
     stop("A `parsnip` model was expected but not received.")
   }
 }
@@ -418,7 +419,7 @@ NULL
 #' @param tune_res Results of grid tuning, such as the output of `tuneGrid()`
 #'
 .checkArgTuneRes <- function(tune_res) {
-  if (class(tune_res)[1] != "tune_results") {
+  if (!is(tune_res, "tune_results")) {
     stop("The `tune_res` argument can only take `tune_results` objects.")
   }
 }

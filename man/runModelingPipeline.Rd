@@ -49,3 +49,14 @@ Given a DuckDB file produced by \code{runDataProcessing()}, it:
 \item Saves performance metrics, fitted models, predictions, and top feature rankings
 }
 }
+\examples{
+\dontrun{
+runModelingPipeline(
+  parquet_duckdb_path = "path/to/Bug_parquet.duckdb",
+  threads = 16, n_fold = 5, split = c(1, 0), min_n = 25,
+  prop_vi_top_feats = c(0, 1), pca_threshold = 0.99,
+  verbose = TRUE, use_saved_split = TRUE
+)
+}
+
+}

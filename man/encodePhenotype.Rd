@@ -27,3 +27,16 @@ A list with:
 \description{
 encodePhenotype
 }
+\examples{
+df <- tibble::tibble(
+  genome_id = paste0("g", 1:6),
+  genome_drug.resistant_phenotype = c(
+    "Resistant", "Susceptible", "Resistant",
+    "Susceptible", "Resistant", "Susceptible"
+  ),
+  gene_a = c(1L, 0L, 1L, 0L, 1L, 0L),
+  gene_b = c(0L, 1L, 1L, 0L, 0L, 1L)
+)
+encoded <- encodePhenotype(df)
+encoded$target
+}

@@ -12,6 +12,7 @@
 #' @importFrom dplyr select
 #' @importFrom dplyr slice
 #' @importFrom hardhat tune
+#' @importFrom methods is
 #' @importFrom parsnip augment
 #' @importFrom parsnip boost_tree
 #' @importFrom parsnip extract_fit_engine
@@ -69,23 +70,34 @@ NULL
 #' genome is resistant), but not both.
 #' @param split [num] Vector of length 2 indicating the proportion of data to
 #' be designated as training and validation, respectively.
-#' @param seed [num] For reproducible analysis
+#' @param seed [num] Optional. If supplied, the split is seeded (and the
+#' caller's RNG state restored afterward) for standalone reproducibility. When
+#' `NULL` (the default, as used by `runMLPipeline()`), the split inherits the
+#' ambient RNG stream so it can share one seed with downstream tuning and fitting.
 #' @return An `rsplit` object
+#' @examples
+#' ml <- tibble::tibble(
+#'   genome_id = paste0("g", 1:20),
+#'   genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 10),
+#'   feat_a = rep(c(0L, 1L), 10),
+#'   feat_b = rep(c(1L, 0L), 10)
+#' )
+#' splitMLInputTibble(ml, split = c(1, 0), seed = 42)
 #' @export
-splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280) {
+splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = NULL) {
   .checkArgTibble(ml_input_tibble, ml = TRUE)
   .checkArgSplit(split)
-  .checkArgSeed(seed)
-
-  set.seed(seed)
+  if (!is.null(seed)) {
+    .checkArgSeed(seed)
+    withr::local_seed(seed)
+  }
 
   target_var <- .getTargetVarName(ml_input_tibble)
 
   # Split the data, maintaining R/S proportions.
   if (split[2] == 0) {
-    # If in CV mode:
-    # Still retain a stratified testing holdout purely for final reporting metrics;
-    # CV is only performed on the training portion.
+    # CV mode: retain a stratified testing holdout purely for final reporting
+    # metrics; CV is only performed on the training portion.
     prop_train_for_holdout <- 0.8 # 80 percent train, 20 percent reserved test
     data_split <- rsample::initial_split(
       ml_input_tibble,
@@ -99,7 +111,6 @@ splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280
       strata = !!target_var
     )
   }
-
   return(data_split)
 }
 
@@ -114,6 +125,14 @@ splitMLInputTibble <- function(ml_input_tibble, split = c(0.6, 0.2), seed = 5280
 #' @param pca_threshold [num] The proportion of total variance for which the
 #' principle components account
 #' @return A `recipe` object
+#' @examples
+#' train <- tibble::tibble(
+#'   genome_id = paste0("g", 1:10),
+#'   genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 5),
+#'   feat_a = rep(c(0L, 1L), 5),
+#'   feat_b = rep(c(1L, 0L), 5)
+#' )
+#' buildRecipe(train, use_pca = FALSE)
 #' @export
 buildRecipe <- function(train_data, use_pca = FALSE, pca_threshold = 0.95) {
   .checkArgTibble(train_data, ml = TRUE)
@@ -157,6 +176,9 @@ buildRecipe <- function(train_data, use_pca = FALSE, pca_threshold = 0.95) {
 #' @param multi_class [bool] Whether to construct a model for multi-class
 #' classification
 #' @return A `parsnip` `logistic_reg` object
+#' @examples
+#' buildLRModel()
+#' buildLRModel(multi_class = TRUE)
 #' @export
 buildLRModel <- function(multi_class = FALSE) {
   .checkArgMultiClass(multi_class)
@@ -186,6 +208,16 @@ buildLRModel <- function(multi_class = FALSE) {
 #' `buildLRModel()` (random forest and boosted tree support planned)
 #' @param recipe A recipe, such as the output of `buildRecipe()`
 #' @return A `workflow` object
+#' @examples
+#' train <- tibble::tibble(
+#'   genome_id = paste0("g", 1:10),
+#'   genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 5),
+#'   feat_a = rep(c(0L, 1L), 5),
+#'   feat_b = rep(c(1L, 0L), 5)
+#' )
+#' rec <- buildRecipe(train, use_pca = FALSE)
+#' lr <- buildLRModel()
+#' buildWflow(lr, rec)
 #' @export
 buildWflow <- function(parsnip_mod, recipe) {
   .checkArgParsnipMod(parsnip_mod)
@@ -210,6 +242,12 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' regression. 0 corresponds to L2 regularization; 1 corresponds to L1;
 #' intermediate values (0, 1) correspond to elastic net.
 #' @return A logistic regression tuning grid as a tibble
+#' @examples
+#' buildTuningGrid(
+#'   model       = "LR",
+#'   penalty_vec = 10^c(-3, -1),
+#'   mix_vec     = c(0, 0.5, 1)
+#' )
 #' @export
 buildTuningGrid <- function(
   model = "LR",
@@ -243,6 +281,16 @@ buildTuningGrid <- function(
 #' `buildTuningGrid()`
 #' @param n_fold [num] Number of folds of cross-validation
 #' @return Results of grid tuning
+#' @examples
+#' data(demo_ml_tibble)
+#' data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+#' wflow <- buildWflow(
+#'   buildLRModel(),
+#'   buildRecipe(rsample::training(data_split))
+#' )
+#' grid <- buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1))
+#' set.seed(1)
+#' tuneGrid(wflow, data_split, grid, n_fold = 2)
 #' @export
 tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
                      n_fold = 5) {
@@ -250,20 +298,18 @@ tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
   .checkArgWflow(wflow)
   .checkArgDataSplit(data_split)
 
-  split_class <- class(data_split)[1]
-
   # Always do CV on the training portion of the split
   train_df <- rsample::training(data_split)
   target_var <- .getTargetVarName(train_df)
 
-  if (identical(split_class, "initial_split")) {
+  if (is(data_split, "initial_split")) {
     # CV on training portion; final eval will use the held-out test set
     resamples <- rsample::vfold_cv(train_df, v = n_fold, strata = !!target_var)
-  } else if (identical(split_class, "initial_validation_split")) {
+  } else if (is(data_split, "initial_validation_split")) {
     # Use the validation partition from the original three-way split.
     resamples <- rsample::validation_set(data_split)
   } else {
-    stop("Unsupported rsample split object: ", split_class)
+    stop("Unsupported rsample split object: ", class(data_split)[1])
   }
 
   tune_res <- tune::tune_grid(
@@ -294,6 +340,19 @@ tuneGrid <- function(wflow, data_split, grid = buildTuningGrid(model = "LR"),
 #' @param select_best_metric [chr] Metric to select best model: "f_meas",
 #' "pr_auc", "mcc", or "bal_accuracy"
 #' @return Best model workflow
+#' @examples
+#' data(demo_ml_tibble)
+#' data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+#' wflow <- buildWflow(
+#'   buildLRModel(),
+#'   buildRecipe(rsample::training(data_split))
+#' )
+#' set.seed(1)
+#' tune_res <- tuneGrid(wflow, data_split,
+#'   buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
+#'   n_fold = 2
+#' )
+#' selectBestModel(tune_res, wflow, "mcc")
 #' @export
 selectBestModel <- function(tune_res, wflow, select_best_metric = "mcc") {
   .checkArgTuneRes(tune_res)
@@ -315,6 +374,18 @@ selectBestModel <- function(tune_res, wflow, select_best_metric = "mcc") {
 #' training. This can be the output of
 #' `rsample::training(splitMLInputTibble(ml_input_tibble))`.
 #' @return Best model fit
+#' @examples
+#' data(demo_ml_tibble)
+#' data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+#' train <- rsample::training(data_split)
+#' wflow <- buildWflow(buildLRModel(), buildRecipe(train))
+#' set.seed(1)
+#' tune_res <- tuneGrid(wflow, data_split,
+#'   buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1)),
+#'   n_fold = 2
+#' )
+#' best_wflow <- selectBestModel(tune_res, wflow, "mcc")
+#' fitBestModel(best_wflow, train)
 #' @export
 fitBestModel <- function(final_mod, train_data) {
   .checkArgWflow(final_mod)
@@ -361,6 +432,11 @@ fitBestModel <- function(final_mod, train_data) {
 #' `rsample::testing(splitMLInputTibble(ml_input_tibble))`.
 #' @return Test data (tibble) with an added column for predicted phenotype
 #' labels
+#' @examples
+#' data(demo_ml_tibble)
+#' data(demo_fit)
+#' data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+#' predictML(demo_fit, rsample::testing(data_split))
 #' @export
 predictML <- function(fit, test_data) {
   .checkArgWflow(fit)
@@ -379,6 +455,22 @@ predictML <- function(fit, test_data) {
 #' @param test_data_plus_predictions Test data (tibble) with an added column for
 #' predicted phenotype labels, such as the output of `predictML()`
 #' @return Confusion matrix of class `conf_mat`
+#' @examples
+#' preds <- tibble::tibble(
+#'   genome_id = paste0("g", 1:8),
+#'   genome_drug.resistant_phenotype = factor(
+#'     rep(c("Resistant", "Susceptible"), each = 4),
+#'     levels = c("Resistant", "Susceptible")
+#'   ),
+#'   .pred_class = factor(
+#'     c(
+#'       "Resistant", "Resistant", "Susceptible", "Resistant",
+#'       "Susceptible", "Resistant", "Susceptible", "Susceptible"
+#'     ),
+#'     levels = c("Resistant", "Susceptible")
+#'   )
+#' )
+#' getConfusionMatrix(preds)
 #' @export
 getConfusionMatrix <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
@@ -624,7 +716,25 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 #' phenotype predictions by an ML model compared against the actual values.
 #'
 #' @inheritParams getConfusionMatrix
-#' @return F1 score, AUPRC, balanced accuracy, MCC, nMCC, and log2(AUPRC/prior)
+#' @return F1 score, AUPRC, balanced accuracy, nMCC, and log2(AUPRC/prior)
+#' @examples
+#' preds <- tibble::tibble(
+#'   genome_id = paste0("g", 1:10),
+#'   genome_drug.resistant_phenotype = factor(
+#'     rep(c("Resistant", "Susceptible"), each = 5),
+#'     levels = c("Resistant", "Susceptible")
+#'   ),
+#'   .pred_class = factor(
+#'     c(
+#'       "Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
+#'       "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"
+#'     ),
+#'     levels = c("Resistant", "Susceptible")
+#'   ),
+#'   .pred_Resistant = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
+#'   .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
+#' )
+#' calculateEvalMets(preds)
 #' @export
 calculateEvalMets <- function(test_data_plus_predictions) {
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
@@ -657,6 +767,9 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 #' @return A tibble with a column for top features (`Variable`), a column for
 #' `Importance`, and a column for `Sign` (or, for multi-class, a tibble with
 #' per-class columns of importance scores for each `Variable`)
+#' @examples
+#' data(demo_fit)
+#' extractTopFeats(demo_fit, n_top_feats = 10)
 #' @export
 extractTopFeats <- function(
   fit, prop_vi_top_feats = c(0, 1),
@@ -704,7 +817,7 @@ extractTopFeats <- function(
 
   # Take a different approach if using multi-class (the previous code would give
   # a less meaningful result).
-  if (class(fit$fit$actions$model$spec)[1] == "multinom_reg") {
+  if (is(fit$fit$actions$model$spec, "multinom_reg")) {
     warning(paste(
       "Extracting top features from a multi-class model.",
       "The `prop_vi_top_feats` and `n_top_feats` arguments do not apply."
