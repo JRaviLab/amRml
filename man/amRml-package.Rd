@@ -19,6 +19,11 @@ Useful links:
 \author{
 \strong{Maintainer}: Janani Ravi \email{janani.ravi@cuanschutz.edu} (\href{https://orcid.org/0000-0001-7443-925X}{ORCID})
 
+Authors:
+\itemize{
+  \item Janani Ravi \email{janani.ravi@cuanschutz.edu} (\href{https://orcid.org/0000-0001-7443-925X}{ORCID})
+}
+
 Other contributors:
 \itemize{
   \item Ethan Wolfe \email{ethan.wolfe@cuanschutz.edu} [contributor]

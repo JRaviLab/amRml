@@ -11,9 +11,9 @@ buildRecipe(train_data, use_pca = FALSE, pca_threshold = 0.95)
 training. This can be the output of
 \code{rsample::training(splitMLInputTibble(ml_input_tibble))}.}
 
-\item{use_pca}{\link[arrow:data-type]{arrow::bool} Set to \code{TRUE} to use PCA instead of all features.}
+\item{use_pca}{\link[arrow:bool]{bool} Set to \code{TRUE} to use PCA instead of all features.}
 
-\item{pca_threshold}{\link[pillar:num]{pillar::num} The proportion of total variance for which the
+\item{pca_threshold}{\link[pillar:num]{num} The proportion of total variance for which the
 principle components account}
 }
 \value{
@@ -21,4 +21,13 @@ A \code{recipe} object
 }
 \description{
 Specify predictors, outcome, and metadata by building a recipe.
+}
+\examples{
+train <- tibble::tibble(
+  genome_id = paste0("g", 1:10),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 5),
+  feat_a = rep(c(0L, 1L), 5),
+  feat_b = rep(c(1L, 0L), 5)
+)
+buildRecipe(train, use_pca = FALSE)
 }

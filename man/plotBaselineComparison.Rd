@@ -20,3 +20,14 @@ A bar plot with balanced accuracy comparisons per antibiotic
 Generates a bar plot that compares model performance with and without
 randomly shuffled AMR phenotype labels.
 }
+\examples{
+non_shuffled <- tibble::tibble(
+  antibiotic = c("AMP", "CIP", "CRO"),
+  bal_acc    = c(0.88, 0.81, 0.92)
+)
+shuffled <- tibble::tibble(
+  antibiotic = c("AMP", "CIP", "CRO"),
+  bal_acc    = c(0.52, 0.49, 0.55)
+)
+plotBaselineComparison(non_shuffled, shuffled)
+}

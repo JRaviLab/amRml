@@ -240,6 +240,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
   con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
   on.exit(DBI::dbDisconnect(con0, shutdown = FALSE), add = TRUE)
+  DBI::dbExecute(con0, sprintf(
+    "SET file_search_path='%s'",
+    dirname(parquet_duckdb_path)
+  ))
 
   bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
   log("info", paste0("Connected to DuckDB for bug: ", bug))
@@ -261,6 +265,10 @@ skipImbalancedMatrix <- function(genome_ids,
     for (i in seq_len(nrow(all_groups))) {
       # New connection for this group
       con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+      DBI::dbExecute(con, sprintf(
+        "SET file_search_path='%s'",
+        dirname(parquet_duckdb_path)
+      ))
 
       group_values <- all_groups[i, , drop = FALSE]
       group_label <- paste(group_values, collapse = "_")
@@ -646,10 +654,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
     grouped <- split(group_df, group_df$drug_or_class)
 
-    purrr::walk(names(grouped), function(drug_class) {
+    new_files <- purrr::map(names(grouped), function(drug_class) {
       group <- grouped[[drug_class]]
 
-      purrr::walk(unique(group$stratification), function(leave_one_out) {
+      purrr::map(unique(group$stratification), function(leave_one_out) {
         subset <- dplyr::filter(group, stratification != leave_one_out)
         if (nrow(subset) == 0) {
           return(NULL)
@@ -667,11 +675,14 @@ skipImbalancedMatrix <- function(genome_ids,
           )
         ))
         arrow::write_parquet(combined, out_file)
-        created <<- c(created, out_file)
-
         log("debug", paste0("Created LOO file: ", out_file))
-      })
-    })
+        out_file
+      }) |>
+        purrr::compact() |>
+        unlist()
+    }) |> unlist()
+
+    created <- c(created, new_files)
   }
 
   log("info", "All LOO matrices generated and saved.")
@@ -715,6 +726,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
   # Connect to DuckDB
   con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+  DBI::dbExecute(con0, sprintf(
+    "SET file_search_path='%s'",
+    dirname(parquet_duckdb_path)
+  ))
   # Discover bug name and which genomes to include
   bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
   metadata_all <- DBI::dbGetQuery(con0, "SELECT * FROM metadata")
@@ -754,6 +769,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
       # Fresh connection for this matrix
       con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
+      DBI::dbExecute(con, sprintf(
+        "SET file_search_path='%s'",
+        dirname(parquet_duckdb_path)
+      ))
 
       # Selected genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
