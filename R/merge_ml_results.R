@@ -484,7 +484,7 @@ buildTopFeatsPqYearCountry <- function(
       regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_top_features\\.tsv$",
       remove = FALSE
     ) |>
-    dplyr::select(-c("strat_label2", "seed_from_name"))
+    dplyr::select(-c("strat_label2"))
 
   strat_label <- merged_df |>
     dplyr::distinct(strat_label) |>
