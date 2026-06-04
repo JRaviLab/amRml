@@ -42,17 +42,10 @@ Creates a structured directory hierarchy for storing machine learning results
 including matrices, performance metrics, feature importance, models, and predictions.
 }
 \examples{
-\dontrun{
-# Basic directory structure
-paths <- createMLResultDir("/path/to/results")
-
-# LOO analysis stratified by year
-paths_loo <- createMLResultDir("/path/to/results",
-                                stratify_by = "year",
-                                LOO = TRUE)
-
-# MDR analysis
-paths_mdr <- createMLResultDir("/path/to/results", MDR = TRUE)
-}
+out_dir <- file.path(tempdir(), "amRml_createdir_example")
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+createMLResultDir(out_dir)
+createMLResultDir(out_dir, stratify_by = "year", LOO = TRUE)
+createMLResultDir(out_dir, MDR = TRUE)
 
 }

@@ -7,7 +7,7 @@
 buildLRModel(multi_class = FALSE)
 }
 \arguments{
-\item{multi_class}{\link[arrow:data-type]{arrow::bool} Whether to construct a model for multi-class
+\item{multi_class}{\link[arrow:bool]{bool} Whether to construct a model for multi-class
 classification}
 }
 \value{
@@ -15,4 +15,8 @@ A \code{parsnip} \code{logistic_reg} object
 }
 \description{
 Builds a logistic regression model.
+}
+\examples{
+buildLRModel()
+buildLRModel(multi_class = TRUE)
 }

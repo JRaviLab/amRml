@@ -21,10 +21,10 @@ Description: Comprehensive machine learning (ML) pipeline for predicting antimic
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Depends:
     R (>= 4.5.0)
 Suggests:
+    BiocStyle,
     ComplexHeatmap,
     knitr,
     rmarkdown,
@@ -34,17 +34,17 @@ VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
     arrow,
+    BiocParallel,
     DBI,
     dplyr,
     duckdb,
-    future,
-    future.apply,
     ggplot2,
     ggrepel,
     glmnet,
     glue,
     jsonlite,
     hardhat,
+    methods,
     parsnip,
     purrr,
     readr,
@@ -57,14 +57,20 @@ Imports:
     tidyr,
     tune,
     vip,
+    withr,
     workflows,
     workflowsets,
     yardstick
 biocViews:
-    ML,
-    AMR,
-    MicrobialGenomics,
-    Pathogen,
+    Software,
+    Classification,
+    Regression,
+    StatisticalMethod,
+    FeatureExtraction,
+    MultipleComparison,
+    FunctionalGenomics,
+    Genetics,
     Visualization
 URL: https://github.com/JRaviLab/amRml
 BugReports: https://github.com/JRaviLab/amRml/issues
+Config/roxygen2/version: 8.0.0

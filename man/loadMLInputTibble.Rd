@@ -7,7 +7,7 @@
 loadMLInputTibble(parquet_path)
 }
 \arguments{
-\item{parquet_path}{\link[rlang:vector-construction]{rlang::chr} Path to a long-format sparse Parquet file from
+\item{parquet_path}{\link[rlang:chr]{chr} Path to a long-format sparse Parquet file from
 upstream processing.}
 }
 \value{
@@ -17,4 +17,18 @@ A tibble (one row per genome, one column per feature), plus
 \description{
 Reads in a Parquet file as a tibble and converts it from long to wide format
 to prepare it for ML.
+}
+\examples{
+long <- tibble::tibble(
+  genome_id = rep(paste0("g", 1:6), each = 2),
+  feature_id = rep(c("gene_a", "gene_b"), 6),
+  value = c(1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1),
+  genome_drug.resistant_phenotype = rep(
+    rep(c("Resistant", "Susceptible"), each = 3),
+    each = 2
+  )
+)
+tmp <- tempfile(fileext = ".parquet")
+arrow::write_parquet(long, tmp)
+loadMLInputTibble(tmp)
 }

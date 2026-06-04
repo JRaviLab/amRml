@@ -20,3 +20,12 @@ Number of features
 \description{
 Returns the number of features in an amR pangenome.
 }
+\examples{
+ml <- tibble::tibble(
+  genome_id = paste0("g", 1:6),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 3),
+  feat_a = c(1L, 0L, 1L, 0L, 1L, 0L),
+  feat_b = c(0L, 1L, 0L, 1L, 0L, 1L)
+)
+getNumFeat(ml)
+}

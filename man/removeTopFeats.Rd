@@ -19,3 +19,14 @@ An amR pangenome with top features removed
 \description{
 Removes top features from a pangenome given previous ML results.
 }
+\examples{
+ml <- tibble::tibble(
+  genome_id = paste0("g", 1:6),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 3),
+  feat_a = c(1L, 0L, 1L, 0L, 1L, 0L),
+  feat_b = c(0L, 1L, 0L, 1L, 0L, 1L),
+  feat_c = c(1L, 1L, 0L, 0L, 1L, 0L)
+)
+top <- tibble::tibble(Variable = c("feat_a", "feat_c"))
+removeTopFeats(ml, top)
+}

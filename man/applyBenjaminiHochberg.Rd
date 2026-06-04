@@ -17,3 +17,10 @@ Returns Fisher results with added cols for adj_p_value, sig_after_bh, Q
 \description{
 applyBenjaminiHochberg
 }
+\examples{
+fisher_results <- tibble::tibble(
+  gene    = paste0("gene_", 1:5),
+  p_value = c(0.001, 0.01, 0.04, 0.2, 0.5)
+)
+applyBenjaminiHochberg(fisher_results, Q = 0.05)
+}

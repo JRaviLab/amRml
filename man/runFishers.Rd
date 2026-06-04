@@ -29,3 +29,20 @@ The Fisher test results, BH correction, and feature frequencies
 \description{
 runFishers
 }
+\examples{
+long <- tibble::tibble(
+  genome_id = rep(paste0("g", 1:10), each = 2),
+  feature_id = rep(c("gene_a", "gene_b"), 10),
+  value = c(
+    1, 0, 1, 0, 1, 1, 1, 1, 0, 1,
+    0, 0, 0, 1, 0, 1, 0, 1, 0, 0
+  ),
+  genome_drug.resistant_phenotype = rep(
+    rep(c("Resistant", "Susceptible"), each = 5),
+    each = 2
+  )
+)
+tmp <- tempfile(fileext = ".parquet")
+arrow::write_parquet(long, tmp)
+runFishers(tmp, Q = 0.05)
+}
