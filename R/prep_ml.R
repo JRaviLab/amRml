@@ -112,7 +112,8 @@ loadMLInputTibble <- function(parquet_path) {
 
   target_var <- .getTargetVarName(long_tibble)
 
-  ml_input_tibble <- long_tibble |> dplyr::distinct() |>
+  ml_input_tibble <- long_tibble |>
+    dplyr::distinct() |>
     dplyr::mutate(!!target_var := as.factor(!!target_var)) |>
     tidyr::pivot_wider(
       id_cols = dplyr::all_of(
