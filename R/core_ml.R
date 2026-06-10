@@ -609,8 +609,8 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     ))
   } else if (prior >= 0.7) {
     warning(paste(
-      "Classes are imbalanced toward the resistant phenotype.",
-      "Calculation of log2(AUPRC/prior) may be inappropriate."
+      "Classes are imbalanced for this model.",
+      "The use of the log2(AUPRC/prior) metric may be more informative in this imbalanced model."
     ))
   }
 
