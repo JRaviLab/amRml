@@ -124,7 +124,7 @@ head(results$top_feat_tibble)
 | `model` | Model type (`"LR"`) |
 | `train_prop`, `val_prop` | Train/validation split proportions |
 | `fit_penalty`, `fit_mixture` | Fitted hyperparameters |
-| `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
+| `mcc`, `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
 | `run_time_sec` | Runtime in seconds |
 
 **`top_feat_tibble`** — ranked feature importance:

@@ -129,7 +129,7 @@ associated with MDR.
 - **Data preparation**: Load Parquet files and prepare ML-ready datasets
 - **Model training**: User-customizable logistic regression via
   tidymodels
-- **Evaluation**: nMCC, F1, balanced accuracy, AuPRC, and confusion
+- **Evaluation**: MCC, nMCC, F1, balanced accuracy, AuPRC, and confusion
   matrices
 - **Feature importance**: Extract and rank predictive features
 
