@@ -217,7 +217,7 @@ buildPerfPq <- function(
   LOO = FALSE,
   MDR = FALSE,
   cross_test = FALSE,
-  out_parquet = "all_performance.parquet",
+  out_parquet = "all_perf.parquet",
   compression = "zstd",
   verbose = TRUE
 ) {
