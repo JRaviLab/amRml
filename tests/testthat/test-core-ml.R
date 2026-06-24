@@ -104,8 +104,8 @@ test_that("predictML augments test data with .pred_class", {
 
   # log2(AUPRC/prior) warns on balanced classes; unrelated to what we test.
   mets <- suppressWarnings(calculateEvalMets(preds))
-  # Returns a length-5 vector: f1, auprc, bal_acc, nmcc, log2_apop.
-  expect_length(mets, 5)
+  # Returns a length-6 vector: f1, auprc, bal_acc, mcc, nmcc, log2_apop.
+  expect_length(mets, 6)
   expect_true(all(!is.na(mets[1:4])))
 })
 
