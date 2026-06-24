@@ -25,6 +25,7 @@ utils::globalVariables(c(
   "adj_p_value",
   "antibiotic",
   "bal_acc",
+  "drug",
   "drug_or_class",
   "feature",
   "feature_id",

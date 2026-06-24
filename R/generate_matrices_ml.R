@@ -984,10 +984,10 @@ skipImbalancedMatrix <- function(genome_ids,
     grouped <- split(group_df, group_df$drug)
 
     ## --------------------------------------------------------------
-    ## Leave‑one‑drug‑out with genome blocking
+    ## Leave-one-drug-out with genome blocking
     ## --------------------------------------------------------------
     purrr::walk(names(grouped), function(leave_one_out) {
-      ## Read held‑out drug to get its genome IDs
+      ## Read held-out drug to get its genome IDs
       heldout_tbl <- arrow::read_parquet(grouped[[leave_one_out]]$file)
 
       if (!"genome_id" %in% colnames(heldout_tbl)) {
@@ -1048,7 +1048,7 @@ skipImbalancedMatrix <- function(genome_ids,
     })
   }
 
-  log("info", "All LOO‑drug matrices generated with genome‑level blocking")
+  log("info", "All LOO-drug matrices generated with genome-level blocking")
   invisible(tibble::tibble(created_file = created))
 }
 
@@ -1146,7 +1146,7 @@ skipImbalancedMatrix <- function(genome_ids,
     drugs <- names(grouped)
 
     ## --------------------------------------------------------------
-    ## Pairwise cross‑drug testing (A → B)
+    ## Pairwise cross-drug testing (A -> B)
     ## --------------------------------------------------------------
     for (drugA in drugs) {
       for (drugB in drugs) {
@@ -1169,7 +1169,7 @@ skipImbalancedMatrix <- function(genome_ids,
           log(
             "debug",
             paste0(
-              "Skipping ", drugA, " → ", drugB,
+              "Skipping ", drugA, " -> ", drugB,
               ": no test data after genome filtering"
             )
           )
@@ -1194,8 +1194,8 @@ skipImbalancedMatrix <- function(genome_ids,
         log(
           "debug",
           paste0(
-            "Created cross‑drug test: ",
-            drugA, " → ", drugB,
+            "Created cross-drug test: ",
+            drugA, " -> ", drugB,
             " | removed ", length(train_genomes), " genomes"
           )
         )
@@ -1203,7 +1203,7 @@ skipImbalancedMatrix <- function(genome_ids,
     }
   }
 
-  log("info", "All cross‑drug testing matrices generated")
+  log("info", "All cross-drug testing matrices generated")
   invisible(tibble::tibble(created_file = created))
 }
 
