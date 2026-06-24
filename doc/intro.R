@@ -112,7 +112,8 @@ knitr::opts_chunk$set(
 
 ## ----metrics------------------------------------------------------------------
 # # Individual metrics
-# nmcc <- calculatenMCC(predictions)       # Normalized MCC (0-1 scale)
+# mcc  <- calculateMCC(predictions)        # Matthews correlation coefficient (-1 to 1)
+# nmcc <- calculatenMCC(predictions)       # Normalized MCC (0 to 1)
 # f1 <- calculateF1(predictions)           # F1 score
 # bal_acc <- calculateBalAcc(predictions)  # Balanced accuracy
 # auprc <- calculateAUPRC(predictions)     # Area under PR curve
@@ -150,7 +151,7 @@ knitr::opts_chunk$set(
 #   verbose = TRUE
 # )
 # 
-# # Results include nMCC at each iteration
+# # Results include MCC and nMCC at each iteration
 # ife_results$ife_performance_tibble
 # ife_results$feats_removed  # If return_feats = TRUE
 # 
@@ -233,8 +234,8 @@ knitr::opts_chunk$set(
 # )
 # 
 # # 5. Compare real vs baseline performance
-# cat("Real nMCC:", results$performance_tibble$nmcc, "\n")
-# cat("Baseline nMCC:", baseline_results$performance_tibble$nmcc, "\n")
+# cat("Real MCC:", results$performance_tibble$mcc, "| nMCC:", results$performance_tibble$nmcc, "\n")
+# cat("Baseline MCC:", baseline_results$performance_tibble$mcc, "| nMCC:", baseline_results$performance_tibble$nmcc, "\n")
 # 
 # # 6. Run iterative feature elimination
 # ife_results <- runIFE(

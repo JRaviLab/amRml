@@ -99,7 +99,7 @@ plotTopFeatsVI <- function(fit, n_top_feats = 10) {
 #' or "n_fold"
 #' @param y_default_eval [chr] y value of default evaluation plot. It can be
 #' "avg_runtime_sec" or one of the following performance metrics:
-#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", or "avg_nmcc"
+#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_mcc", or "avg_nmcc"
 #' @param xlab [chr] Label for x axis
 #' @param ylab [chr] Label for y axis
 #' @return A `ggplot2` scatterplot (performance metric or runtime vs.
