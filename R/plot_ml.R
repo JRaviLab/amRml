@@ -16,6 +16,7 @@
 #' @importFrom ggplot2 theme
 #' @importFrom ggplot2 xlab
 #' @importFrom ggplot2 ylim
+#' @importFrom graphics barplot
 #' @importFrom tune extract_fit_parsnip
 #' @importFrom vip vip
 #' @importFrom yardstick pr_curve
@@ -24,8 +25,9 @@ NULL
 #' Plot a Precision-Recall Curve
 #'
 #' Generates a precision-recall curve (PRC) for AMR phenotype prediction results.
-#' @param test_data_plus_predictions_file A file containing test data with added
-#' prediction columns, typically the output of `runMLmodels(return_pred=TRUE)`.
+#' @param test_data_plus_predictions A tibble of test data with added prediction
+#' columns (e.g. the output of `predictML()` or `runMLmodels(return_pred=TRUE)`),
+#' or a path to a TSV file containing the same.
 #'
 #' @return A `ggplot2` object showing the precision-recall curve.
 #'
@@ -34,14 +36,16 @@ NULL
 #' visualizes it using `ggplot2`.
 #'
 #' @examples
-#' \dontrun{
-#' test_data_plus_predictions_file <- "results / ML_pred / Sfl_drug_AMP_domains_binary_prediction.tsv"
-#' plotPRC(test_data_plus_predictions_file)
-#' }
+#' data(demo_fit)
+#' data(demo_ml_tibble)
+#' preds <- predictML(demo_fit, demo_ml_tibble)
+#' plotPRC(preds)
 #'
-#'  @export
-plotPRC <- function(test_data_plus_predictions_file) {
-  test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
+#' @export
+plotPRC <- function(test_data_plus_predictions) {
+  if (is.character(test_data_plus_predictions)) {
+    test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions)
+  }
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -67,14 +71,23 @@ plotPRC <- function(test_data_plus_predictions_file) {
 #'
 #' Generates a ROC curve for AMR phenotype prediction results.
 #'
-#' @param test_data_plus_predictions_file A file with test data and prediction
-#' columns (output of `runMLmodels(return_pred=TRUE)`).
+#' @param test_data_plus_predictions A tibble of test data with prediction
+#' columns (e.g. the output of `predictML()` or `runMLmodels(return_pred=TRUE)`),
+#' or a path to a TSV file containing the same.
 #'
 #' @return A ROC curve plotted using `ggplot2::autoplot()`.
 #'
+#' @examples
+#' data(demo_fit)
+#' data(demo_ml_tibble)
+#' preds <- predictML(demo_fit, demo_ml_tibble)
+#' plotROC(preds)
+#'
 #' @export
-plotROC <- function(test_data_plus_predictions_file) {
-  test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
+plotROC <- function(test_data_plus_predictions) {
+  if (is.character(test_data_plus_predictions)) {
+    test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions)
+  }
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -98,14 +111,23 @@ plotROC <- function(test_data_plus_predictions_file) {
 #'
 #' Produces a heatmap visualization of the confusion matrix for AMR predictions.
 #'
-#' @param test_data_plus_predictions_file A file containing true and predicted
-#' phenotype labels.
+#' @param test_data_plus_predictions A tibble containing true and predicted
+#' phenotype labels (e.g. the output of `predictML()`), or a path to a TSV file
+#' containing the same.
 #'
 #' @return A heatmap (`ggplot2` object) showing the confusion matrix.
 #'
+#' @examples
+#' data(demo_fit)
+#' data(demo_ml_tibble)
+#' preds <- predictML(demo_fit, demo_ml_tibble)
+#' plotCM(preds)
+#'
 #' @export
-plotCM <- function(test_data_plus_predictions_file) {
-  test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions_file)
+plotCM <- function(test_data_plus_predictions) {
+  if (is.character(test_data_plus_predictions)) {
+    test_data_plus_predictions <- readr::read_tsv(test_data_plus_predictions)
+  }
   .checkArgTestDataPlusPredictions(test_data_plus_predictions)
   test_data_plus_predictions <- test_data_plus_predictions |>
     dplyr::mutate(
@@ -131,21 +153,23 @@ plotCM <- function(test_data_plus_predictions_file) {
 #' Creates a bar plot showing the most important features affecting
 #' AMR phenotype predictions.
 #'
-#' @param topfeat_file A file containing feature importance scores
-#' (output of `runMLmodels()`).
+#' @param topfeat A tibble of feature importance scores (e.g. the output of
+#' `extractTopFeats()` or `runMLmodels()`), with `Variable`, `Importance`, and
+#' `Sign` columns, or a path to a TSV file containing the same.
 #' @param n_top_feats Number of top features to display (default: 10).
 #'
 #' @return A bar plot of variable importance (`ggplot2` object).
 #'
 #' @examples
-#' \dontrun{
-#' topfeat_file <- "results / ML_top_features / Sfl_drug_AMP_domains_binary_top_features.tsv"
-#' plotTopFeatsVI(topfeat_file)
-#' }
+#' data(demo_fit)
+#' top_feats <- extractTopFeats(demo_fit, n_top_feats = 10)
+#' plotTopFeatsVI(top_feats, n_top_feats = 10)
 #'
 #' @export
-plotTopFeatsVI <- function(topfeat_file, n_top_feats = 10) {
-  topfeat <- readr::read_tsv(topfeat_file)
+plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
+  if (is.character(topfeat)) {
+    topfeat <- readr::read_tsv(topfeat)
+  }
   .checkArgNTopFeats(n_top_feats)
 
   vip <- topfeat |>
@@ -185,19 +209,18 @@ plotTopFeatsVI <- function(topfeat_file, n_top_feats = 10) {
 #'
 #' @return A base R barplot comparing balanced accuracy across models.
 #'
-#' @param non_shuffled_label_results Output of `runMLPipeline()`
-#' (`shuffle_labels = FALSE`)
-#' @param shuffled_label_results Output of `runMLPipeline()`
-#' (`shuffle_labels = TRUE`)
-#' @return A bar plot with balanced accuracy comparisons per antibiotic
 #' @examples
-#' non_shuffled <- tibble::tibble(
-#'   antibiotic = c("AMP", "CIP", "CRO"),
-#'   bal_acc    = c(0.88, 0.81, 0.92)
+#' non_shuffled <- list(
+#'   performance_tibble = tibble::tibble(
+#'     antibiotic = c("AMP", "CIP", "CRO"),
+#'     bal_acc    = c(0.88, 0.81, 0.92)
+#'   )
 #' )
-#' shuffled <- tibble::tibble(
-#'   antibiotic = c("AMP", "CIP", "CRO"),
-#'   bal_acc    = c(0.52, 0.49, 0.55)
+#' shuffled <- list(
+#'   performance_tibble = tibble::tibble(
+#'     antibiotic = c("AMP", "CIP", "CRO"),
+#'     bal_acc    = c(0.52, 0.49, 0.55)
+#'   )
 #' )
 #' plotBaselineComparison(non_shuffled, shuffled)
 #' @export
@@ -352,14 +375,14 @@ plotFishers <- function(
 #' @export
 #'
 #' @examples
-#' plotDrugDist(metadata_path = "data/Campylobacter/")
+#' plotDrugDist(metadata_path = system.file("extdata", package = "amRml"))
 plotDrugDist <- function(metadata_path = ".") {
   metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
 
   ##################### phenotype distribution (drugs) #########################
   drug_dist <- metadata |>
     dplyr::distinct(
-      genome.genome_id,
+      genome_drug.genome_id,
       genome_drug.antibiotic,
       drug_abbr,
       genome_drug.resistant_phenotype
@@ -408,18 +431,42 @@ plotDrugDist <- function(metadata_path = ".") {
 #' Generates heatmaps and ridge plots summarizing model performance (MCC)
 #' across drugs and feature types.
 #'
-#' @param metadata_path Character. Path to `metadata.parquet`.
-#' @param performance_path Character. Path to `all_performance.parquet`.
+#' @param metadata_path Character. Path to a directory containing `metadata.parquet`.
+#' @param performance_path A performance tibble (with `drug_label`, `shuffled`,
+#' `drug_or_class`, `feature_type`, `feature_subtype`, and `mcc` columns), or a
+#' directory path containing `all_performance.parquet`.
 #'
 #' @return A patchwork ggplot object combining multiple panels.
 #' @export
 #'
 #' @examples
-#' plotDrugPerf(metadata_path = "data/Campylobacter/", performance_path = "data/Campylobacter/ML_performance/")
+#' # Several models per drug x feature type so the ridge densities can be drawn.
+#' performance <- tidyr::expand_grid(
+#'   drug_or_class = c("AMP", "CIP", "NAL"),
+#'   feature_type = c("genes", "proteins"),
+#'   feature_subtype = c("binary", "counts"),
+#'   replicate = 1:8
+#' )
+#' performance$drug_label <- "drug"
+#' performance$shuffled <- FALSE
+#' performance$mcc <- 0.6 + 0.3 * sin(seq_len(nrow(performance)))
+#' plotDrugPerf(
+#'   metadata_path = system.file("extdata", package = "amRml"),
+#'   performance_path = performance
+#' )
 plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
 
-  performance <- arrow::read_parquet(file.path(performance_path, "all_performance.parquet"))
+  if (!is.data.frame(performance_path)) {
+    performance_path <- arrow::read_parquet(
+      file.path(performance_path, "all_performance.parquet")
+    )
+  }
+  performance <- performance_path
+
+  plot_df <- metadata |>
+    dplyr::distinct(genome_drug.genome_id, genome_drug.antibiotic, drug_abbr) |>
+    dplyr::count(genome_drug.antibiotic, drug_abbr, name = "total")
 
   ######################## drug performances #################################
   median_drug <- performance |>
@@ -525,12 +572,11 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 
   rc_perf
 
-  final_plot <- drug_p1 +
-    rc_perf +
-    patchwork::plot_layout(
-      widths = c(2, 2), # adjust proportions
-      guides = "collect"
-    ) &
+  final_plot <- patchwork::wrap_plots(
+    drug_p1, rc_perf,
+    widths = c(2, 2), # adjust proportions
+    guides = "collect"
+  ) &
     ggplot2::theme(
       legend.position = "bottom"
     )
@@ -543,17 +589,51 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #' Creates a heatmap showing cross-drug model performance (MCC), where models
 #' trained on one drug are evaluated on another.
 #'
-#' @param cross_test_performance_path Character. Path to `cross_drug_perf.parquet`.
-#' @param drug_performance_path Character. Path to `all_performance.parquet`.
+#' @param cross_test_performance_path A cross-drug performance tibble (with
+#' `drug_or_class`, `tested_on`, and `mcc` columns), or a directory path
+#' containing `cross_drug_perf.parquet`.
+#' @param drug_performance_path A performance tibble (with `drug_label`,
+#' `drug_or_class`, and `mcc` columns), or a directory path containing
+#' `all_performance.parquet`.
+#' @param metadata_path Character. Path to a directory containing `metadata.parquet`.
 #'
 #' @return A ComplexHeatmap object.
 #' @export
 #'
 #' @examples
-#' plotCrossDrug(cross_test_performance_path = "data/Campylobacter/cross_test_ML_performance", drug_performance_path = "data/Campylobacter/ML_performance/")
-plotCrossDrug <- function(cross_test_performance_path = ".", drug_performance_path = ".") {
-  cross_drug <- arrow::read_parquet(file.path(cross_test_performance_path, "cross_drug_perf.parquet"))
-  performance <- arrow::read_parquet(file.path(drug_performance_path, "all_performance.parquet"))
+#' cross_drug <- tibble::tibble(
+#'   drug_or_class = c("AMP", "AMP", "CIP", "CIP", "NAL", "NAL"),
+#'   tested_on = c("CIP", "NAL", "AMP", "NAL", "AMP", "CIP"),
+#'   mcc = c(0.3, 0.2, 0.4, 0.25, 0.15, 0.35)
+#' )
+#' performance <- tibble::tibble(
+#'   drug_label = "drug",
+#'   drug_or_class = c("AMP", "CIP", "NAL"),
+#'   mcc = c(0.8, 0.7, 0.6)
+#' )
+#' plotCrossDrug(
+#'   cross_test_performance_path = cross_drug,
+#'   drug_performance_path = performance,
+#'   metadata_path = system.file("extdata", package = "amRml")
+#' )
+plotCrossDrug <- function(
+  cross_test_performance_path = ".",
+  drug_performance_path = ".",
+  metadata_path = "."
+) {
+  if (!is.data.frame(cross_test_performance_path)) {
+    cross_test_performance_path <- arrow::read_parquet(
+      file.path(cross_test_performance_path, "cross_drug_perf.parquet")
+    )
+  }
+  cross_drug <- cross_test_performance_path
+  if (!is.data.frame(drug_performance_path)) {
+    drug_performance_path <- arrow::read_parquet(
+      file.path(drug_performance_path, "all_performance.parquet")
+    )
+  }
+  performance <- drug_performance_path
+  metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
 
   ###################### CROSS DRUG Testing #############################
   heatmap_df <- cross_drug |>
@@ -634,6 +714,7 @@ plotCrossDrug <- function(cross_test_performance_path = ".", drug_performance_pa
   )
 
   heat_colors <- colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(100)
+  max_val <- max(abs(mat), na.rm = TRUE)
 
   # ---- Convert annotations ----
   ha_row <- ComplexHeatmap::rowAnnotation(
@@ -698,10 +779,12 @@ plotCrossDrug <- function(cross_test_performance_path = ".", drug_performance_pa
 #' @export
 #'
 #' @examples
+#' \dontrun{
 #' plotStratifiedPerf("year",
 #'   stratified_performance_path = "data/Campylobacter/ML_year_performance",
 #'   stratified_cross_performance_path = "data/Campylobacter/cross_test_ML_year_performance"
 #' )
+#' }
 plotStratifiedPerf <- function(year_or_country = "year",
                                stratified_performance_path = ".",
                                stratified_cross_performance_path = ".") {
@@ -819,10 +902,12 @@ plotStratifiedPerf <- function(year_or_country = "year",
 #' @export
 #'
 #' @examples
+#' \dontrun{
 #' plotMDR(
 #'   MDR_performance_path = "data/Campylobacter/MDR_ML_performance", MDR_top_feature_path = "data/Campylobacter/MDR_ML_top_features",
 #'   MDR_pred_path = "data/Campylobacter/MDR_ML_pred"
 #' )
+#' }
 plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
                     MDR_pred_path = ".") {
   MDR_perf <- arrow::read_parquet(file.path(MDR_performance_path, "MDR_perf.parquet"))
@@ -1028,17 +1113,29 @@ plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
 #' Creates boxplots comparing performance (MCC) between real and shuffled labels
 #' across feature types.
 #'
-#' @param metadata_path Character. Path to `metadata.parquet`.
-#' @param performance_path Character. Path to `all_performance.parquet`.
+#' @param metadata_path Character. Unused; retained for backward compatibility.
+#' @param performance_path A performance tibble (with `feature_type`,
+#' `feature_subtype`, `mcc`, and `shuffled` columns), or a directory path
+#' containing `all_performance.parquet`.
 #'
 #' @return A ggplot object.
 #' @export
 #'
 #' @examples
-#' plotShuffleVsReal(metadata_path = "data/Campylobacter/", performance_path = "data/Campylobacter/ML_performance")
+#' performance <- tibble::tibble(
+#'   feature_type = rep(c("genes", "proteins"), each = 4),
+#'   feature_subtype = rep(c("binary", "counts"), times = 4),
+#'   mcc = c(0.7, 0.6, 0.65, 0.55, 0.1, 0.05, 0.08, 0.02),
+#'   shuffled = rep(c(FALSE, TRUE), each = 4)
+#' )
+#' plotShuffleVsReal(performance_path = performance)
 plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
-  metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
-  performance <- arrow::read_parquet(file.path(performance_path, "all_performance.parquet"))
+  if (!is.data.frame(performance_path)) {
+    performance_path <- arrow::read_parquet(
+      file.path(performance_path, "all_performance.parquet")
+    )
+  }
+  performance <- performance_path
 
   performance |>
     dplyr::mutate(
@@ -1086,10 +1183,12 @@ plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
 #' @export
 #'
 #' @examples
+#' \dontrun{
 #' plotTopClusters(
 #'   top_feat_path = "data/Campylobacter/ML_top_features", cluster_feature_path = "data/Campylobacter/",
 #'   protein_names_path = "data/Campylobacter/", top_n = 10
 #' )
+#' }
 plotTopClusters <- function(top_feat_path = ".", cluster_feature_path = ".",
                             protein_names_path = ".", top_n = 10) {
   ################### Top features #########################

@@ -2,23 +2,27 @@
 % Please edit documentation in R/plot_ml.R
 \name{plotTopFeatsVI}
 \alias{plotTopFeatsVI}
-\title{plotTopFeatsVI()}
+\title{Plot Top Feature Importances}
 \usage{
-plotTopFeatsVI(fit, n_top_feats = 10)
+plotTopFeatsVI(topfeat, n_top_feats = 10)
 }
 \arguments{
-\item{fit}{Best model fit, such as the output of \code{fitBestModel()}}
+\item{topfeat}{A tibble of feature importance scores (e.g. the output of
+\code{extractTopFeats()} or \code{runMLmodels()}), with \code{Variable}, \code{Importance}, and
+\code{Sign} columns, or a path to a TSV file containing the same.}
 
-\item{n_top_feats}{\link[pillar:num]{num} Number of top features to plot}
+\item{n_top_feats}{Number of top features to display (default: 10).}
 }
 \value{
-Variable importance plot (a \code{ggplot2} object)
+A bar plot of variable importance (\code{ggplot2} object).
 }
 \description{
-Generates a plot showing the top features and their variable importance
-scores.
+Creates a bar plot showing the most important features affecting
+AMR phenotype predictions.
 }
 \examples{
 data(demo_fit)
-plotTopFeatsVI(demo_fit, n_top_feats = 10)
+top_feats <- extractTopFeats(demo_fit, n_top_feats = 10)
+plotTopFeatsVI(top_feats, n_top_feats = 10)
+
 }

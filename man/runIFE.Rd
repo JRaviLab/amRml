@@ -4,7 +4,7 @@
 \alias{runIFE}
 \title{runIFE
 Removes top features identified by ML models and retrains iteratively;
-returns nMCC at each iteration.}
+returns MCC at each iteration.}
 \usage{
 runIFE(
   ml_input_tibble,
@@ -49,7 +49,7 @@ list along with top features removed per iteration if \code{return_feats = TRUE}
 \description{
 runIFE
 Removes top features identified by ML models and retrains iteratively;
-returns nMCC at each iteration.
+returns MCC at each iteration.
 }
 \examples{
 data(demo_ml_tibble)

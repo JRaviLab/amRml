@@ -11,11 +11,10 @@
 predicted phenotype labels, such as the output of \code{predictML()}}
 }
 \value{
-Normalized (to a 0 to 1 scale instead of -1 to 1) Matthews
-correlation coefficient (nMCC)
+Normalized Matthews correlation coefficient (nMCC), range 0 to 1
 }
 \description{
-Returns the normalized (to a 0 to 1 scale instead of -1 to 1) Matthews
-correlation coefficient (nMCC) based on the AMR phenotype predictions by an
-ML model compared against the actual values.
+Returns the normalized (0 to 1) Matthews correlation coefficient (nMCC)
+based on the AMR phenotype predictions by an ML model compared against
+the actual values.
 }

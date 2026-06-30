@@ -196,7 +196,7 @@ plotPRC(results$pred)
 ```
 
 ```{r plot-vi, fig.width = 5, fig.height = 4}
-plotTopFeatsVI(results$fit, n_top_feats = 10)
+plotTopFeatsVI(results$top_feat_tibble, n_top_feats = 10)
 ```
 
 For a baseline comparison against random labels, fit a shuffled-label pipeline and compare:

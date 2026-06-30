@@ -4,6 +4,9 @@
 # Package-level imports for packages used with :: notation
 #' @importFrom jsonlite fromJSON write_json
 #' @importFrom glmnet glmnet
+#' @importFrom grDevices colorRampPalette
+#' @importFrom stats median
+#' @importFrom stats reorder
 #' @keywords internal
 "_PACKAGE"
 
@@ -22,10 +25,19 @@ utils::globalVariables(c(
   "cum_imp",
 
   # Data columns
+  "abs_imp",
   "adj_p_value",
   "antibiotic",
   "bal_acc",
+  "category",
+  "class_abbr",
+  "cluster",
+  "contribution",
+  "diff_top2",
   "drug",
+  "drug_abbr",
+  "drug_class",
+  "drug_label",
   "drug_or_class",
   "feature",
   "feature_id",
@@ -36,6 +48,7 @@ utils::globalVariables(c(
   "fit_mtry",
   "fit_trees",
   "gene",
+  "genome_drug.antibiotic",
   "genome_drug.genome_id",
   "genome_drug.resistant_phenotype",
   "genome_id",
@@ -43,9 +56,13 @@ utils::globalVariables(c(
   "i_strat",
   "idx_sparse",
   "idx_strat",
+  "label",
   "model",
   "neg_log10_adj_p",
   "mcc",
+  "mean_margin",
+  "median_mcc",
+  "n_feat_types",
   "nmcc",
   "num_obs",
   "seed",
@@ -56,6 +73,7 @@ utils::globalVariables(c(
   "pair_id",
   "parts",
   "phenotype",
+  "proteinName",
   "precision",
   "prefix",
   "prefix_key",
@@ -66,14 +84,22 @@ utils::globalVariables(c(
   "res_prop",
   "resistant_classes",
   "run_time_sec",
+  "shuffled",
+  "shuffled_label",
   "sig_after_bh",
   "significance",
   "strat_value",
   "strat_value_test",
   "stratification",
+  "test_country",
   "test_drug",
   "test_file",
+  "test_year",
+  "tested_on",
+  "total",
+  "train_country",
   "train_prop",
+  "train_year",
   "value",
 
   # Base R functions that need explicit import
