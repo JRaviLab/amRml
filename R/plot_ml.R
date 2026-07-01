@@ -624,7 +624,7 @@ plotCrossDrug <- function(
   if (!is.data.frame(cross_test_performance_path)) {
     cross_test_performance_path <- arrow::read_parquet(
       file.path(cross_test_performance_path, "cross_drug_perf.parquet")
-    ) 
+    )
   }
   cross_drug <- cross_test_performance_path
   if (!is.data.frame(drug_performance_path)) {
@@ -637,7 +637,7 @@ plotCrossDrug <- function(
 
   ###################### CROSS DRUG Testing #############################
   heatmap_df <- cross_drug |>
-      dplyr::filter(!is.na(drug), !is.na(test_drug)) |>
+    dplyr::filter(!is.na(drug), !is.na(test_drug)) |>
     # dplyr::filter(test_drug %in% (cross_drug |> dplyr::pull(drug))) |>
     dplyr::group_by(drug, test_drug) |>
     dplyr::summarise(median_mcc = median(mcc, na.rm = TRUE), .groups = "drop")
@@ -716,10 +716,10 @@ plotCrossDrug <- function(
   # )
 
   class_colors <- stats::setNames(
-  colorRampPalette(RColorBrewer::brewer.pal(9, "Pastel1"))(length(classes)),
-  classes
-)
-  
+    colorRampPalette(RColorBrewer::brewer.pal(9, "Pastel1"))(length(classes)),
+    classes
+  )
+
 
   heat_colors <- colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(100)
   max_val <- max(abs(mat), na.rm = TRUE)
@@ -735,7 +735,7 @@ plotCrossDrug <- function(
   ha_col <- ComplexHeatmap::HeatmapAnnotation(
     class_abbr = annotation_col$class_abbr,
     col = list(class_abbr = class_colors),
-    show_annotation_name = FALSE, na_col = "grey3", 
+    show_annotation_name = FALSE, na_col = "grey3",
     annotation_legend_param = list(labels_gp = grid::gpar(fontsize = 14))
   )
 
@@ -755,12 +755,8 @@ plotCrossDrug <- function(
     column_order = col_order,
     left_annotation = ha_row,
     top_annotation = ha_col,
-
-
-    width  = grid::unit(ncol(mat), "in"),
+    width = grid::unit(ncol(mat), "in"),
     height = grid::unit(nrow(mat), "in"),
-
-
     show_row_names = TRUE,
     show_column_names = TRUE,
     column_title = "tested on",
@@ -776,7 +772,6 @@ plotCrossDrug <- function(
 
     # legends
     show_heatmap_legend = TRUE,
-
     use_raster = FALSE
   )
 
@@ -819,22 +814,22 @@ plotStratifiedPerf <- function(year_or_country = "year",
     )
   ))
   # if (year_or_country == "year") {
-    all <- perf |>
-      # dplyr::rename("train_year" = "strat_value") |>
-      dplyr::mutate(strat_value_test = strat_value) |>
+  all <- perf |>
+    # dplyr::rename("train_year" = "strat_value") |>
+    dplyr::mutate(strat_value_test = strat_value) |>
+    dplyr::select(
+      drug_label, drug_or_class,
+      strat_value, strat_value_test, feature_type, feature_subtype, mcc
+    ) |>
+    dplyr::bind_rows(cross_test |>
       dplyr::select(
         drug_label, drug_or_class,
-        strat_value, strat_value_test, feature_type, feature_subtype, mcc
-      ) |>
-      dplyr::bind_rows(cross_test |>
-        dplyr::select(
-          drug_label, drug_or_class,
-          strat_value, strat_value_test, feature_type,
-          feature_subtype, mcc
-        )) |>
-      dplyr::mutate(category = dplyr::if_else(
-        strat_value == strat_value_test, "same", "different"
-      ))
+        strat_value, strat_value_test, feature_type,
+        feature_subtype, mcc
+      )) |>
+    dplyr::mutate(category = dplyr::if_else(
+      strat_value == strat_value_test, "same", "different"
+    ))
   # } else {
   #   all <- perf |>
   #     dplyr::rename("train_country" = "strat_value") |>
@@ -868,9 +863,9 @@ plotStratifiedPerf <- function(year_or_country = "year",
   # }
 
   fill_vals <- c(
-      "same" = "#b3cde3",
-      "different" = "#fbb4ae"
-    )
+    "same" = "#b3cde3",
+    "different" = "#fbb4ae"
+  )
 
   plot <- ggplot2::ggplot(
     all |>
