@@ -248,7 +248,7 @@ plotBaselineComparison <- function(
   baseline_comparison_barplot <- barplot(bal_acc_matrix,
     beside = TRUE,
     legend.text = TRUE, col = c("skyblue", "lightpink"),
-    ylab = "Balanced Accuracy"
+    ylab = "Balanced accuracy"
   )
 
   return(baseline_comparison_barplot)
@@ -382,7 +382,7 @@ plotDrugDist <- function(metadata_path = ".") {
   ##################### phenotype distribution (drugs) #########################
   drug_dist <- metadata |>
     dplyr::distinct(
-      genome_drug.genome_id,
+      genome.genome_id,
       genome_drug.antibiotic,
       drug_abbr,
       genome_drug.resistant_phenotype
@@ -434,7 +434,7 @@ plotDrugDist <- function(metadata_path = ".") {
 #' @param metadata_path Character. Path to a directory containing `metadata.parquet`.
 #' @param performance_path A performance tibble (with `drug_label`, `shuffled`,
 #' `drug_or_class`, `feature_type`, `feature_subtype`, and `mcc` columns), or a
-#' directory path containing `all_performance.parquet`.
+#' directory path containing `all_perf.parquet`.
 #'
 #' @return A patchwork ggplot object combining multiple panels.
 #' @export
@@ -459,13 +459,13 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 
   if (!is.data.frame(performance_path)) {
     performance_path <- arrow::read_parquet(
-      file.path(performance_path, "all_performance.parquet")
+      file.path(performance_path, "all_perf.parquet")
     )
   }
   performance <- performance_path
 
   plot_df <- metadata |>
-    dplyr::distinct(genome_drug.genome_id, genome_drug.antibiotic, drug_abbr) |>
+    dplyr::distinct(genome.genome_id, genome_drug.antibiotic, drug_abbr) |>
     dplyr::count(genome_drug.antibiotic, drug_abbr, name = "total")
 
   ######################## drug performances #################################
@@ -548,7 +548,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
     ) +
     ggplot2::geom_point(
       position = position_jitter(height = 0.1),
-      size = 2,
+      size = 1.5,
       alpha = 0.8,
       aes(color = feature_type)
     ) +
@@ -590,11 +590,11 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #' trained on one drug are evaluated on another.
 #'
 #' @param cross_test_performance_path A cross-drug performance tibble (with
-#' `drug_or_class`, `tested_on`, and `mcc` columns), or a directory path
+#' `drug_or_class`, `test_drug`, and `mcc` columns), or a directory path
 #' containing `cross_drug_perf.parquet`.
 #' @param drug_performance_path A performance tibble (with `drug_label`,
 #' `drug_or_class`, and `mcc` columns), or a directory path containing
-#' `all_performance.parquet`.
+#' `all_perf.parquet`.
 #' @param metadata_path Character. Path to a directory containing `metadata.parquet`.
 #'
 #' @return A ComplexHeatmap object.
@@ -603,7 +603,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #' @examples
 #' cross_drug <- tibble::tibble(
 #'   drug_or_class = c("AMP", "AMP", "CIP", "CIP", "NAL", "NAL"),
-#'   tested_on = c("CIP", "NAL", "AMP", "NAL", "AMP", "CIP"),
+#'   test_drug = c("CIP", "NAL", "AMP", "NAL", "AMP", "CIP"),
 #'   mcc = c(0.3, 0.2, 0.4, 0.25, 0.15, 0.35)
 #' )
 #' performance <- tibble::tibble(
@@ -624,12 +624,12 @@ plotCrossDrug <- function(
   if (!is.data.frame(cross_test_performance_path)) {
     cross_test_performance_path <- arrow::read_parquet(
       file.path(cross_test_performance_path, "cross_drug_perf.parquet")
-    )
+    ) 
   }
   cross_drug <- cross_test_performance_path
   if (!is.data.frame(drug_performance_path)) {
     drug_performance_path <- arrow::read_parquet(
-      file.path(drug_performance_path, "all_performance.parquet")
+      file.path(drug_performance_path, "all_perf.parquet")
     )
   }
   performance <- drug_performance_path
@@ -637,61 +637,63 @@ plotCrossDrug <- function(
 
   ###################### CROSS DRUG Testing #############################
   heatmap_df <- cross_drug |>
-    # dplyr::filter(tested_on %in% (cross_drug |> dplyr::pull(drug_or_class))) |>
-    dplyr::group_by(drug_or_class, tested_on) |>
+      dplyr::filter(!is.na(drug), !is.na(test_drug)) |>
+    # dplyr::filter(test_drug %in% (cross_drug |> dplyr::pull(drug))) |>
+    dplyr::group_by(drug, test_drug) |>
     dplyr::summarise(median_mcc = median(mcc, na.rm = TRUE), .groups = "drop")
 
   same_drugs <- performance |>
     dplyr::filter(
       drug_label == "drug",
       drug_or_class %in% (cross_drug |>
-        dplyr::distinct(drug_or_class) |>
+        dplyr::distinct(drug) |>
         dplyr::pull())
     ) |>
     dplyr::group_by(drug_or_class) |>
     dplyr::summarise(median_mcc = median(mcc, na.rm = TRUE), .groups = "drop") |>
-    dplyr::mutate(tested_on = drug_or_class) |>
-    dplyr::distinct(drug_or_class, tested_on, median_mcc)
+    dplyr::mutate(test_drug = drug_or_class) |>
+    dplyr::distinct(drug_or_class, test_drug, median_mcc) |>
+    dplyr::rename(drug = drug_or_class)
 
   heatmap_df <- heatmap_df |>
     dplyr::add_row(same_drugs) |>
     dplyr::left_join(
       metadata |>
         dplyr::distinct(drug_abbr, class_abbr),
-      by = c("drug_or_class" = "drug_abbr")
+      by = c("drug" = "drug_abbr")
     ) |>
     dplyr::rename("drug_class" = "class_abbr") |>
     dplyr::left_join(
       metadata |>
         dplyr::distinct(drug_abbr, class_abbr),
-      by = c("tested_on" = "drug_abbr")
+      by = c("test_drug" = "drug_abbr")
     )
 
   # Row annotation (already similar to what you did)
   annotation_row <- heatmap_df |>
-    dplyr::distinct(drug_or_class, drug_class) |>
-    tibble::column_to_rownames("drug_or_class")
+    dplyr::distinct(drug, drug_class) |>
+    tibble::column_to_rownames("drug")
 
   # Column annotation
   annotation_col <- heatmap_df |>
-    dplyr::distinct(tested_on, class_abbr) |>
-    tibble::column_to_rownames("tested_on")
+    dplyr::distinct(test_drug, class_abbr) |>
+    tibble::column_to_rownames("test_drug")
 
   mat <- heatmap_df |>
-    dplyr::select(drug_or_class, tested_on, median_mcc) |>
-    tidyr::pivot_wider(names_from = tested_on, values_from = median_mcc) |>
-    tibble::column_to_rownames("drug_or_class") |>
+    dplyr::select(drug, test_drug, median_mcc) |>
+    tidyr::pivot_wider(names_from = test_drug, values_from = median_mcc) |>
+    tibble::column_to_rownames("drug") |>
     as.matrix()
 
   row_order <- heatmap_df |>
-    dplyr::distinct(drug_or_class, drug_class) |>
-    dplyr::arrange(drug_class, drug_or_class) |>
-    dplyr::pull(drug_or_class)
+    dplyr::distinct(drug, drug_class) |>
+    dplyr::arrange(drug_class, drug) |>
+    dplyr::pull(drug)
 
   col_order <- heatmap_df |>
-    dplyr::distinct(tested_on, class_abbr) |>
-    dplyr::arrange(class_abbr, tested_on) |>
-    dplyr::pull(tested_on)
+    dplyr::distinct(test_drug, class_abbr) |>
+    dplyr::arrange(class_abbr, test_drug) |>
+    dplyr::pull(test_drug)
 
   # mat[is.na(mat)] <- 0
   mat <- mat[row_order, col_order]
@@ -708,10 +710,16 @@ plotCrossDrug <- function(
   )
 
   # Create ONE named color vector
+  # class_colors <- stats::setNames(
+  #   scales::hue_pal()(length(classes)),
+  #   classes
+  # )
+
   class_colors <- stats::setNames(
-    scales::hue_pal()(length(classes)),
-    classes
-  )
+  colorRampPalette(RColorBrewer::brewer.pal(9, "Pastel1"))(length(classes)),
+  classes
+)
+  
 
   heat_colors <- colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(100)
   max_val <- max(abs(mat), na.rm = TRUE)
@@ -727,7 +735,8 @@ plotCrossDrug <- function(
   ha_col <- ComplexHeatmap::HeatmapAnnotation(
     class_abbr = annotation_col$class_abbr,
     col = list(class_abbr = class_colors),
-    show_annotation_name = FALSE, na_col = "grey3"
+    show_annotation_name = FALSE, na_col = "grey3", 
+    annotation_legend_param = list(labels_gp = grid::gpar(fontsize = 14))
   )
 
   # ---- Color function (instead of breaks + palette) ----
@@ -746,6 +755,12 @@ plotCrossDrug <- function(
     column_order = col_order,
     left_annotation = ha_row,
     top_annotation = ha_col,
+
+
+    width  = grid::unit(ncol(mat), "in"),
+    height = grid::unit(nrow(mat), "in"),
+
+
     show_row_names = TRUE,
     show_column_names = TRUE,
     column_title = "tested on",
@@ -754,13 +769,15 @@ plotCrossDrug <- function(
     row_title_side = "right",
     row_names_gp = grid::gpar(fontsize = 14),
     column_names_gp = grid::gpar(fontsize = 14),
-    column_names_rot = 0,
+    column_names_rot = 45,
 
     # remove borders like pheatmap
     rect_gp = grid::gpar(col = NA),
 
     # legends
-    show_heatmap_legend = TRUE
+    show_heatmap_legend = TRUE,
+
+    use_raster = FALSE
   )
 
   cross_drug_hm
@@ -801,54 +818,59 @@ plotStratifiedPerf <- function(year_or_country = "year",
       "_perf.parquet"
     )
   ))
-  if (year_or_country == "year") {
+  # if (year_or_country == "year") {
     all <- perf |>
-      dplyr::rename("train_year" = "strat_value") |>
-      dplyr::mutate(test_year = train_year) |>
+      # dplyr::rename("train_year" = "strat_value") |>
+      dplyr::mutate(strat_value_test = strat_value) |>
       dplyr::select(
         drug_label, drug_or_class,
-        train_year, test_year, feature_type, feature_subtype, mcc
+        strat_value, strat_value_test, feature_type, feature_subtype, mcc
       ) |>
       dplyr::bind_rows(cross_test |>
         dplyr::select(
           drug_label, drug_or_class,
-          train_year, test_year, feature_type,
+          strat_value, strat_value_test, feature_type,
           feature_subtype, mcc
         )) |>
       dplyr::mutate(category = dplyr::if_else(
-        train_year == test_year, "same year bin", "different year bin"
+        strat_value == strat_value_test, "same", "different"
       ))
-  } else {
-    all <- perf |>
-      dplyr::rename("train_country" = "strat_value") |>
-      dplyr::mutate(test_country = train_country) |>
-      dplyr::select(
-        drug_label, drug_or_class,
-        train_country, test_country,
-        feature_type, feature_subtype, mcc
-      ) |>
-      dplyr::bind_rows(cross_test |>
-        dplyr::select(
-          drug_label, drug_or_class,
-          train_country, test_country,
-          feature_type, feature_subtype, mcc
-        )) |>
-      dplyr::mutate(category = dplyr::if_else(
-        train_country == test_country, "same country", "different country"
-      ))
-  }
+  # } else {
+  #   all <- perf |>
+  #     dplyr::rename("train_country" = "strat_value") |>
+  #     dplyr::mutate(test_country = train_country) |>
+  #     dplyr::select(
+  #       drug_label, drug_or_class,
+  #       train_country, test_country,
+  #       feature_type, feature_subtype, mcc
+  #     ) |>
+  #     dplyr::bind_rows(cross_test |>
+  #       dplyr::select(
+  #         drug_label, drug_or_class,
+  #         train_country, test_country,
+  #         feature_type, feature_subtype, mcc
+  #       )) |>
+  #     dplyr::mutate(category = dplyr::if_else(
+  #       train_country == test_country, "same country", "different country"
+  #     ))
+  # }
 
-  fill_vals <- if (year_or_country == "year") {
-    c(
-      "same year bin" = "#b3cde3",
-      "different year bin" = "#fbb4ae"
+  # fill_vals <- if (year_or_country == "year") {
+  #   c(
+  #     "same year bin" = "#b3cde3",
+  #     "different year bin" = "#fbb4ae"
+  #   )
+  # } else {
+  #   c(
+  #     "same country" = "#b3cde3",
+  #     "different country" = "#fbb4ae"
+  #   )
+  # }
+
+  fill_vals <- c(
+      "same" = "#b3cde3",
+      "different" = "#fbb4ae"
     )
-  } else {
-    c(
-      "same country" = "#b3cde3",
-      "different country" = "#fbb4ae"
-    )
-  }
 
   plot <- ggplot2::ggplot(
     all |>
@@ -875,16 +897,16 @@ plotStratifiedPerf <- function(year_or_country = "year",
       fill = "Tested on"
     ) +
     ggplot2::theme(
-      axis.title = ggplot2::element_text(colour = "black", size = 10),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 10, colour = "black"),
-      axis.text.y = ggplot2::element_text(size = 10, colour = "black"),
+      axis.title = ggplot2::element_text(colour = "black", size = 14),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 14, colour = "black"),
+      axis.text.y = ggplot2::element_text(size = 14, colour = "black"),
       axis.title.y = ggplot2::element_blank(),
       legend.title = ggplot2::element_text(size = 12),
       legend.text = ggplot2::element_text(size = 10),
       legend.position = "bottom",
       plot.title = ggplot2::element_text(face = "bold"),
       panel.grid.minor = ggplot2::element_blank(),
-      plot.margin = margin(0, 0, 0, 0)
+      plot.margin = ggplot2::margin(0, 0, 0, 0)
     )
   plot
 }
@@ -1116,7 +1138,7 @@ plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
 #' @param metadata_path Character. Unused; retained for backward compatibility.
 #' @param performance_path A performance tibble (with `feature_type`,
 #' `feature_subtype`, `mcc`, and `shuffled` columns), or a directory path
-#' containing `all_performance.parquet`.
+#' containing `all_perf.parquet`.
 #'
 #' @return A ggplot object.
 #' @export
@@ -1132,7 +1154,7 @@ plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
 plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
   if (!is.data.frame(performance_path)) {
     performance_path <- arrow::read_parquet(
-      file.path(performance_path, "all_performance.parquet")
+      file.path(performance_path, "all_perf.parquet")
     )
   }
   performance <- performance_path
