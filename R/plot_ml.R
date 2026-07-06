@@ -736,7 +736,7 @@ plotCrossDrug <- function(
     class_abbr = annotation_col$class_abbr,
     col = list(class_abbr = class_colors),
     show_annotation_name = FALSE, na_col = "grey3",
-    annotation_legend_param = list(labels_gp = grid::gpar(fontsize = 14))
+    annotation_legend_param = list(labels_gp = grid::gpar(fontsize = 10))
   )
 
   # ---- Color function (instead of breaks + palette) ----
@@ -755,8 +755,8 @@ plotCrossDrug <- function(
     column_order = col_order,
     left_annotation = ha_row,
     top_annotation = ha_col,
-    width = grid::unit(ncol(mat), "in"),
-    height = grid::unit(nrow(mat), "in"),
+    width = grid::unit(ncol(mat) * 1.5, "cm"),
+    height = grid::unit(nrow(mat)* 1.5, "cm"),
     show_row_names = TRUE,
     show_column_names = TRUE,
     column_title = "tested on",
