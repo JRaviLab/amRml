@@ -756,7 +756,7 @@ plotCrossDrug <- function(
     left_annotation = ha_row,
     top_annotation = ha_col,
     width = grid::unit(ncol(mat) * 1.5, "cm"),
-    height = grid::unit(nrow(mat)* 1.5, "cm"),
+    height = grid::unit(nrow(mat) * 1.5, "cm"),
     show_row_names = TRUE,
     show_column_names = TRUE,
     column_title = "tested on",
