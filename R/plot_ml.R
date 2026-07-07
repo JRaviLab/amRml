@@ -489,29 +489,29 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   ) +
     ggplot2::geom_tile(color = "grey90", width = 0.9) +
     ggplot2::scale_fill_gradientn(
-  colors = c(
-    "#C4B8A8", 
-    "#FAFAF7", 
-    "#5F84C9", 
-    "#0F2A5A"
-  ),
-  values = scales::rescale(c(-1, 0, 0.85, 1)),
-  breaks = c(-1, -0.5, 0, 0.5, 1),
-  labels = scales::label_number(accuracy = 0.01),
-  name = "Median MCC"
-) +
-#   ggplot2::scale_fill_gradientn(
-#   colors = c(
-#     "white",
-#     "#BDD7E7",
-#     "#6BAED6",
-#     "#2171B5",
-#     "#08306B"
-#   ),
-#   values = scales::rescale(c(0, 0.4, 0.6, 0.8, 1)),
-#   labels = scales::label_number(accuracy = 0.1),
-#   name = "Median MCC"
-# ) +
+      colors = c(
+        "#C4B8A8",
+        "#FAFAF7",
+        "#5F84C9",
+        "#0F2A5A"
+      ),
+      values = scales::rescale(c(-1, 0, 0.85, 1)),
+      breaks = c(-1, -0.5, 0, 0.5, 1),
+      labels = scales::label_number(accuracy = 0.01),
+      name = "Median MCC"
+    ) +
+    #   ggplot2::scale_fill_gradientn(
+    #   colors = c(
+    #     "white",
+    #     "#BDD7E7",
+    #     "#6BAED6",
+    #     "#2171B5",
+    #     "#08306B"
+    #   ),
+    #   values = scales::rescale(c(0, 0.4, 0.6, 0.8, 1)),
+    #   labels = scales::label_number(accuracy = 0.1),
+    #   name = "Median MCC"
+    # ) +
     ggplot2::labs(x = "Feature type") +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(
