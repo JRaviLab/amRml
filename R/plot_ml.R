@@ -1222,8 +1222,6 @@ plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
 #' }
 plotTopClusters <- function(top_feat_path = ".", cluster_feature_path = ".",
                             protein_names_path = ".", top_n = 10) {
-
-
   top_feat <- arrow::read_parquet(file.path(top_feat_path, "all_top_features.parquet"))
   cluster_feature <- arrow::read_parquet(file.path(cluster_feature_path, "cluster_feature.parquet"))
   protein_names <- arrow::read_parquet(file.path(protein_names_path, "protein_names.parquet"))
