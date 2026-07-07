@@ -207,7 +207,7 @@ plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
 #' @param non_shuffled_label_results Output of `runMLPipeline(shuffle_labels = FALSE)`
 #' @param shuffled_label_results Output of `runMLPipeline(shuffle_labels = TRUE)`
 #'
-#' @return A base R barplot comparing balanced accuracy across models.
+#' @return A barplot comparing balanced accuracy across models.
 #'
 #' @examples
 #' non_shuffled <- list(
@@ -598,7 +598,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   final_plot
 }
 
-#' Plot cross-drug generalization heatmap
+#' Plot cross-drug prediction as a heatmap
 #'
 #' Creates a heatmap showing cross-drug model performance (MCC), where models
 #' trained on one drug are evaluated on another.
@@ -649,7 +649,7 @@ plotCrossDrug <- function(
   performance <- drug_performance_path
   metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
 
-  ###################### CROSS DRUG Testing #############################
+
   heatmap_df <- cross_drug |>
     dplyr::filter(!is.na(drug), !is.na(test_drug)) |>
     # dplyr::filter(test_drug %in% (cross_drug |> dplyr::pull(drug))) |>
@@ -897,9 +897,9 @@ plotStratifiedPerf <- function(year_or_country = "year",
     ggplot2::theme_minimal(base_size = 14) +
     ggplot2::labs(
       title = if (year_or_country == "year") {
-        "Temporal performance by drug"
+        "Performance of AMR drug models with temporal holdouts"
       } else {
-        "Geographical performance by drug"
+        "Performance of AMR drug models with geographical holdouts"
       },
       x = "MCC",
       y = "Drug",
@@ -1222,7 +1222,7 @@ plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
 #' }
 plotTopClusters <- function(top_feat_path = ".", cluster_feature_path = ".",
                             protein_names_path = ".", top_n = 10) {
-  ################### Top features #########################
+
 
   top_feat <- arrow::read_parquet(file.path(top_feat_path, "all_top_features.parquet"))
   cluster_feature <- arrow::read_parquet(file.path(cluster_feature_path, "cluster_feature.parquet"))
