@@ -12,7 +12,7 @@ plotBaselineComparison(non_shuffled_label_results, shuffled_label_results)
 \item{shuffled_label_results}{Output of \code{runMLPipeline(shuffle_labels = TRUE)}}
 }
 \value{
-A base R barplot comparing balanced accuracy across models.
+A barplot comparing balanced accuracy across models.
 }
 \description{
 Produces a bar plot comparing balanced accuracy for each antibiotic using

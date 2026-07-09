@@ -144,10 +144,8 @@ runMLPipeline <- function(
 
   if (verbose) {
     message(
-      paste(
-        "`ml_input_tibble` has", num_obs_ml_input_tibble, "observations of",
-        getNumFeat(ml_input_tibble), "features."
-      )
+      "`ml_input_tibble` has ", num_obs_ml_input_tibble, " observations of ",
+      getNumFeat(ml_input_tibble), " features."
     )
   }
 

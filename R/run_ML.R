@@ -334,11 +334,11 @@ createMLinputList <- function(path,
           # Case B: unstratified -> prefix is first two tokens
           if (x[2] == "drug" && x[3] != "class") {
             # Case A: Cje_drug_X
-            return(paste(x[1:2], collapse = "_"))
+            return(paste(x[seq_len(2)], collapse = "_"))
           }
           if (x[2] == "drug" && x[3] == "class") {
             # Case A: Cje_drug_X
-            return(paste(x[1:3], collapse = "_"))
+            return(paste(x[seq_len(3)], collapse = "_"))
           }
         })
       )

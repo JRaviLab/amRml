@@ -11,7 +11,7 @@ plotDrugPerf(metadata_path = ".", performance_path = ".")
 
 \item{performance_path}{A performance tibble (with \code{drug_label}, \code{shuffled},
 \code{drug_or_class}, \code{feature_type}, \code{feature_subtype}, and \code{mcc} columns), or a
-directory path containing \code{all_performance.parquet}.}
+directory path containing \code{all_perf.parquet}.}
 }
 \value{
 A patchwork ggplot object combining multiple panels.

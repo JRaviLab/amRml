@@ -382,7 +382,7 @@ plotDrugDist <- function(metadata_path = ".") {
   ##################### phenotype distribution (drugs) #########################
   drug_dist <- metadata |>
     dplyr::distinct(
-      genome.genome_id,
+      genome_drug.genome_id,
       genome_drug.antibiotic,
       drug_abbr,
       genome_drug.resistant_phenotype
@@ -465,7 +465,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   performance <- performance_path
 
   plot_df <- metadata |>
-    dplyr::distinct(genome.genome_id, genome_drug.antibiotic, drug_abbr) |>
+    dplyr::distinct(genome_drug.genome_id, genome_drug.antibiotic, drug_abbr) |>
     dplyr::count(genome_drug.antibiotic, drug_abbr, name = "total")
 
   ######################## drug performances #################################
@@ -604,7 +604,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #' trained on one drug are evaluated on another.
 #'
 #' @param cross_test_performance_path A cross-drug performance tibble (with
-#' `drug_or_class`, `test_drug`, and `mcc` columns), or a directory path
+#' `drug`, `test_drug`, and `mcc` columns), or a directory path
 #' containing `cross_drug_perf.parquet`.
 #' @param drug_performance_path A performance tibble (with `drug_label`,
 #' `drug_or_class`, and `mcc` columns), or a directory path containing
@@ -616,7 +616,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #'
 #' @examples
 #' cross_drug <- tibble::tibble(
-#'   drug_or_class = c("AMP", "AMP", "CIP", "CIP", "NAL", "NAL"),
+#'   drug = c("AMP", "AMP", "CIP", "CIP", "NAL", "NAL"),
 #'   test_drug = c("CIP", "NAL", "AMP", "NAL", "AMP", "CIP"),
 #'   mcc = c(0.3, 0.2, 0.4, 0.25, 0.15, 0.35)
 #' )

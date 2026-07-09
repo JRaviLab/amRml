@@ -10,7 +10,7 @@ runIFE(
   ml_input_tibble,
   by_num = TRUE,
   by_vi = FALSE,
-  percent_removal_vec = 10 * 1:9,
+  percent_removal_vec = 10 * seq_len(9),
   mix_vec = 0,
   return_feats = FALSE,
   verbose = TRUE

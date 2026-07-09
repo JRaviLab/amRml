@@ -11,7 +11,7 @@ plotShuffleVsReal(metadata_path = ".", performance_path = ".")
 
 \item{performance_path}{A performance tibble (with \code{feature_type},
 \code{feature_subtype}, \code{mcc}, and \code{shuffled} columns), or a directory path
-containing \code{all_performance.parquet}.}
+containing \code{all_perf.parquet}.}
 }
 \value{
 A ggplot object.

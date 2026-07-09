@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_ml.R
 \name{plotCrossDrug}
 \alias{plotCrossDrug}
-\title{Plot cross-drug generalization heatmap}
+\title{Plot cross-drug prediction as a heatmap}
 \usage{
 plotCrossDrug(
   cross_test_performance_path = ".",
@@ -12,12 +12,12 @@ plotCrossDrug(
 }
 \arguments{
 \item{cross_test_performance_path}{A cross-drug performance tibble (with
-\code{drug_or_class}, \code{tested_on}, and \code{mcc} columns), or a directory path
+\code{drug}, \code{test_drug}, and \code{mcc} columns), or a directory path
 containing \code{cross_drug_perf.parquet}.}
 
 \item{drug_performance_path}{A performance tibble (with \code{drug_label},
 \code{drug_or_class}, and \code{mcc} columns), or a directory path containing
-\code{all_performance.parquet}.}
+\code{all_perf.parquet}.}
 
 \item{metadata_path}{Character. Path to a directory containing \code{metadata.parquet}.}
 }
@@ -30,8 +30,8 @@ trained on one drug are evaluated on another.
 }
 \examples{
 cross_drug <- tibble::tibble(
-  drug_or_class = c("AMP", "AMP", "CIP", "CIP", "NAL", "NAL"),
-  tested_on = c("CIP", "NAL", "AMP", "NAL", "AMP", "CIP"),
+  drug = c("AMP", "AMP", "CIP", "CIP", "NAL", "NAL"),
+  test_drug = c("CIP", "NAL", "AMP", "NAL", "AMP", "CIP"),
   mcc = c(0.3, 0.2, 0.4, 0.25, 0.15, 0.35)
 )
 performance <- tibble::tibble(
