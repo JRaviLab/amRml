@@ -382,7 +382,7 @@ plotDrugDist <- function(metadata_path = ".") {
   ##################### phenotype distribution (drugs) #########################
   drug_dist <- metadata |>
     dplyr::distinct(
-      genome_drug.genome_id,
+      genome.genome_id,
       genome_drug.antibiotic,
       drug_abbr,
       genome_drug.resistant_phenotype
@@ -465,7 +465,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   performance <- performance_path
 
   plot_df <- metadata |>
-    dplyr::distinct(genome_drug.genome_id, genome_drug.antibiotic, drug_abbr) |>
+    dplyr::distinct(genome.genome_id, genome_drug.antibiotic, drug_abbr) |>
     dplyr::count(genome_drug.antibiotic, drug_abbr, name = "total")
 
   ######################## drug performances #################################
@@ -489,17 +489,16 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   ) +
     ggplot2::geom_tile(color = "grey90", width = 0.9) +
     ggplot2::scale_fill_gradientn(
-      colors = c(
-        "#C4B8A8",
-        "#FAFAF7",
-        "#5F84C9",
-        "#0F2A5A"
-      ),
-      values = scales::rescale(c(-1, 0, 0.85, 1)),
-      breaks = c(-1, -0.5, 0, 0.5, 1),
-      labels = scales::label_number(accuracy = 0.01),
-      name = "Median MCC"
-    ) +
+  colors = c(
+    "#EAF2FF",  # very light blue
+    "#5F84C9",  # medium blue
+    "#0F2A5A"   # dark blue
+  ),
+  values = scales::rescale(c(-1, 0, 1)),
+  breaks = c(-1, -0.5, 0, 0.5, 1),
+  labels = scales::label_number(accuracy = 0.01),
+  name = "Median MCC"
+) +
     #   ggplot2::scale_fill_gradientn(
     #   colors = c(
     #     "white",
