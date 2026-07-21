@@ -429,7 +429,7 @@ plotDrugDist <- function(metadata_path = ".") {
 
   drug_dist <- metadata |>
     dplyr::distinct(
-      genome_drug.genome_id,
+      genome.genome_id,
       genome_drug.antibiotic,
       drug_abbr,
       genome_drug.resistant_phenotype
@@ -508,7 +508,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   )
 
   plot_df <- metadata |>
-    dplyr::distinct(genome_drug.genome_id, genome_drug.antibiotic, drug_abbr) |>
+    dplyr::distinct(genome.genome_id, genome_drug.antibiotic, drug_abbr) |>
     dplyr::count(genome_drug.antibiotic, drug_abbr, name = "total")
 
   ######################## drug performances #################################
