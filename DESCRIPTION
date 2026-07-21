@@ -31,6 +31,8 @@ Suggests:
     xgboost
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Remotes:
+    vip=url::https://cran.r-project.org/src/contrib/Archive/vip/vip_0.4.6.tar.gz
 Imports:
     arrow,
     BiocParallel,
