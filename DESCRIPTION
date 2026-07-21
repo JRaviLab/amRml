@@ -25,7 +25,6 @@ Depends:
     R (>= 4.5.0)
 Suggests:
     BiocStyle,
-    ComplexHeatmap,
     knitr,
     rmarkdown,
     testthat (>= 3.0.0),
@@ -35,6 +34,7 @@ Config/testthat/edition: 3
 Imports:
     arrow,
     BiocParallel,
+    ComplexHeatmap,
     DBI,
     dplyr,
     duckdb,

@@ -7,29 +7,28 @@
 plotBaselineComparison(non_shuffled_label_results, shuffled_label_results)
 }
 \arguments{
-\item{non_shuffled_label_results}{Output of \code{runMLPipeline(shuffle_labels = FALSE)}}
+\item{non_shuffled_label_results}{A performance tibble with \code{antibiotic} and
+\code{bal_acc} columns (one row per antibiotic), such as an aggregated
+\code{performance_tibble} from \code{runMLPipeline(shuffle_labels = FALSE)}.}
 
-\item{shuffled_label_results}{Output of \code{runMLPipeline(shuffle_labels = TRUE)}}
+\item{shuffled_label_results}{The corresponding shuffled-label performance
+tibble, e.g. from \code{runMLPipeline(shuffle_labels = TRUE)}.}
 }
 \value{
-A barplot comparing balanced accuracy across models.
+A barplot comparing balanced accuracy across antibiotics.
 }
 \description{
 Produces a bar plot comparing balanced accuracy for each antibiotic using
 true AMR labels vs. randomly shuffled labels.
 }
 \examples{
-non_shuffled <- list(
-  performance_tibble = tibble::tibble(
-    antibiotic = c("AMP", "CIP", "CRO"),
-    bal_acc    = c(0.88, 0.81, 0.92)
-  )
+non_shuffled <- tibble::tibble(
+  antibiotic = c("AMP", "CIP", "CRO"),
+  bal_acc    = c(0.88, 0.81, 0.92)
 )
-shuffled <- list(
-  performance_tibble = tibble::tibble(
-    antibiotic = c("AMP", "CIP", "CRO"),
-    bal_acc    = c(0.52, 0.49, 0.55)
-  )
+shuffled <- tibble::tibble(
+  antibiotic = c("AMP", "CIP", "CRO"),
+  bal_acc    = c(0.52, 0.49, 0.55)
 )
 plotBaselineComparison(non_shuffled, shuffled)
 }

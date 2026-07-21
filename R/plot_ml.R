@@ -170,7 +170,17 @@ plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
   if (is.character(topfeat)) {
     topfeat <- readr::read_tsv(topfeat)
   }
+  .checkArgTibble(topfeat)
   .checkArgNTopFeats(n_top_feats)
+
+  missing_cols <- setdiff(c("Variable", "Importance", "Sign"), colnames(topfeat))
+  if (length(missing_cols) > 0) {
+    stop(
+      "`topfeat` must have `Variable`, `Importance`, and `Sign` columns ",
+      "(e.g. the output of `extractTopFeats()`). Missing: ",
+      paste(missing_cols, collapse = ", "), "."
+    )
+  }
 
   vip <- topfeat |>
     dplyr::slice_max(order_by = Importance, n = n_top_feats) |>
@@ -204,51 +214,62 @@ plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
 #' Produces a bar plot comparing balanced accuracy for each antibiotic using
 #' true AMR labels vs. randomly shuffled labels.
 #'
-#' @param non_shuffled_label_results Output of `runMLPipeline(shuffle_labels = FALSE)`
-#' @param shuffled_label_results Output of `runMLPipeline(shuffle_labels = TRUE)`
+#' @param non_shuffled_label_results A performance tibble with `antibiotic` and
+#' `bal_acc` columns (one row per antibiotic), such as an aggregated
+#' `performance_tibble` from `runMLPipeline(shuffle_labels = FALSE)`.
+#' @param shuffled_label_results The corresponding shuffled-label performance
+#' tibble, e.g. from `runMLPipeline(shuffle_labels = TRUE)`.
 #'
-#' @return A barplot comparing balanced accuracy across models.
+#' @return A barplot comparing balanced accuracy across antibiotics.
 #'
 #' @examples
-#' non_shuffled <- list(
-#'   performance_tibble = tibble::tibble(
-#'     antibiotic = c("AMP", "CIP", "CRO"),
-#'     bal_acc    = c(0.88, 0.81, 0.92)
-#'   )
+#' non_shuffled <- tibble::tibble(
+#'   antibiotic = c("AMP", "CIP", "CRO"),
+#'   bal_acc    = c(0.88, 0.81, 0.92)
 #' )
-#' shuffled <- list(
-#'   performance_tibble = tibble::tibble(
-#'     antibiotic = c("AMP", "CIP", "CRO"),
-#'     bal_acc    = c(0.52, 0.49, 0.55)
-#'   )
+#' shuffled <- tibble::tibble(
+#'   antibiotic = c("AMP", "CIP", "CRO"),
+#'   bal_acc    = c(0.52, 0.49, 0.55)
 #' )
 #' plotBaselineComparison(non_shuffled, shuffled)
 #' @export
 plotBaselineComparison <- function(
-  non_shuffled_label_results,
-  shuffled_label_results
-) {
-  .checkArgTibble(non_shuffled_label_results$performance_tibble)
-  .checkArgTibble(shuffled_label_results$performance_tibble)
+    non_shuffled_label_results,
+    shuffled_label_results) {
+  .checkArgTibble(non_shuffled_label_results)
+  .checkArgTibble(shuffled_label_results)
 
-  non_shuffled_bal_acc <- non_shuffled_label_results$performance_tibble |>
-    dplyr::select(bal_acc) |>
-    dplyr::pull()
+  required_cols <- c("antibiotic", "bal_acc")
+  for (results in list(non_shuffled_label_results, shuffled_label_results)) {
+    missing_cols <- setdiff(required_cols, colnames(results))
+    if (length(missing_cols) > 0) {
+      stop(
+        "Baseline comparison inputs must have `antibiotic` and `bal_acc` ",
+        "columns. Missing: ", paste(missing_cols, collapse = ", "), "."
+      )
+    }
+  }
 
-  shuffled_bal_acc <- shuffled_label_results$performance_tibble |>
-    dplyr::select(bal_acc) |>
-    dplyr::pull()
+  drugs <- non_shuffled_label_results |>
+    dplyr::pull(antibiotic)
+
+  non_shuffled_bal_acc <- non_shuffled_label_results |>
+    dplyr::pull(bal_acc)
+
+  shuffled_bal_acc <- shuffled_label_results |>
+    dplyr::pull(bal_acc)
 
   bal_acc_matrix <- matrix(c(non_shuffled_bal_acc, shuffled_bal_acc),
     nrow = 2, byrow = TRUE
   )
 
+  colnames(bal_acc_matrix) <- drugs
   rownames(bal_acc_matrix) <- c("Non-Shuffled Labels", "Shuffled Labels")
 
   baseline_comparison_barplot <- barplot(bal_acc_matrix,
     beside = TRUE,
     legend.text = TRUE, col = c("skyblue", "lightpink"),
-    ylab = "Balanced accuracy"
+    ylab = "Balanced accuracy", xlab = "Antibiotic"
   )
 
   return(baseline_comparison_barplot)
@@ -302,10 +323,9 @@ plotBaselineComparison <- function(
 #' @import ggrepel
 #' @export
 plotFishers <- function(
-  fisher_df,
-  alpha = 0.05,
-  label_top_n = 5
-) {
+    fisher_df,
+    alpha = 0.05,
+    label_top_n = 5) {
   required_cols <- c("gene", "adj_p_value", "sig_after_bh")
   missing_cols <- setdiff(required_cols, colnames(fisher_df))
 
@@ -364,6 +384,34 @@ plotFishers <- function(
   return(p)
 }
 
+# Read `metadata.parquet` from a directory, with a clear error if missing.
+.readMetadata <- function(metadata_path) {
+  if (!is.character(metadata_path) || length(metadata_path) != 1) {
+    stop("`metadata_path` must be a single directory path (character).")
+  }
+  fp <- file.path(metadata_path, "metadata.parquet")
+  if (!file.exists(fp)) {
+    stop("Could not find `metadata.parquet` in directory: ", metadata_path)
+  }
+  arrow::read_parquet(fp)
+}
+
+# Accept a data frame directly, or read `filename` from a directory path.
+# `arg_name` is used only to produce informative error messages.
+.readPerfInput <- function(x, filename, arg_name) {
+  if (is.data.frame(x)) {
+    return(x)
+  }
+  if (!is.character(x) || length(x) != 1) {
+    stop("`", arg_name, "` must be a data frame or a single directory path.")
+  }
+  fp <- file.path(x, filename)
+  if (!file.exists(fp)) {
+    stop("Could not find `", filename, "` in `", arg_name, "` directory: ", x)
+  }
+  arrow::read_parquet(fp)
+}
+
 #' Plot drug phenotype distribution
 #'
 #' Reads metadata and generates a stacked bar plot showing counts of resistant
@@ -377,12 +425,11 @@ plotFishers <- function(
 #' @examples
 #' plotDrugDist(metadata_path = system.file("extdata", package = "amRml"))
 plotDrugDist <- function(metadata_path = ".") {
-  metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
+  metadata <- .readMetadata(metadata_path)
 
-  ##################### phenotype distribution (drugs) #########################
   drug_dist <- metadata |>
     dplyr::distinct(
-      genome.genome_id,
+      genome_drug.genome_id,
       genome_drug.antibiotic,
       drug_abbr,
       genome_drug.resistant_phenotype
@@ -455,17 +502,13 @@ plotDrugDist <- function(metadata_path = ".") {
 #'   performance_path = performance
 #' )
 plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
-  metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
-
-  if (!is.data.frame(performance_path)) {
-    performance_path <- arrow::read_parquet(
-      file.path(performance_path, "all_perf.parquet")
-    )
-  }
-  performance <- performance_path
+  metadata <- .readMetadata(metadata_path)
+  performance <- .readPerfInput(
+    performance_path, "all_perf.parquet", "performance_path"
+  )
 
   plot_df <- metadata |>
-    dplyr::distinct(genome.genome_id, genome_drug.antibiotic, drug_abbr) |>
+    dplyr::distinct(genome_drug.genome_id, genome_drug.antibiotic, drug_abbr) |>
     dplyr::count(genome_drug.antibiotic, drug_abbr, name = "total")
 
   ######################## drug performances #################################
@@ -489,28 +532,16 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
   ) +
     ggplot2::geom_tile(color = "grey90", width = 0.9) +
     ggplot2::scale_fill_gradientn(
-  colors = c(
-    "#EAF2FF",  # very light blue
-    "#5F84C9",  # medium blue
-    "#0F2A5A"   # dark blue
-  ),
-  values = scales::rescale(c(-1, 0, 1)),
-  breaks = c(-1, -0.5, 0, 0.5, 1),
-  labels = scales::label_number(accuracy = 0.01),
-  name = "Median MCC"
-) +
-    #   ggplot2::scale_fill_gradientn(
-    #   colors = c(
-    #     "white",
-    #     "#BDD7E7",
-    #     "#6BAED6",
-    #     "#2171B5",
-    #     "#08306B"
-    #   ),
-    #   values = scales::rescale(c(0, 0.4, 0.6, 0.8, 1)),
-    #   labels = scales::label_number(accuracy = 0.1),
-    #   name = "Median MCC"
-    # ) +
+      colors = c(
+        "#EAF2FF", # very light blue
+        "#5F84C9", # medium blue
+        "#0F2A5A" # dark blue
+      ),
+      values = scales::rescale(c(-1, 0, 1)),
+      breaks = c(-1, -0.5, 0, 0.5, 1),
+      labels = scales::label_number(accuracy = 0.01),
+      name = "Median MCC"
+    ) +
     ggplot2::labs(x = "Feature type") +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(
@@ -521,8 +552,6 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
       legend.position = "bottom"
     ) +
     ggplot2::coord_fixed()
-
-  drug_p1
 
   median_feature <- performance |>
     dplyr::filter(
@@ -583,8 +612,6 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
       axis.line = ggplot2::element_line(color = "black")
     )
 
-  rc_perf
-
   final_plot <- patchwork::wrap_plots(
     drug_p1, rc_perf,
     widths = c(2, 2), # adjust proportions
@@ -630,28 +657,20 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #'   metadata_path = system.file("extdata", package = "amRml")
 #' )
 plotCrossDrug <- function(
-  cross_test_performance_path = ".",
-  drug_performance_path = ".",
-  metadata_path = "."
-) {
-  if (!is.data.frame(cross_test_performance_path)) {
-    cross_test_performance_path <- arrow::read_parquet(
-      file.path(cross_test_performance_path, "cross_drug_perf.parquet")
-    )
-  }
-  cross_drug <- cross_test_performance_path
-  if (!is.data.frame(drug_performance_path)) {
-    drug_performance_path <- arrow::read_parquet(
-      file.path(drug_performance_path, "all_perf.parquet")
-    )
-  }
-  performance <- drug_performance_path
-  metadata <- arrow::read_parquet(file.path(metadata_path, "metadata.parquet"))
-
+    cross_test_performance_path = ".",
+    drug_performance_path = ".",
+    metadata_path = ".") {
+  cross_drug <- .readPerfInput(
+    cross_test_performance_path, "cross_drug_perf.parquet",
+    "cross_test_performance_path"
+  )
+  performance <- .readPerfInput(
+    drug_performance_path, "all_perf.parquet", "drug_performance_path"
+  )
+  metadata <- .readMetadata(metadata_path)
 
   heatmap_df <- cross_drug |>
     dplyr::filter(!is.na(drug), !is.na(test_drug)) |>
-    # dplyr::filter(test_drug %in% (cross_drug |> dplyr::pull(drug))) |>
     dplyr::group_by(drug, test_drug) |>
     dplyr::summarise(median_mcc = median(mcc, na.rm = TRUE), .groups = "drop")
 
@@ -708,7 +727,6 @@ plotCrossDrug <- function(
     dplyr::arrange(class_abbr, test_drug) |>
     dplyr::pull(test_drug)
 
-  # mat[is.na(mat)] <- 0
   mat <- mat[row_order, col_order]
 
   # Align annotations
@@ -722,12 +740,7 @@ plotCrossDrug <- function(
     annotation_col$class_abbr
   )
 
-  # Create ONE named color vector
-  # class_colors <- stats::setNames(
-  #   scales::hue_pal()(length(classes)),
-  #   classes
-  # )
-
+  # One named color vector shared by row and column annotations.
   class_colors <- stats::setNames(
     colorRampPalette(RColorBrewer::brewer.pal(9, "Pastel1"))(length(classes)),
     classes
@@ -813,22 +826,29 @@ plotCrossDrug <- function(
 plotStratifiedPerf <- function(year_or_country = "year",
                                stratified_performance_path = ".",
                                stratified_cross_performance_path = ".") {
-  perf <- arrow::read_parquet(file.path(
+  if (!year_or_country %in% c("year", "country")) {
+    stop("`year_or_country` must be either \"year\" or \"country\".")
+  }
+
+  perf_file <- file.path(
     stratified_performance_path,
     paste0(year_or_country, "_perf.parquet")
-  ))
-
-  cross_test <- arrow::read_parquet(file.path(
+  )
+  cross_file <- file.path(
     stratified_cross_performance_path,
-    paste0(
-      "cross_",
-      year_or_country,
-      "_perf.parquet"
-    )
-  ))
-  # if (year_or_country == "year") {
+    paste0("cross_", year_or_country, "_perf.parquet")
+  )
+  if (!file.exists(perf_file)) {
+    stop("Could not find stratified performance file: ", perf_file)
+  }
+  if (!file.exists(cross_file)) {
+    stop("Could not find cross-stratified performance file: ", cross_file)
+  }
+
+  perf <- arrow::read_parquet(perf_file)
+  cross_test <- arrow::read_parquet(cross_file)
+
   all <- perf |>
-    # dplyr::rename("train_year" = "strat_value") |>
     dplyr::mutate(strat_value_test = strat_value) |>
     dplyr::select(
       drug_label, drug_or_class,
@@ -843,37 +863,6 @@ plotStratifiedPerf <- function(year_or_country = "year",
     dplyr::mutate(category = dplyr::if_else(
       strat_value == strat_value_test, "same", "different"
     ))
-  # } else {
-  #   all <- perf |>
-  #     dplyr::rename("train_country" = "strat_value") |>
-  #     dplyr::mutate(test_country = train_country) |>
-  #     dplyr::select(
-  #       drug_label, drug_or_class,
-  #       train_country, test_country,
-  #       feature_type, feature_subtype, mcc
-  #     ) |>
-  #     dplyr::bind_rows(cross_test |>
-  #       dplyr::select(
-  #         drug_label, drug_or_class,
-  #         train_country, test_country,
-  #         feature_type, feature_subtype, mcc
-  #       )) |>
-  #     dplyr::mutate(category = dplyr::if_else(
-  #       train_country == test_country, "same country", "different country"
-  #     ))
-  # }
-
-  # fill_vals <- if (year_or_country == "year") {
-  #   c(
-  #     "same year bin" = "#b3cde3",
-  #     "different year bin" = "#fbb4ae"
-  #   )
-  # } else {
-  #   c(
-  #     "same country" = "#b3cde3",
-  #     "different country" = "#fbb4ae"
-  #   )
-  # }
 
   fill_vals <- c(
     "same" = "#b3cde3",
@@ -921,26 +910,41 @@ plotStratifiedPerf <- function(year_or_country = "year",
 
 #' Plot multi-drug resistance (MDR) model performance
 #'
-#' Generates violin plots of performance, feature importance summaries,
-#' and prediction confusion-style visualizations for MDR models.
+#' Generates a violin plot of performance across feature types and a
+#' prediction confusion-style tile plot for MDR models.
 #'
-#' @param MDR_performance_path Character. Path to `MDR_perf.parquet`.
-#' @param MDR_top_feature_path Character. Path to `MDR_top_features.parquet`.
-#' @param MDR_pred_path Character. Path to `MDR_pred.parquet`.
+#' @param MDR_performance_path Character. Path to a directory containing
+#' `MDR_perf.parquet`.
+#' @param MDR_top_feature_path Character. Path to a directory containing
+#' `MDR_top_features.parquet`. Currently unused (reserved for an upcoming
+#' feature-cluster panel).
+#' @param MDR_pred_path Character. Path to a directory containing
+#' `MDR_pred.parquet`.
 #'
-#' @return A list of ggplot objects.
+#' @return A named list of two `ggplot` objects: `performance` (violin plot)
+#' and `prediction` (predicted-vs-true tile plot).
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' plotMDR(
-#'   MDR_performance_path = "data/Campylobacter/MDR_ML_performance", MDR_top_feature_path = "data/Campylobacter/MDR_ML_top_features",
+#'   MDR_performance_path = "data/Campylobacter/MDR_ML_performance",
+#'   MDR_top_feature_path = "data/Campylobacter/MDR_ML_top_features",
 #'   MDR_pred_path = "data/Campylobacter/MDR_ML_pred"
 #' )
 #' }
 plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
                     MDR_pred_path = ".") {
-  MDR_perf <- arrow::read_parquet(file.path(MDR_performance_path, "MDR_perf.parquet"))
+  perf_file <- file.path(MDR_performance_path, "MDR_perf.parquet")
+  pred_file <- file.path(MDR_pred_path, "MDR_pred.parquet")
+  if (!file.exists(perf_file)) {
+    stop("Could not find `MDR_perf.parquet` in: ", MDR_performance_path)
+  }
+  if (!file.exists(pred_file)) {
+    stop("Could not find `MDR_pred.parquet` in: ", MDR_pred_path)
+  }
+
+  MDR_perf <- arrow::read_parquet(perf_file)
 
   # ---- Violin plot ----
   perf_plot <- ggplot2::ggplot(
@@ -989,9 +993,7 @@ plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
     ) +
     ggplot2::scale_y_continuous(limits = c(0, 1))
 
-  perf_plot
-
-  MDR_pred <- arrow::read_parquet(file.path(MDR_pred_path, "MDR_pred.parquet")) |>
+  MDR_pred <- arrow::read_parquet(pred_file) |>
     dplyr::mutate(
       diff_top2 = purrr::pmap_dbl(dplyr::across(dplyr::contains(".pred") & dplyr::where(is.numeric)), function(...) {
         x <- c(...)
@@ -1039,103 +1041,10 @@ plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
       title = ggplot2::element_text(face = "bold")
     )
 
-  MDR_pred_plot
-
-  # MDR_feat <- arrow::read_parquet(file.path(
-  #   MDR_top_feature_path,"MDR_top_features.parquet")) |>
-  #   pivot_longer(-c(Variable, feature_type, feature_subtype, seed),
-  #                values_to = "Importance",
-  #                names_to = "Resistant_classes") |>
-  #   filter(!Importance == 0)
-  #
-  # MDR_feat_clean <- MDR_feat |>
-  #   dplyr::filter(feature_type != "struct") |>
-  #   dplyr::group_by(Resistant_classes, feature_type, feature_subtype, seed) |>
-  #   dplyr::slice_max(Importance, n = top_n, with_ties = FALSE) |>
-  #   dplyr::ungroup() |>
-  #   dplyr::mutate(Variable = gsub( ".NCBIFAM", "", Variable)) |>
-  #   dplyr::mutate(Variable = gsub("^X", "", Variable)) |>
-  #   dplyr::mutate(Variable = dplyr::if_else(
-  #     feature_type == "domains", gsub("_.*", "", Variable), Variable)) |>
-  #   dplyr::mutate(Variable = dplyr::if_else(
-  #     feature_type == "proteins", gsub("fig.", "fig|", Variable), Variable)) |>
-  #   dplyr::left_join(cluster_feature, by = c("Variable" = "feature")) |>
-  #   dplyr::mutate(
-  #     cluster = dplyr::coalesce(cluster, Variable)
-  #   )
-  #
-  # cluster_df <- MDR_feat_clean |>
-  #   dplyr::group_by(Resistant_classes, cluster) |>
-  #   dplyr::summarise(
-  #     Importance = median(Importance, na.rm = TRUE),
-  #     .groups = "drop"
-  #   )
-  #
-  # top_clusters <- cluster_df |>
-  #   group_by(Resistant_classes) |>
-  #   group_modify(~{
-  #
-  #     df <- .x
-  #
-  #     top_pos <- df |>
-  #       arrange(desc(Importance)) |>
-  #       slice_head(n = 10)
-  #
-  #     top_neg <- df |>
-  #       arrange(Importance) |>
-  #       slice_head(n = 10)
-  #
-  #     bind_rows(top_pos, top_neg)
-  #   }) |>
-  #   ungroup()
-  #
-  # top_clusters <- top_clusters |>
-  #   dplyr::left_join(protein_names, by = c("cluster" = "proteinID")) |>
-  #   dplyr::mutate(
-  #     proteinName = dplyr::coalesce(proteinName, cluster),  # fallback
-  #     proteinName = stringr::str_trunc(proteinName, 50)
-  #   ) |>
-  #   dplyr::distinct(Resistant_classes, proteinName, Importance) |>
-  #   # ✅ reorder AFTER naming
-  #   dplyr::group_by(Resistant_classes) |>
-  #   dplyr::mutate(
-  #     proteinName = forcats::fct_reorder(proteinName, Importance)
-  #   ) |>
-  #   dplyr::ungroup()
-  #
-  # ggplot(top_clusters,
-  #        aes(x = Importance, y = proteinName)) +
-  #
-  #   # line (lollipop stem)
-  #   geom_segment(
-  #     aes(x = 0, xend = Importance,
-  #         y = proteinName, yend = proteinName),
-  #     color = "grey60"
-  #   ) +
-  #
-  #   # dot
-  #   geom_point(
-  #     aes(color = Importance > 0),
-  #     size = 3
-  #   ) +
-  #
-  #   facet_wrap(~ Resistant_classes, scales = "free_y") +
-  #
-  #   scale_color_manual(
-  #     values = c("TRUE" = "#5b8db8",   # positive
-  #                "FALSE" = "#d4872a"), # negative
-  #     guide = "none"
-  #   ) +
-  #
-  #   theme_minimal(base_size = 13) +
-  #   labs(
-  #     x = "Median importance",
-  #     y = "Cluster"
-  #   ) +
-  #   theme(
-  #     panel.grid.minor = element_blank(),
-  #     strip.text = element_text(face = "bold")
-  #   )
+  list(
+    performance = perf_plot,
+    prediction = MDR_pred_plot
+  )
 }
 
 #' Compare shuffled vs real model performance
@@ -1160,12 +1069,9 @@ plotMDR <- function(MDR_performance_path = ".", MDR_top_feature_path = ".",
 #' )
 #' plotShuffleVsReal(performance_path = performance)
 plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
-  if (!is.data.frame(performance_path)) {
-    performance_path <- arrow::read_parquet(
-      file.path(performance_path, "all_perf.parquet")
-    )
-  }
-  performance <- performance_path
+  performance <- .readPerfInput(
+    performance_path, "all_perf.parquet", "performance_path"
+  )
 
   performance |>
     dplyr::mutate(
@@ -1215,15 +1121,23 @@ plotShuffleVsReal <- function(metadata_path = ".", performance_path = ".") {
 #' @examples
 #' \dontrun{
 #' plotTopClusters(
-#'   top_feat_path = "data/Campylobacter/ML_top_features", cluster_feature_path = "data/Campylobacter/",
-#'   protein_names_path = "data/Campylobacter/", top_n = 10
+#'   top_feat_path = "data/Campylobacter/ML_top_features",
+#'   cluster_feature_path = "data/Campylobacter/",
+#'   protein_names_path = "data/Campylobacter/",
+#'   top_n = 10
 #' )
 #' }
 plotTopClusters <- function(top_feat_path = ".", cluster_feature_path = ".",
                             protein_names_path = ".", top_n = 10) {
-  top_feat <- arrow::read_parquet(file.path(top_feat_path, "all_top_features.parquet"))
-  cluster_feature <- arrow::read_parquet(file.path(cluster_feature_path, "cluster_feature.parquet"))
-  protein_names <- arrow::read_parquet(file.path(protein_names_path, "protein_names.parquet"))
+  top_feat <- .readPerfInput(
+    top_feat_path, "all_top_features.parquet", "top_feat_path"
+  )
+  cluster_feature <- .readPerfInput(
+    cluster_feature_path, "cluster_feature.parquet", "cluster_feature_path"
+  )
+  protein_names <- .readPerfInput(
+    protein_names_path, "protein_names.parquet", "protein_names_path"
+  )
 
   # which clusters appear in top n across feature types per drug
   # join top features with cluster mapping, filter out struct and shuffled

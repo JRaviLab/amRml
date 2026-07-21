@@ -11,23 +11,29 @@ plotMDR(
 )
 }
 \arguments{
-\item{MDR_performance_path}{Character. Path to \code{MDR_perf.parquet}.}
+\item{MDR_performance_path}{Character. Path to a directory containing
+\code{MDR_perf.parquet}.}
 
-\item{MDR_top_feature_path}{Character. Path to \code{MDR_top_features.parquet}.}
+\item{MDR_top_feature_path}{Character. Path to a directory containing
+\code{MDR_top_features.parquet}. Currently unused (reserved for an upcoming
+feature-cluster panel).}
 
-\item{MDR_pred_path}{Character. Path to \code{MDR_pred.parquet}.}
+\item{MDR_pred_path}{Character. Path to a directory containing
+\code{MDR_pred.parquet}.}
 }
 \value{
-A list of ggplot objects.
+A named list of two \code{ggplot} objects: \code{performance} (violin plot)
+and \code{prediction} (predicted-vs-true tile plot).
 }
 \description{
-Generates violin plots of performance, feature importance summaries,
-and prediction confusion-style visualizations for MDR models.
+Generates a violin plot of performance across feature types and a
+prediction confusion-style tile plot for MDR models.
 }
 \examples{
 \dontrun{
 plotMDR(
-  MDR_performance_path = "data/Campylobacter/MDR_ML_performance", MDR_top_feature_path = "data/Campylobacter/MDR_ML_top_features",
+  MDR_performance_path = "data/Campylobacter/MDR_ML_performance",
+  MDR_top_feature_path = "data/Campylobacter/MDR_ML_top_features",
   MDR_pred_path = "data/Campylobacter/MDR_ML_pred"
 )
 }

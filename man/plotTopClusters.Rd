@@ -30,8 +30,10 @@ and visualizes their relative contributions.
 \examples{
 \dontrun{
 plotTopClusters(
-  top_feat_path = "data/Campylobacter/ML_top_features", cluster_feature_path = "data/Campylobacter/",
-  protein_names_path = "data/Campylobacter/", top_n = 10
+  top_feat_path = "data/Campylobacter/ML_top_features",
+  cluster_feature_path = "data/Campylobacter/",
+  protein_names_path = "data/Campylobacter/",
+  top_n = 10
 )
 }
 }
