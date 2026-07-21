@@ -346,7 +346,7 @@ buildPerfPqCrossDrug <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_or_class", "tested_on", "feature_type", "feature_subtype"),
+      into = c("species", "drug", "test_drug", "feature_type", "feature_subtype"),
       regex = "cross_test_([A-Za-z0-9-]+)_drug_([A-Z]+)_cross_tested_on_([A-Z-]+)_([a-z]+)_(binary|counts)"
     )
 
@@ -375,7 +375,7 @@ buildPerfPqCrossYear <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_label", "drug_or_class", "train_year", "test_year", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "strat_value", "strat_value_test", "feature_type", "feature_subtype"),
       regex = "cross_test_([A-Za-z0-9-]+)_(drug|drug_class)_([A-Za-z0-9-]+)_cross_([0-9]{4}-[0-9]{4})_tested_on_([0-9]{4}-[0-9]{4})_([a-z]+)_(binary|counts)"
     )
 
@@ -404,7 +404,7 @@ buildPerfPqCrossCountry <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_label", "drug_or_class", "train_country", "test_country", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "strat_value", "strat_value_test", "feature_type", "feature_subtype"),
       regex = "cross_test_([A-Za-z0-9-]+)_(drug|drug_class)_([A-Za-z0-9-]+)_cross_([A-Z]{3})_tested_on_([A-Z]{3})_([a-z]+)_(binary|counts)"
     )
 
@@ -434,7 +434,7 @@ buildPerfPqLOODrug <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_or_class", "feature_type", "feature_subtype"),
+      into = c("species", "LOO_drug", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_drug_leaveout_([A-Z]+)_([a-z]+)_(binary|counts)"
     )
 
@@ -516,7 +516,7 @@ buildTopFeatsPqLOODrug <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_or_class", "feature_type", "feature_subtype"),
+      into = c("species", "LOO_drug", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_drug_leaveout_([A-Z]+)_([a-z]+)_(binary|counts)"
     )
 
@@ -535,21 +535,23 @@ buildTopFeatsPqLOODrug <- function(
 #'
 #' @export
 buildTopFeatsPqMDR <- function(
-  top_feat_dir_path
-) {
+    top_feat_dir_path) {
+  
   files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-
+  
   # Read and combine
-  merged_df <- files |>
-    purrr::set_names() |> # keeps file names attached
+  merged_df <- files|>
+    purrr::set_names() |>   # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-      dplyr::mutate(filename = basename(.x))) |>
-    dplyr::mutate(
-      feature_type = stringr::str_extract(filename, "args|cogs|genes|domains|proteins|struct"),
-      feature_subtype = stringr::str_extract(filename, "binary|counts")
+                     dplyr::mutate(filename = basename(.x))) |>
+     tidyr::extract(
+      filename,
+      into = c("feature_type", "feature_subtype", "seed"),
+      regex = "classes_([a-z]+)_(binary|counts)_([0-9]+)"
     )
-
+    
   arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "MDR_top_features.parquet"))
+  
 }
 
 #' Build Parquet file from MDR ML performances
@@ -565,23 +567,57 @@ buildTopFeatsPqMDR <- function(
 #'
 #' @export
 buildPerfPqMDR <- function(
-  perf_dir_path
-) {
+    perf_dir_path) {
+  
   files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
-
+  
   # Read and combine
-  merged_df <- files |>
-    purrr::set_names() |> # keeps file names attached
+  merged_df <- files|>
+    purrr::set_names() |>   # keeps file names attached
     purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
-      dplyr::mutate(filename = basename(.x))) |>
-    dplyr::mutate(
-      feature_type = stringr::str_extract(filename, "args|cogs|genes|domains|proteins|struct"),
-      feature_subtype = stringr::str_extract(filename, "binary|counts")
+                     dplyr::mutate(filename = basename(.x))) |>
+    tidyr::extract(
+      filename,
+      into = c("feature_type", "feature_subtype", "seed"),
+      regex = "classes_([a-z]+)_(binary|counts)_([0-9]+)"
     )
-
+  
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "MDR_perf.parquet"))
+  
 }
 
+#' Build Parquet file from MDR ML predictions
+#'
+#'
+#' @param perf_dir_path Directory containing prediction TSV files
+#'
+#' @return Writes a Parquet file to the same directory
+#'
+#' @examples
+#' # MDR
+#' buildPredPqMDR(pred_dir_path = "data/Campylobacter/MDR_ML_pred/")
+#'
+#' @export
+buildPredPqMDR <- function(
+    pred_dir_path) {
+  
+  files <- list.files(pred_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  
+  # Read and combine
+  merged_df <- files|>
+    purrr::set_names() |>   # keeps file names attached
+    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+                  dplyr::select(1:resistant_classes)|>
+                     dplyr::mutate(filename = basename(.x)) ) |>
+   tidyr::extract(
+      filename,
+      into = c("feature_type", "feature_subtype", "seed"),
+      regex = "classes_([a-z]+)_(binary|counts)_([0-9]+)"
+    )
+  
+  arrow::write_parquet(merged_df, file.path(pred_dir_path, "MDR_pred.parquet"))
+  
+}
 #' Build Parquet file from LOO country ML performances
 #'
 #' @param perf_dir_path Directory containing performance TSV files
@@ -605,7 +641,7 @@ buildPerfPqLOOCountry <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_label", "drug_or_class", "leaveout_country", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_strat_value", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_country_([A-Za-z0-9-]+)_leaveout_([A-Z]{3})_([a-z]+)_(binary|counts)"
     )
 
@@ -635,7 +671,7 @@ buildPerfPqLOOYear <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_label", "drug_or_class", "leaveout_year", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_strat_value", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_year_([A-Za-z0-9-]+)_leaveout_([0-9]{4}-[0-9]{4})_([a-z]+)_(binary|counts)"
     )
 
@@ -666,7 +702,7 @@ buildTopFeatsPqLOOCountry <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_label", "drug_or_class", "leaveout_country", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_strat_value", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_country_([A-Za-z0-9-]+)_leaveout_([A-Z]{3})_([a-z]+)_(binary|counts)"
     )
 
@@ -697,7 +733,7 @@ buildTopFeatsPqLOOYear <- function(
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
-      into = c("species", "drug_label", "drug_or_class", "leaveout_year", "feature_type", "feature_subtype"),
+      into = c("species", "drug_label", "drug_or_class", "leaveout_strat_value", "feature_type", "feature_subtype"),
       regex = "LOO_([A-Za-z0-9-]+)_(drug|drug_class)_year_([A-Za-z0-9-]+)_leaveout_([0-9]{4}-[0-9]{4})_([a-z]+)_(binary|counts)"
     )
 
