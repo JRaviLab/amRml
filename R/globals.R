@@ -7,6 +7,7 @@
 #' @importFrom grDevices colorRampPalette
 #' @importFrom stats median
 #' @importFrom stats reorder
+#' @importFrom stats sd
 #' @keywords internal
 "_PACKAGE"
 
@@ -49,7 +50,7 @@ utils::globalVariables(c(
   "fit_trees",
   "gene",
   "genome_drug.antibiotic",
-  "genome_drug.genome_id",
+  "genome.genome_id",
   "genome_drug.resistant_phenotype",
   "genome_id",
   "i_sparse",
@@ -101,6 +102,41 @@ utils::globalVariables(c(
   "train_prop",
   "train_year",
   "value",
+
+  # feature_rescoring.R (computeFeatureScore / computeFeatureImprovement)
+  "best_rank",
+  "contrib_score",
+  "coverage_boost",
+  "delta_rank",
+  "delta_score",
+  "denom",
+  "expected_types",
+  "feature_cluster_parquet",
+  "fully_realized_scales",
+  "good_feature",
+  "improvement",
+  "max_imp",
+  "mean_rank",
+  "mean_rank_nonshuffle",
+  "mean_rank_score",
+  "mean_rank_shuffle",
+  "median_contribution",
+  "median_datatype",
+  "median_drug_or_class",
+  "median_rank",
+  "min_imp",
+  "n_features",
+  "n_scales",
+  "observed_types_csv",
+  "partially_realized_scales",
+  "range_imp",
+  "rank_score",
+  "realization_score",
+  "scale_factor",
+  "scale_realization",
+  "sign_consistent",
+  "species",
+  "stability_score",
 
   # Base R functions that need explicit import
   "barplot",

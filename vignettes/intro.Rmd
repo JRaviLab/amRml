@@ -37,7 +37,7 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 `generateMLInputs()` reads the bug-level DuckDB (metadata + feature parquets) and writes one long-format sparse parquet per drug × feature × encoding combination into `out_path/matrix/`. With `stratify_by`, it additionally writes year- or country-stratified matrices into `matrix_year/` or `matrix_country/`.
 
-```{r generate-matrices}
+```{r generate-matrices, eval = FALSE}
 generateMLInputs(
   parquet_duckdb_path = fixture,
   out_path            = out_dir,
@@ -75,7 +75,7 @@ The generated parquets are long-format sparse tibbles with these columns:
 
 `loadMLInputTibble()` converts one of them to wide format (one row per genome, one column per feature) ready for ML.
 
-```{r load-data}
+```{r load-data, eval = FALSE}
 matrix_path <- file.path(
   out_dir, "matrix", "Sfl_drug_AMP_genes_binary_sparse.parquet"
 )
@@ -91,7 +91,7 @@ c(n_features = n_features, target_var = target_var)
 
 `runMLPipeline()` runs the train/tune/fit/predict pipeline on a single matrix in memory. Use it to iterate on one drug-feature combo before scaling to all of them.
 
-```{r run-pipeline}
+```{r run-pipeline, eval = FALSE}
 results <- runMLPipeline(
   ml_input_tibble    = ml_tibble,
   model              = "LR",
@@ -145,13 +145,13 @@ head(results$top_feat_tibble)
 
 The builders below are what `runMLPipeline()` chains internally. Call them directly when you need control over any individual step.
 
-```{r split-data}
+```{r split-data, eval = FALSE}
 data_split <- splitMLInputTibble(ml_tibble, split = c(0.6, 0.2), seed = 123)
 train_data <- rsample::training(data_split)
 test_data <- rsample::testing(data_split)
 ```
 
-```{r build-model}
+```{r build-model, eval = FALSE}
 recipe <- buildRecipe(train_data, use_pca = FALSE)
 lr_mod <- buildLRModel(multi_class = FALSE)
 wflow <- buildWflow(lr_mod, recipe)
@@ -163,7 +163,7 @@ grid <- buildTuningGrid(
 )
 ```
 
-```{r tune-fit}
+```{r tune-fit, eval = FALSE}
 tune_res <- tuneGrid(wflow, data_split, grid, n_fold = 2)
 best_wflow <- selectBestModel(tune_res, wflow, select_best_metric = "mcc")
 fit <- fitBestModel(best_wflow, train_data)
@@ -175,7 +175,7 @@ preds <- predictML(fit, test_data)
 
 `calculateEvalMets()` returns all of nMCC, F1, balanced accuracy, AUPRC, log2(AUPRC/prior), sensitivity, and specificity from a tibble of predictions + truth.
 
-```{r metrics}
+```{r metrics, eval = FALSE}
 calculateEvalMets(preds)
 getConfusionMatrix(preds)
 ```
@@ -184,18 +184,18 @@ getConfusionMatrix(preds)
 
 `extractTopFeats()` ranks features by absolute coefficient (for LR). Use `n_top_feats` for a fixed count or `prop_vi_top_feats` for a percentile range.
 
-```{r feature-importance}
+```{r feature-importance, eval = FALSE}
 top_features <- extractTopFeats(fit, n_top_feats = 20)
 head(top_features)
 ```
 
 ## Visualization
 
-```{r plot-prc, fig.width = 5, fig.height = 4}
+```{r plot-prc, eval = FALSE, fig.width = 5, fig.height = 4}
 plotPRC(results$pred)
 ```
 
-```{r plot-vi, fig.width = 5, fig.height = 4}
+```{r plot-vi, eval = FALSE, fig.width = 5, fig.height = 4}
 plotTopFeatsVI(results$top_feat_tibble, n_top_feats = 10)
 ```
 
@@ -238,7 +238,7 @@ ife_results$feats_removed
 
 `removeTopFeats()` strips a given set of features from a matrix tibble if you want to do this manually:
 
-```{r remove-feats}
+```{r remove-feats, eval = FALSE}
 trimmed <- removeTopFeats(ml_tibble, head(top_features, 5))
 ncol(ml_tibble) - ncol(trimmed)
 ```
@@ -247,7 +247,7 @@ ncol(ml_tibble) - ncol(trimmed)
 
 `runFishers()` runs a Fisher's exact test of feature presence vs. phenotype for each feature, applies Benjamini–Hochberg correction, and computes per-class frequencies.
 
-```{r fisher}
+```{r fisher, eval = FALSE}
 fisher_results <- runFishers(
   matrix_path       = matrix_path,
   Q                 = 0.05,
@@ -259,7 +259,7 @@ fisher_results <- runFishers(
 head(fisher_results)
 ```
 
-```{r plot-fishers, fig.width = 5, fig.height = 4}
+```{r plot-fishers, eval = FALSE, fig.width = 5, fig.height = 4}
 plotFishers(fisher_results, alpha = 0.05, label_top_n = 5)
 ```
 
