@@ -234,8 +234,9 @@ plotTopFeatsVI <- function(topfeat, n_top_feats = 10) {
 #' plotBaselineComparison(non_shuffled, shuffled)
 #' @export
 plotBaselineComparison <- function(
-    non_shuffled_label_results,
-    shuffled_label_results) {
+  non_shuffled_label_results,
+  shuffled_label_results
+) {
   .checkArgTibble(non_shuffled_label_results)
   .checkArgTibble(shuffled_label_results)
 
@@ -323,9 +324,10 @@ plotBaselineComparison <- function(
 #' @import ggrepel
 #' @export
 plotFishers <- function(
-    fisher_df,
-    alpha = 0.05,
-    label_top_n = 5) {
+  fisher_df,
+  alpha = 0.05,
+  label_top_n = 5
+) {
   required_cols <- c("gene", "adj_p_value", "sig_after_bh")
   missing_cols <- setdiff(required_cols, colnames(fisher_df))
 
@@ -657,9 +659,10 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #'   metadata_path = system.file("extdata", package = "amRml")
 #' )
 plotCrossDrug <- function(
-    cross_test_performance_path = ".",
-    drug_performance_path = ".",
-    metadata_path = ".") {
+  cross_test_performance_path = ".",
+  drug_performance_path = ".",
+  metadata_path = "."
+) {
   cross_drug <- .readPerfInput(
     cross_test_performance_path, "cross_drug_perf.parquet",
     "cross_test_performance_path"

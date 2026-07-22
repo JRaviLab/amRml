@@ -2,7 +2,6 @@ computeFeatureImprovement <- function(
   all_top_features_parquet,
   cluster_feature_parquet
 ) {
-
   stopifnot(file.exists(all_top_features_parquet))
 
   # read the cluster-feature mapping
@@ -108,45 +107,45 @@ computeFeatureScore <- function(
   ## 2. Importance → contribution → rank
   ## --------------------------------
 
- ranked_features <- top_features |>
-  dplyr::group_by(
-    species,
-    drug_label,
-    drug_or_class,
-    feature_type,
-    feature_subtype,
-    seed
-  ) |>
-  dplyr::mutate(
-    contribution = Importance / sum(Importance, na.rm = TRUE),
-    rank = dplyr::dense_rank(dplyr::desc(contribution)),
-    n_features = dplyr::n(),
-    rank_score = ifelse(n_features > 1, (n_features - rank) / (n_features - 1), 1)
-  ) |>
-  dplyr::ungroup() |>
-  dplyr::group_by(
-    species,
-    drug_label,
-    drug_or_class,
-    feature_type,
-    feature_subtype,
-    Variable
-  ) |>
-  dplyr::summarise(
-    n_seeds = dplyr::n_distinct(seed),
-    mean_rank = mean(rank, na.rm = TRUE),
-    median_rank = median(rank, na.rm = TRUE),
-    mean_rank_score = mean(rank_score, na.rm = TRUE),
-    best_rank = min(rank, na.rm = TRUE),
-    rank_consistent = dplyr::n_distinct(rank) == 1,
-    rank_sd = sd(rank),
-    rank_score_cv = sd(rank_score) / mean(rank_score),
-    sign_consistent = dplyr::n_distinct(Sign) == 1,
-    sign = if (sign_consistent) dplyr::first(Sign) else "mixed",
-    .groups = "drop"
-  ) |>
-  dplyr::arrange(dplyr::desc(mean_rank_score), mean_rank, best_rank)
-  
+  ranked_features <- top_features |>
+    dplyr::group_by(
+      species,
+      drug_label,
+      drug_or_class,
+      feature_type,
+      feature_subtype,
+      seed
+    ) |>
+    dplyr::mutate(
+      contribution = Importance / sum(Importance, na.rm = TRUE),
+      rank = dplyr::dense_rank(dplyr::desc(contribution)),
+      n_features = dplyr::n(),
+      rank_score = ifelse(n_features > 1, (n_features - rank) / (n_features - 1), 1)
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::group_by(
+      species,
+      drug_label,
+      drug_or_class,
+      feature_type,
+      feature_subtype,
+      Variable
+    ) |>
+    dplyr::summarise(
+      n_seeds = dplyr::n_distinct(seed),
+      mean_rank = mean(rank, na.rm = TRUE),
+      median_rank = median(rank, na.rm = TRUE),
+      mean_rank_score = mean(rank_score, na.rm = TRUE),
+      best_rank = min(rank, na.rm = TRUE),
+      rank_consistent = dplyr::n_distinct(rank) == 1,
+      rank_sd = sd(rank),
+      rank_score_cv = sd(rank_score) / mean(rank_score),
+      sign_consistent = dplyr::n_distinct(Sign) == 1,
+      sign = if (sign_consistent) dplyr::first(Sign) else "mixed",
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(dplyr::desc(mean_rank_score), mean_rank, best_rank)
+
   ## --------------------------------
   ## 3. Collapse to protein level
   ## --------------------------------
