@@ -1,15 +1,14 @@
 computeFeatureImprovement <- function(
-  all_feature_parquet,
-  feature_cluster_parquet
+  all_top_features_parquet,
+  cluster_feature_parquet
 ) {
-  stopifnot(file.exists(all_feature_parquet))
-  feature_cluster <- arrow::read_parquet(normalizePath(feature_cluster_parquet))
+  stopifnot(file.exists(all_top_features_parquet))
+  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet))
 
 
-  features_rescored <- arrow::read_parquet(normalizePath(all_feature_parquet)) |>
+  features_rescored <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
     dplyr::select(
-      output_prefix,
-      drug_label, drug_or_class, shuffled, pca,
+      species, drug_label, drug_or_class, shuffled,
       feature_type, feature_subtype, Variable,
       Importance, Sign
     ) |>
