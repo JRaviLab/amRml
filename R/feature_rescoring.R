@@ -50,36 +50,32 @@ computeFeatureImprovement <- function(
       highest_contri             = max(contribution, na.rm = TRUE)
     ) |>
     dplyr::ungroup() |>
-    dplyr::group_by(drug_label, drug_or_class, cluster) |>
-    dplyr::mutate(
-      shuffled_rank = dplyr::if_else(shuffled, median_drug_or_class, NA_real_),
-      non_shuffled_rank = dplyr::if_else(!shuffled, median_drug_or_class, NA_real_),
-
-      # If non-shuffled is missing -> NA (no evidence). If shuffled missing -> +Inf improvement.
-      improvement = dplyr::case_when(
-        !is.na(non_shuffled_rank) ~ tidyr::replace_na(shuffled_rank, Inf) - non_shuffled_rank,
-        TRUE ~ NA_real_
-      ),
-
-      # "Good" if non-shuffled exists AND (non-shuffled < shuffled OR shuffled is missing)
-      good_feature = !is.na(non_shuffled_rank) & improvement > 0
-    ) |>
-    dplyr::ungroup()
+    dplyr::group_by(drug_label, drug_or_class, cluster) 
 
   return(features_rescored)
 }
 
 computeFeatureScore <- function(
-  all_feature_parquet,
-  feature_cluster_parquet
+  all_top_features_parquet,
+  cluster_feature_parquet
 ) {
-  top_features <- arrow::read_parquet(normalizePath(all_feature_parquet))
-  top_features <- top_features |>
+  top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
+    dplyr::filter(!shuffled) |>
+    dplyr::select(
+      species, drug_label, drug_or_class, seed,
+      feature_type, feature_subtype, Variable,
+      Importance, Sign
+    ) |>
     dplyr::mutate(
-      shuffled = stringr::str_detect(prefix_key, "^shuffled_"),
-      species = prefix_key |>
-        stringr::str_remove("^shuffled_") |>
-        stringr::str_remove("(_drug_class|_drug).*")
+      Variable = dplyr::case_when(
+        feature_type == "domains" ~ sub("_.+$", "", Variable),
+        feature_type == "proteins" ~ sub("fig.", "fig|", Variable, fixed = TRUE),
+        feature_type == "args" ~ sub(
+          "^X", "",
+          gsub("\\.NCBIFAM", "", Variable)
+        ),
+        TRUE ~ Variable
+      )
     )
 
   ## --------------------------------
@@ -100,38 +96,42 @@ computeFeatureScore <- function(
   ## --------------------------------
 
   ranked_features <- top_features |>
-    dplyr::group_by(
-      species,
-      drug_label,
-      drug_or_class,
-      feature_type,
-      feature_subtype,
-      shuffled
-    ) |>
-    dplyr::mutate(
-      contribution = Importance / sum(Importance, na.rm = TRUE),
-      rank = dplyr::dense_rank(dplyr::desc(contribution)),
-      max_rank = max(rank),
-      min_rank = min(rank),
-      mean_rank = mean(rank),
-      rank_score = 1 - (mean_rank - 1) / max_rank,
-    ) |>
-    dplyr::ungroup() |>
-    dplyr::select(
-      species,
-      drug_label,
-      drug_or_class,
-      feature_type,
-      feature_subtype,
-      shuffled,
-      Variable,
-      contribution,
-      rank,
-      max_rank,
-      min_rank,
-      mean_rank
-    )
-
+  dplyr::group_by(
+    species,
+    drug_label,
+    drug_or_class,
+    feature_type,
+    feature_subtype,
+    seed
+  ) |>
+  dplyr::mutate(
+    contribution = Importance / sum(Importance, na.rm = TRUE),
+    rank = dplyr::dense_rank(dplyr::desc(contribution)),
+    n_features = dplyr::n(),
+    rank_score = ifelse(n_features > 1, (n_features - rank) / (n_features - 1), 1)
+  ) |>
+  dplyr::ungroup() |>
+  dplyr::group_by(
+    species,
+    drug_label,
+    drug_or_class,
+    feature_type,
+    feature_subtype,
+    Variable
+  ) |>
+  dplyr::summarise(
+    n_seeds = dplyr::n_distinct(seed),
+    mean_rank = mean(rank, na.rm = TRUE),
+    median_rank = median(rank, na.rm = TRUE),
+    mean_rank_score = mean(rank_score, na.rm = TRUE),
+    best_rank = min(rank, na.rm = TRUE),
+    rank_consistent = dplyr::n_distinct(rank) == 1,
+    sign_consistent = dplyr::n_distinct(Sign) == 1,
+    sign = if (sign_consistent) dplyr::first(Sign) else "mixed",
+    .groups = "drop"
+  ) |>
+  dplyr::arrange(dplyr::desc(mean_rank_score), mean_rank, best_rank)
+  
   ## --------------------------------
   ## 3. Collapse to protein level
   ## --------------------------------
