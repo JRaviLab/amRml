@@ -693,18 +693,19 @@ buildFeatureWideTable <- function(feature_summary
 # one row per cluster, with per-model columns
 # and global_cluster_score / global_cluster_breadth
 #------------------------------------------------------------
-buildClusterWideTable <- function(cluster_summary,
-                                  id_cols = c("species", "drug_label", "drug_or_class"),
-                                  row_cols = c("species", "cluster"),
-                                  score_col = "cluster_mean_rank_score") {
-  required_cols <- c(
-    id_cols, row_cols,
-    score_col, "cluster_rank_score_sd",
-    "cluster_best_rank", "frequency",
-    "n_variables", "n_feature_types"
-  )
-  stopifnot(all(required_cols %in% names(cluster_summary)))
-
+#' Cluster wide table with global scores. 
+#'
+#' @param cluster_summary
+#' @param id_cols
+#' @param row_cols
+#' @param score_col
+#'
+#' @returns
+#'
+#' @export
+#' @examples
+buildClusterWideTable <- function(feature_summary, cluster_feature_parquet) {
+  
   build <- buildFeatureWideTable(
     .data = cluster_summary,
     id_cols = id_cols,
