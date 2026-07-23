@@ -485,19 +485,23 @@ top_features <- feature_summary |>
   dplyr::filter(
     sign == "NEG",
     rank_sd <= threshold_sd_rank
-  ) |>
+  ) |> 
+  dplyr::group_by(species, drug_label, drug_or_class, feature_type, Variable) |>
+    dplyr::mutate( n_subtype = dplyr::n_distinct(feature_subtype), 
+  subtype_csv = paste(sort(unique(feature_subtype)), collapse = ",") ) |>
+  dplyr::ungroup() |>
   dplyr::group_by(drug_label, drug_or_class) |>
   dplyr::filter(
     n_seeds == max(n_seeds),
     mean_rank_score >= quantile(mean_rank_score, rank_score_quantile)
   ) |>
   dplyr::ungroup() |>
-    dplyr::select(
+    dplyr::distinct(
       species, drug_label, drug_or_class,
-      feature_type, feature_subtype, Variable,
+      feature_type, feature_subtype, Variable, n_subtype, subtype_csv,
       mean_rank_score, mean_rank, best_rank,
       median_rank, mean_contribution, median_contribution,
-      n_seeds, rank_sd,
+      n_seeds, rank_sd, 
       sign_consistent, sign
     ) |>
 dplyr::filter(sign_consistent)
@@ -613,4 +617,114 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
     dplyr::select(drug_or_class, cluster, cluster_name, cluster_mean_rank_score)
 
   return(unique_clusters)
+}
+
+#' build the wide table for features while calculating the global score and breadth
+#' 
+#' First aggregate the feature subtype to feature type level, then calculate the global score and breadth for each feature type across all drugs/classes.
+#' Then create a wide table representation 
+#' 
+#' @param feature_summary The tibble of summarized features across seeds generated from `summariseFeatureAcrossSeeds()`
+#'
+#' @returns a wide tibble with each drug/class score and global score for individual features from different scales. 
+#'
+#' @export
+#' @examples
+buildFeatureWideTable <- function(feature_summary
+                              ) {
+ 
+  id_cols = c("drug_label", "drug_or_class")
+ 
+  adv_feat_summary <- feature_summary |>
+  dplyr::group_by(
+    species, drug_label, drug_or_class, feature_type, Variable
+  ) |>
+  dplyr::summarise(
+    n_subtype = dplyr::n_distinct(feature_subtype),
+    subtype_csv = paste(sort(unique(feature_subtype)), collapse = ","),
+    type_mean_score = mean(mean_rank_score, na.rm = TRUE),
+    type_median_rank = median(median_rank, na.rm = TRUE),
+    type_rank_sd = sd(median_rank, na.rm = TRUE),
+    frequency = sum(n_seeds),
+    sign = if (dplyr::n_distinct(sign) == 1) dplyr::first(sign) else "MIXED",
+    .groups = "drop"
+  ) |>
+    tidyr::unite(
+      col = "model_id",
+      dplyr::all_of(id_cols),
+      sep = ".",
+      remove = FALSE
+    )
+  
+   row_cols = c("species", "feature_type", "Variable")
+
+  global_summary <- adv_feat_summary |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(row_cols))) |>
+    dplyr::summarise(
+      global_breadth = dplyr::n_distinct(model_id),
+      global_score = mean(type_mean_score, na.rm = TRUE),
+      global_sd = sd(type_rank_sd, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  wide_cols = c("sign", "frequency", "type_mean_score")
+
+  wide_part <- adv_feat_summary |>
+    dplyr::select(
+      dplyr::all_of(row_cols),
+      model_id,
+      dplyr::all_of(wide_cols)
+    ) |>
+    tidyr::pivot_wider(
+      names_from = model_id,
+      values_from = dplyr::all_of(wide_cols),
+      names_sep = "."
+    )
+
+  wide_table <- dplyr::left_join(wide_part, global_summary, by = row_cols) |>
+    dplyr::arrange(dplyr::desc(global_breadth), dplyr::desc(global_score))
+
+  return(wide_table)
+}
+
+
+#------------------------------------------------------------
+# Cluster-wide table:
+# one row per cluster, with per-model columns
+# and global_cluster_score / global_cluster_breadth
+#------------------------------------------------------------
+buildClusterWideTable <- function(cluster_summary,
+                                  id_cols = c("species", "drug_label", "drug_or_class"),
+                                  row_cols = c("species", "cluster"),
+                                  score_col = "cluster_mean_rank_score") {
+  required_cols <- c(
+    id_cols, row_cols,
+    score_col, "cluster_rank_score_sd",
+    "cluster_best_rank", "frequency",
+    "n_variables", "n_feature_types"
+  )
+  stopifnot(all(required_cols %in% names(cluster_summary)))
+
+  build <- buildFeatureWideTable(
+    .data = cluster_summary,
+    id_cols = id_cols,
+    row_cols = row_cols,
+    score_col = score_col,
+    breadth_name = "global_breadth",
+    wide_cols = c(
+      "cluster_mean_rank_score",
+      "cluster_rank_score_sd",
+      "cluster_best_rank",
+      "frequency",
+      "n_variables",
+      "n_feature_types"
+    )
+  )
+
+  build |>
+    dplyr::rename(
+      global_cluster_score = global_score,
+      global_cluster_sd = global_sd
+    ) |>
+    dplyr::arrange(dplyr::desc(global_cluster_score), dplyr::desc(global_breadth))
 }
