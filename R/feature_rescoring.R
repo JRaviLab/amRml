@@ -707,22 +707,11 @@ buildFeatureWideTable <- function(feature_summary
 buildClusterWideTable <- function(feature_summary, cluster_feature_parquet) {
   
   build <- buildFeatureWideTable(
-    .data = cluster_summary,
-    id_cols = id_cols,
-    row_cols = row_cols,
-    score_col = score_col,
-    breadth_name = "global_breadth",
-    wide_cols = c(
-      "cluster_mean_rank_score",
-      "cluster_rank_score_sd",
-      "cluster_best_rank",
-      "frequency",
-      "n_variables",
-      "n_feature_types"
-    )
+    feature_summary
   )
 
-  build |>
+  cluster_feature <- arrow::read_parquet(cluster_feature_parquet)
+  build |> 
     dplyr::rename(
       global_cluster_score = global_score,
       global_cluster_sd = global_sd
