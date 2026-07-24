@@ -122,6 +122,10 @@
         </td>
         <td><p>.calculateLog2APOP()</p></td>
       </tr><tr><td>
+          <p><code><a href="dot-calculateMCC.html">.calculateMCC()</a></code> </p>
+        </td>
+        <td><p>.calculateMCC()</p></td>
+      </tr><tr><td>
           <p><code><a href="dot-calculateSensitivity.html">.calculateSensitivity()</a></code> </p>
         </td>
         <td><p>.calculateSensitivity()</p></td>
@@ -141,6 +145,10 @@
           <p><code><a href="dot-getTargetVarName.html">.getTargetVarName()</a></code> </p>
         </td>
         <td><p>.getTargetVarName()</p></td>
+      </tr><tr><td>
+          <p><code><a href="dot-parquet2LOODrugMatrix.html">.parquet2LOODrugMatrix()</a></code> </p>
+        </td>
+        <td><p>Build leave-one-out (LOO) merged parquet matrices from drug parquet files.</p></td>
       </tr><tr><td>
           <p><code><a href="dot-parquet2LOOMatrix.html">.parquet2LOOMatrix()</a></code> </p>
         </td>
@@ -176,23 +184,55 @@
       </tr><tr><td>
           <p><code><a href="plotBaselineComparison.html">plotBaselineComparison()</a></code> </p>
         </td>
-        <td><p>plotBaselineComparison()</p></td>
+        <td><p>Compare Baseline Performance With and Without Shuffled Labels</p></td>
       </tr><tr><td>
-          <p><code><a href="plotDefaultEval.html">plotDefaultEval()</a></code> </p>
+          <p><code><a href="plotCM.html">plotCM()</a></code> </p>
         </td>
-        <td><p>plotDefaultEval()</p></td>
+        <td><p>Plot a Confusion Matrix Heatmap</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotCrossDrug.html">plotCrossDrug()</a></code> </p>
+        </td>
+        <td><p>Plot cross-drug prediction as a heatmap</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotDrugDist.html">plotDrugDist()</a></code> </p>
+        </td>
+        <td><p>Plot drug phenotype distribution</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotDrugPerf.html">plotDrugPerf()</a></code> </p>
+        </td>
+        <td><p>Plot drug-level model performance</p></td>
       </tr><tr><td>
           <p><code><a href="plotFishers.html">plotFishers()</a></code> </p>
         </td>
         <td><p>Plot top features' Fisher's significance</p></td>
       </tr><tr><td>
+          <p><code><a href="plotMDR.html">plotMDR()</a></code> </p>
+        </td>
+        <td><p>Plot multi-drug resistance (MDR) model performance</p></td>
+      </tr><tr><td>
           <p><code><a href="plotPRC.html">plotPRC()</a></code> </p>
         </td>
-        <td><p>plotPRC()</p></td>
+        <td><p>Plot a Precision-Recall Curve</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotROC.html">plotROC()</a></code> </p>
+        </td>
+        <td><p>Plot a Receiver Operating Characteristic (ROC) Curve</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotShuffleVsReal.html">plotShuffleVsReal()</a></code> </p>
+        </td>
+        <td><p>Compare shuffled vs real model performance</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotStratifiedPerf.html">plotStratifiedPerf()</a></code> </p>
+        </td>
+        <td><p>Plot stratified model performance</p></td>
+      </tr><tr><td>
+          <p><code><a href="plotTopClusters.html">plotTopClusters()</a></code> </p>
+        </td>
+        <td><p>Plot top contributing feature clusters</p></td>
       </tr><tr><td>
           <p><code><a href="plotTopFeatsVI.html">plotTopFeatsVI()</a></code> </p>
         </td>
-        <td><p>plotTopFeatsVI()</p></td>
+        <td><p>Plot Top Feature Importances</p></td>
       </tr><tr><td>
           <p><code><a href="predictML.html">predictML()</a></code> </p>
         </td>
@@ -212,7 +252,7 @@
       </tr><tr><td>
           <p><code><a href="runIFE.html">runIFE()</a></code> </p>
         </td>
-        <td><p>runIFE Removes top features identified by ML models and retrains iteratively; returns nMCC at each iteration.</p></td>
+        <td><p>runIFE Removes top features identified by ML models and retrains iteratively; returns MCC at each iteration.</p></td>
       </tr><tr><td>
           <p><code><a href="runMDRmodels.html">runMDRmodels()</a></code> </p>
         </td>
@@ -258,7 +298,7 @@
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
       </footer></div>
