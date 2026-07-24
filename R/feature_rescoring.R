@@ -492,9 +492,14 @@ top_features <- feature_summary |>
   dplyr::ungroup() |>
   dplyr::group_by(drug_label, drug_or_class) |>
   dplyr::filter(
-    n_seeds == max(n_seeds),
+  #   n_seeds == max(n_seeds),
     mean_rank_score >= quantile(mean_rank_score, rank_score_quantile)
   ) |>
+  # dplyr::slice_max(
+  #   order_by = mean_rank_score,
+  #   n = 10,
+  #   with_ties = FALSE
+  # ) |>
   dplyr::ungroup() |>
     dplyr::distinct(
       species, drug_label, drug_or_class,
@@ -619,102 +624,295 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
   return(unique_clusters)
 }
 
-#' build the wide table for features while calculating the global score and breadth
-#' 
-#' First aggregate the feature subtype to feature type level, then calculate the global score and breadth for each feature type across all drugs/classes.
-#' Then create a wide table representation 
-#' 
-#' @param feature_summary The tibble of summarized features across seeds generated from `summariseFeatureAcrossSeeds()`
+#' Build a signal network from selected top features and top clusters
 #'
-#' @returns a wide tibble with each drug/class score and global score for individual features from different scales. 
+#' @param top_features Output of topFeaturesPerDrugOrClass().
+#' @param top_clusters Output of summariseClusters().
+#' @param cluster_feature_parquet Path to the Parquet file mapping variables to clusters.
+#' @param protein_names_parquet Path to the Parquet file with cluster name annotations.
+#' @param keep_direct_model_cluster Whether to keep model -> cluster edges.
 #'
+#' @return A list with feature_table, cluster_table, nodes, edges, and graph.
 #' @export
-#' @examples
-buildFeatureWideTable <- function(feature_summary
-                              ) {
- 
-  id_cols = c("drug_label", "drug_or_class")
- 
-  adv_feat_summary <- feature_summary |>
-  dplyr::group_by(
-    species, drug_label, drug_or_class, feature_type, Variable
-  ) |>
-  dplyr::summarise(
-    n_subtype = dplyr::n_distinct(feature_subtype),
-    subtype_csv = paste(sort(unique(feature_subtype)), collapse = ","),
-    type_mean_score = mean(mean_rank_score, na.rm = TRUE),
-    type_median_rank = median(median_rank, na.rm = TRUE),
-    type_rank_sd = sd(median_rank, na.rm = TRUE),
-    frequency = sum(n_seeds),
-    sign = if (dplyr::n_distinct(sign) == 1) dplyr::first(sign) else "MIXED",
-    .groups = "drop"
-  ) |>
-    tidyr::unite(
-      col = "model_id",
-      dplyr::all_of(id_cols),
-      sep = ".",
-      remove = FALSE
-    )
-  
-   row_cols = c("species", "feature_type", "Variable")
+buildSignalNetwork <- function(top_features,
+                               top_clusters,
+                               cluster_feature_parquet,
+                               protein_names_parquet,
+                               keep_direct_model_cluster = TRUE) {
+  stopifnot(is.data.frame(top_features))
+  stopifnot(is.data.frame(top_clusters))
+  stopifnot(file.exists(cluster_feature_parquet))
+  stopifnot(file.exists(protein_names_parquet))
 
-  global_summary <- adv_feat_summary |>
-    dplyr::group_by(dplyr::across(dplyr::all_of(row_cols))) |>
+  required_feature_cols <- c(
+    "species", "drug_label", "drug_or_class",
+    "feature_type", "Variable",
+    "mean_rank_score"
+  )
+  required_cluster_cols <- c(
+    "species", "drug_label", "drug_or_class",
+    "cluster", "cluster_mean_rank_score"
+  )
+
+  missing_feature_cols <- setdiff(required_feature_cols, names(top_features))
+  missing_cluster_cols <- setdiff(required_cluster_cols, names(top_clusters))
+
+  if (length(missing_feature_cols) > 0) {
+    stop("top_features is missing required columns: ",
+         paste(missing_feature_cols, collapse = ", "))
+  }
+  if (length(missing_cluster_cols) > 0) {
+    stop("top_clusters is missing required columns: ",
+         paste(missing_cluster_cols, collapse = ", "))
+  }
+
+  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet)) |>
+    dplyr::distinct()
+
+  protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
+    dplyr::distinct()
+
+  make_model_id <- function(drug_label, drug_or_class) {
+    paste(drug_label, drug_or_class, sep = ".")
+  }
+
+  feature_table <- top_features |>
+    dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
+    dplyr::group_by(species, model_id, feature_type, Variable) |>
     dplyr::summarise(
-      global_breadth = dplyr::n_distinct(model_id),
-      global_score = mean(type_mean_score, na.rm = TRUE),
-      global_sd = sd(type_rank_sd, na.rm = TRUE),
+      mean_score = mean(mean_rank_score, na.rm = TRUE),
       .groups = "drop"
     )
 
-  wide_cols = c("sign", "frequency", "type_mean_score")
-
-  wide_part <- adv_feat_summary |>
-    dplyr::select(
-      dplyr::all_of(row_cols),
-      model_id,
-      dplyr::all_of(wide_cols)
+  cluster_table <- top_clusters |>
+    dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
+    dplyr::left_join(
+      protein_names,
+      by = dplyr::join_by(cluster == proteinID)
     ) |>
-    tidyr::pivot_wider(
-      names_from = model_id,
-      values_from = dplyr::all_of(wide_cols),
-      names_sep = "."
+    dplyr::group_by(species, model_id, cluster, proteinName) |>
+    dplyr::summarise(
+      mean_score = mean(cluster_mean_rank_score, na.rm = TRUE),
+      .groups = "drop"
     )
 
-  wide_table <- dplyr::left_join(wide_part, global_summary, by = row_cols) |>
-    dplyr::arrange(dplyr::desc(global_breadth), dplyr::desc(global_score))
+  model_nodes <- dplyr::bind_rows(
+    feature_table |>
+      dplyr::distinct(species, model_id),
+    cluster_table |>
+      dplyr::distinct(species, model_id)
+  ) |>
+    dplyr::distinct(species, model_id) |>
+    dplyr::transmute(
+      name = model_id,
+      label = model_id,
+      node_type = "model",
+      species = species,
+      score = NA_real_,
+      breadth = NA_real_,
+      node_size = 4
+    )
 
-  return(wide_table)
-}
+  feature_nodes <- feature_table |>
+    dplyr::group_by(species, Variable) |>
+    dplyr::summarise(
+      score = mean(mean_score, na.rm = TRUE),
+      breadth = dplyr::n_distinct(model_id),
+      .groups = "drop"
+    ) |>
+    dplyr::transmute(
+      name = Variable,
+      label = Variable,
+      node_type = "feature",
+      species = species,
+      score = score,
+      breadth = breadth,
+      node_size = pmax(3, pmin(10, breadth + 2))
+    )
 
+  cluster_nodes <- cluster_table |>
+    dplyr::group_by(species, cluster, proteinName) |>
+    dplyr::summarise(
+      score = mean(mean_score, na.rm = TRUE),
+      breadth = dplyr::n_distinct(model_id),
+      .groups = "drop"
+    ) |>
+    dplyr::transmute(
+      name = cluster,
+      label = dplyr::if_else(
+        is.na(proteinName) | proteinName == "",
+        cluster,
+        proteinName
+      ),
+      node_type = "cluster",
+      species = species,
+      score = score,
+      breadth = breadth,
+      node_size = pmax(3, pmin(10, breadth + 2))
+    )
 
-#------------------------------------------------------------
-# Cluster-wide table:
-# one row per cluster, with per-model columns
-# and global_cluster_score / global_cluster_breadth
-#------------------------------------------------------------
-#' Cluster wide table with global scores. 
-#'
-#' @param cluster_summary
-#' @param id_cols
-#' @param row_cols
-#' @param score_col
-#'
-#' @returns
-#'
-#' @export
-#' @examples
-buildClusterWideTable <- function(feature_summary, cluster_feature_parquet) {
+  nodes <- dplyr::bind_rows(model_nodes, feature_nodes, cluster_nodes) |>
+    dplyr::distinct(name, .keep_all = TRUE)
+
+  feature_edges <- feature_table |>
+    dplyr::transmute(
+      from = model_id,
+      to = Variable,
+      weight = mean_score,
+      edge_type = "model_feature"
+    ) |>
+    dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
+
+  cluster_edges <- cluster_table |>
+    dplyr::transmute(
+      from = model_id,
+      to = cluster,
+      weight = mean_score,
+      edge_type = "model_cluster"
+    ) |>
+    dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
+
+  feature_cluster_edges <- feature_table |>
+    dplyr::left_join(cluster_feature, by = dplyr::join_by(Variable == feature)) |>
+    dplyr::filter(!is.na(cluster)) |>
+    dplyr::transmute(
+      from = Variable,
+      to = cluster,
+      weight = 1,
+      edge_type = "feature_cluster"
+    ) |>
+    dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
+
+  edges <- dplyr::bind_rows(feature_edges, feature_cluster_edges)
   
-  build <- buildFeatureWideTable(
-    feature_summary
+    edges <- dplyr::bind_rows(edges, cluster_edges)
+  
+
+  missing_vertices <- setdiff(unique(c(edges$from, edges$to)), nodes$name)
+  if (length(missing_vertices) > 0) {
+    extra_nodes <- tibble::tibble(name = missing_vertices) |>
+      dplyr::mutate(
+        label = name,
+        node_type = dplyr::case_when(
+          grepl("^drug\\.|^drug_class\\.", name) ~ "model",
+          grepl("^fig\\||^cluster", name) ~ "cluster",
+          TRUE ~ "feature"
+        ),
+        species = NA_character_,
+        score = NA_real_,
+        breadth = NA_real_,
+        node_size = 4
+      )
+
+    nodes <- dplyr::bind_rows(nodes, extra_nodes) |>
+      dplyr::distinct(name, .keep_all = TRUE)
+  }
+
+  graph <- if (nrow(edges) > 0) {
+    igraph::graph_from_data_frame(
+      d = edges,
+      directed = FALSE,
+      vertices = nodes
+    )
+  } else {
+    igraph::graph_from_data_frame(
+      d = data.frame(from = character(), to = character()),
+      directed = FALSE,
+      vertices = nodes
+    )
+  }
+
+  signal_result <- list(
+    feature_table = feature_table,
+    cluster_table = cluster_table,
+    nodes = nodes,
+    edges = edges,
+    graph = graph
   )
 
-  cluster_feature <- arrow::read_parquet(cluster_feature_parquet)
-  build |> 
-    dplyr::rename(
-      global_cluster_score = global_score,
-      global_cluster_sd = global_sd
+  return(signal_result)
+}
+#' Plot the signal network with networkD3
+#'
+#' @param signal_result Output of \code{identifyTopSignals()}.
+#' @param height Widget height in pixels.
+#' @param width Widget width.
+#'
+#' @returns A \code{networkD3} widget.
+#' @export
+plotSignalNetworkD3 <- function(signal_result,
+                                height = 800,
+                                width = "100%"
+                              ) {
+
+  stopifnot(is.list(signal_result))
+  stopifnot(!is.null(signal_result$nodes))
+  stopifnot(!is.null(signal_result$edges))
+
+  nodes <- signal_result$nodes |>
+    dplyr::distinct(name, .keep_all = TRUE) |>
+    dplyr::mutate(
+      id = dplyr::row_number() - 1L,
+      group = node_type,
+      title = paste0(
+        "<b>", label, "</b>",
+        ifelse(is.na(species), "", paste0("<br>Species: ", species)),
+        ifelse(is.na(score), "", paste0("<br>Score: ", signif(score, 3))),
+        ifelse(is.na(breadth), "", paste0("<br>Breadth: ", breadth))
+      )
+    )
+
+  links <- signal_result$edges |>
+    dplyr::filter(!is.na(from), !is.na(to)) |>
+    # dplyr::filter(
+    #   show_direct_model_cluster | edge_type != "model_cluster"
+    # ) |>
+    dplyr::left_join(
+      nodes |> dplyr::select(name, id),
+      by = c("from" = "name")
     ) |>
-    dplyr::arrange(dplyr::desc(global_cluster_score), dplyr::desc(global_breadth))
+    dplyr::rename(source = id) |>
+    dplyr::left_join(
+      nodes |> dplyr::select(name, id),
+      by = c("to" = "name")
+    ) |>
+    dplyr::rename(target = id) |>
+    dplyr::filter(!is.na(source), !is.na(target)) |>
+    dplyr::mutate(
+      value = dplyr::if_else(is.na(weight), 1, weight)
+    ) |>
+    dplyr::select(source, target, value, edge_type)
+
+  stopifnot(nrow(nodes) > 0)
+  stopifnot(nrow(links) > 0)
+
+  colour_scale <- networkD3::JS(
+    "d3.scaleOrdinal()
+      .domain(['model', 'feature', 'cluster'])
+      .range(['#4C78A8', '#F58518', '#54A24B'])"
+  )
+
+  networkD3::forceNetwork(
+    Links = links,
+    Nodes = nodes,
+    Source = "source",
+    Target = "target",
+    Value = "value",
+    NodeID = "label",
+    Group = "group",
+    opacity = 0.9,
+    zoom = TRUE,
+    fontSize = 14,
+    # nodeWidth = 24,
+    height = height,
+    width = width,
+    colourScale = colour_scale,
+    linkDistance = networkD3::JS(
+      "function(d) {
+         if (d.edge_type === 'feature_cluster') return 60;
+         if (d.edge_type === 'model_feature') return 120;
+         return 90;
+       }"
+    )
+  )
 }
