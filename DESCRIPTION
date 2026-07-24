@@ -1,5 +1,5 @@
 Package: amRml
-Title: Machile learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite
+Title: Machine learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite
 Version: 0.99.0
 Authors@R: c(
     person("Janani", "Ravi", , "janani.ravi@cuanschutz.edu", role = c("aut", "cre"),
@@ -7,7 +7,11 @@ Authors@R: c(
     person("Ethan", "Wolfe", , "ethan.wolfe@cuanschutz.edu", role = "ctb"),
     person("Evan", "Brenner", , "evan.brenner@cuanschutz.edu", role = "ctb"),
     person("Abhirupa", "Ghosh", , "abhirupa.ghosh@cuanschutz.edu", role = "ctb"),
-    person("David", "Mayer", , "david.mayer@cuanschutz.edu", role = "ctb")
+    person("David", "Mayer", , "david.mayer@cuanschutz.edu", role = "ctb"),
+    person("Emily", "Boyer", , "emily.boyer@cuanschutz.edu", role = "ctb"),
+    person("Charmie", "Vang", , "charmie.vang@cuanschutz.edu", role = "ctb"),
+    person("Alexander", "McKim", , "alexander.mckim@cuanschutz.edu", role = "ctb",
+           comment = c(ORCID = "0000-0002-7802-7591"))
   )
 Description: Comprehensive machine learning (ML) pipeline for predicting antimicrobial
     resistance (AMR) in ESKAPE pathogens across molecular scales (gene, protein,
@@ -16,7 +20,7 @@ Description: Comprehensive machine learning (ML) pipeline for predicting antimic
     (geographic, temporal, species). Includes model evaluation, feature importance
     analysis, cross-scale performance comparison, and functional characterization
     of top features. Designed to work with data from amRdata package and generate
-    results for amRshiny visualization. Can work independently with example
+    results for amRviz visualization. Can work independently with example
     ESKAPE pathogen datasets, too.
 License: BSD_3_clause + file LICENSE
 Encoding: UTF-8
