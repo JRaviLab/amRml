@@ -74,6 +74,15 @@ NULL
 #' `top_feat_tibble`. Tuning results, the fit object, and model predictions may
 #' also be returned if `return_tune_res`, `return_fit`, and/or `return_pred`,
 #' respectively, are set to `TRUE`.
+#' @examples
+#' data(demo_ml_tibble)
+#' set.seed(1)
+#' runMLPipeline(
+#'   ml_input_tibble = demo_ml_tibble, model = "LR",
+#'   split = c(1, 0), n_fold = 2,
+#'   penalty_vec = 10^c(-3, -1), mix_vec = c(0, 0.5, 1),
+#'   n_top_feats = 10, verbose = FALSE
+#' )
 #' @export
 runMLPipeline <- function(
   ml_input_tibble, model = "LR", split = c(0.6, 0.2),
@@ -91,7 +100,11 @@ runMLPipeline <- function(
   .checkArgReturnTuneRes(return_tune_res)
   .checkArgReturnFit(return_fit)
   .checkArgReturnPred(return_pred)
+  .checkArgSeed(seed)
 
+  # Seed once for the whole pipeline so the split, CV folds, tuning, and fit
+  # share one continuous RNG stream (restored to the caller's state on exit).
+  withr::local_seed(seed)
 
   # Set `n_fold` to `NA` if not using cross-validation.
   if (split[2] != 0) {
@@ -214,7 +227,7 @@ runMLPipeline <- function(
       dplyr::select(where(~ !any(is.na(.))))
   }
 
-  data_split <- splitMLInputTibble(ml_input_tibble, split = split, seed = seed)
+  data_split <- splitMLInputTibble(ml_input_tibble, split = split)
 
   # Now correct `data_split` if external `test_data` is provided.
   if (external_test_data & split[2] != 0) {
@@ -297,10 +310,11 @@ runMLPipeline <- function(
     log2_apop <- .calculateLog2APOP(test_data_plus_predictions)
   }
 
+  mcc <- .calculateMCC(test_data_plus_predictions)
   nmcc <- .calculatenMCC(test_data_plus_predictions)
 
   if (verbose) {
-    message(paste("Normalized Matthews correlation coefficient:", nmcc))
+    message(paste("Matthews correlation coefficient:", mcc, "| nMCC:", nmcc))
   }
 
   top_feat_tibble <- extractTopFeats(fit,
@@ -362,7 +376,7 @@ runMLPipeline <- function(
   performance_tibble <- tibble::tibble(
     num_obs = num_obs_ml_input_tibble,
     n_feat = getNumFeat(ml_input_tibble), model, train_prop = split[1],
-    val_prop = split[2], n_fold, nmcc, run_time_sec,
+    val_prop = split[2], n_fold, mcc, nmcc, run_time_sec, seed,
     date = as.character(Sys.Date())
   )
 
@@ -383,18 +397,20 @@ runMLPipeline <- function(
       ) |>
       tibble::add_column(bal_acc, .after = "nmcc") |>
       tibble::add_column(f1, .after = "nmcc") |>
-      tibble::add_column(log2_apop, .after = "nmcc")
+      tibble::add_column(log2_apop, .after = "nmcc") |>
+      tibble::add_column(sens, .after = "nmcc") |>
+      tibble::add_column(spec, .after = "nmcc")
   }
 
   if (model == "LR") {
     performance_tibble <- performance_tibble |>
-      tibble::add_column(fit_penalty, .before = "nmcc") |>
-      tibble::add_column(fit_mixture, .before = "nmcc")
+      tibble::add_column(fit_penalty, .before = "mcc") |>
+      tibble::add_column(fit_mixture, .before = "mcc")
   } else if (model == "RF" || model == "BT") {
     performance_tibble <- performance_tibble |>
-      tibble::add_column(fit_trees, .before = "nmcc") |>
-      tibble::add_column(fit_mtry, .before = "nmcc") |>
-      tibble::add_column(fit_min_n, .before = "nmcc")
+      tibble::add_column(fit_trees, .before = "mcc") |>
+      tibble::add_column(fit_mtry, .before = "mcc") |>
+      tibble::add_column(fit_min_n, .before = "mcc")
   }
 
   if (external_test_data) {

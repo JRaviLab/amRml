@@ -103,7 +103,7 @@ This uses specific matrices to test whether ML models can predict resistance aga
 
 - **Data preparation**: Load Parquet files and prepare ML-ready datasets
 - **Model training**: User-customizable logistic regression via tidymodels
-- **Evaluation**: nMCC, F1, balanced accuracy, AuPRC, and confusion matrices
+- **Evaluation**: MCC, nMCC, F1, balanced accuracy, AuPRC, and confusion matrices
 - **Feature importance**: Extract and rank predictive features
 
 See the [package vignette](https://jravilab.github.io/amRml/articles/intro.html) for detailed usage.

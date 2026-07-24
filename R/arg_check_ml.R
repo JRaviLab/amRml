@@ -1,5 +1,6 @@
 # This script contains functions to check the arguments of ML functions.
 
+#' @importFrom methods is
 #' @importFrom tibble is_tibble
 NULL
 
@@ -254,7 +255,7 @@ NULL
 #' `buildLRModel()` (random forest and boosted tree support planned)
 #'
 .checkArgParsnipMod <- function(parsnip_mod) {
-  if (class(parsnip_mod)[2] != "model_spec") {
+  if (!is(parsnip_mod, "model_spec")) {
     stop("A `parsnip` model was expected but not received.")
   }
 }
@@ -418,7 +419,7 @@ NULL
 #' @param tune_res Results of grid tuning, such as the output of `tuneGrid()`
 #'
 .checkArgTuneRes <- function(tune_res) {
-  if (class(tune_res)[1] != "tune_results") {
+  if (!is(tune_res, "tune_results")) {
     stop("The `tune_res` argument can only take `tune_results` objects.")
   }
 }
@@ -702,7 +703,7 @@ NULL
 #' @keywords internal
 #' @param y_default_eval [chr] y value of default evaluation plot. It can be
 #' "avg_runtime_sec" or one of the following performance metrics:
-#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", or "avg_nmcc"
+#' "avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_mcc", or "avg_nmcc"
 #'
 .checkArgYDefaultEval <- function(y_default_eval) {
   if (!is.character(y_default_eval)) {
@@ -710,11 +711,11 @@ NULL
   }
 
   if (!(y_default_eval %in%
-    c("avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_nmcc"))
+    c("avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_mcc", "avg_nmcc"))
   ) {
     stop(paste(
       "`y_default_eval` must be one of:",
-      "'avg_f1_score', 'avg_log2_apop', 'avg_bal_acc', 'avg_nmcc'."
+      "'avg_f1_score', 'avg_log2_apop', 'avg_bal_acc', 'avg_mcc', 'avg_nmcc'."
     ))
   }
 }

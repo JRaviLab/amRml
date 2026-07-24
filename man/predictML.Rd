@@ -21,3 +21,9 @@ labels
 Predicts the AMR phenotype in the test data set based on the best fit ML
 model.
 }
+\examples{
+data(demo_ml_tibble)
+data(demo_fit)
+data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+predictML(demo_fit, rsample::testing(data_split))
+}

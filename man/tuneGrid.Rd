@@ -15,7 +15,7 @@ tuneGrid(wflow, data_split, grid = buildTuningGrid(model = "LR"), n_fold = 5)
 \item{grid}{A tuning grid as a tibble, such as the output of
 \code{buildTuningGrid()}}
 
-\item{n_fold}{\link[pillar:num]{pillar::num} Number of folds of cross-validation}
+\item{n_fold}{\link[pillar:num]{num} Number of folds of cross-validation}
 }
 \value{
 Results of grid tuning
@@ -23,4 +23,15 @@ Results of grid tuning
 \description{
 Tunes the model according to the tuning grid, workflow, and data split
 specified.
+}
+\examples{
+data(demo_ml_tibble)
+data_split <- splitMLInputTibble(demo_ml_tibble, split = c(1, 0), seed = 1)
+wflow <- buildWflow(
+  buildLRModel(),
+  buildRecipe(rsample::training(data_split))
+)
+grid <- buildTuningGrid("LR", 10^c(-3, -1), c(0, 0.5, 1))
+set.seed(1)
+tuneGrid(wflow, data_split, grid, n_fold = 2)
 }

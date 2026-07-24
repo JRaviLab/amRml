@@ -73,6 +73,19 @@ NULL
 #' upstream processing.
 #' @returns A tibble (one row per genome, one column per feature), plus
 #' "Resistant" or "Susceptible" AMR phenotype labels
+#' @examples
+#' long <- tibble::tibble(
+#'   genome_id = rep(paste0("g", 1:6), each = 2),
+#'   feature_id = rep(c("gene_a", "gene_b"), 6),
+#'   value = c(1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1),
+#'   genome_drug.resistant_phenotype = rep(
+#'     rep(c("Resistant", "Susceptible"), each = 3),
+#'     each = 2
+#'   )
+#' )
+#' tmp <- tempfile(fileext = ".parquet")
+#' arrow::write_parquet(long, tmp)
+#' loadMLInputTibble(tmp)
 #' @export
 loadMLInputTibble <- function(parquet_path) {
   .checkArgPath(parquet_path)
@@ -100,6 +113,7 @@ loadMLInputTibble <- function(parquet_path) {
   target_var <- .getTargetVarName(long_tibble)
 
   ml_input_tibble <- long_tibble |>
+    dplyr::distinct() |>
     dplyr::mutate(!!target_var := as.factor(!!target_var)) |>
     tidyr::pivot_wider(
       id_cols = dplyr::all_of(
@@ -135,6 +149,14 @@ loadMLInputTibble <- function(parquet_path) {
 #' (multi-class classification for determining the drug classes to which each
 #' genome is resistant), but not both.
 #' @return Number of features
+#' @examples
+#' ml <- tibble::tibble(
+#'   genome_id = paste0("g", 1:6),
+#'   genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 3),
+#'   feat_a = c(1L, 0L, 1L, 0L, 1L, 0L),
+#'   feat_b = c(0L, 1L, 0L, 1L, 0L, 1L)
+#' )
+#' getNumFeat(ml)
 #' @export
 getNumFeat <- function(ml_input_tibble) {
   .checkArgTibble(ml_input_tibble, ml = TRUE)
@@ -168,19 +190,27 @@ getNumFeat <- function(ml_input_tibble) {
 #' genome is resistant), but not both.
 #' @param seed [num] For reproducible analysis
 #' @return Pangenome with randomly shuffled AMR phenotype labels
+#' @examples
+#' ml <- tibble::tibble(
+#'   genome_id = paste0("g", 1:6),
+#'   genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 3),
+#'   feat_a = c(1L, 0L, 1L, 0L, 1L, 0L)
+#' )
+#' shuffleLabels(ml, seed = 42)
 #' @export
 shuffleLabels <- function(ml_input_tibble, seed = 5280) {
   .checkArgTibble(ml_input_tibble, ml = TRUE)
   .checkArgSeed(seed)
 
-  set.seed(seed)
   target_var <- .getTargetVarName(ml_input_tibble)
 
   log <- .ml_logger("debug")
   log("debug", "Shuffling phenotype labels (for baseline models).")
 
-  ml_input_tibble |>
-    dplyr::mutate(!!target_var := sample(!!target_var))
+  withr::with_seed(seed, {
+    ml_input_tibble |>
+      dplyr::mutate(!!target_var := sample(!!target_var))
+  })
 }
 
 #' calculateMinSamples()
@@ -190,6 +220,9 @@ shuffleLabels <- function(ml_input_tibble, seed = 5280) {
 #' @param smallest_n_obs_rs [numeric] Minimum number of observations of the
 #'   rarer class required per fold/partition. Default is 1.
 #' @return Minimum total observations required, adjusted by smallest_n_obs_rs
+#' @examples
+#' calculateMinSamples(n_fold = 5, split = c(1, 0), res_prop = 0.3)
+#' calculateMinSamples(n_fold = 5, split = c(0.6, 0.2), res_prop = 0.1)
 #' @export
 calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) {
   base <- .calculateMinSamples(n_fold, split, res_prop)
@@ -210,6 +243,16 @@ calculateMinSamples <- function(n_fold, split, res_prop, smallest_n_obs_rs = 1) 
 #' @return The name of the target variable to be used for machine learning:
 #' either `rlang::sym("genome_drug.resistant_phenotype")` or
 #' `rlang::sym("resistant_classes")`
+#' @examples
+#' ml <- tibble::tibble(
+#'   genome_id = paste0("g", 1:4),
+#'   genome_drug.resistant_phenotype = c(
+#'     "Resistant", "Susceptible",
+#'     "Resistant", "Susceptible"
+#'   ),
+#'   feat_a = c(1L, 0L, 1L, 0L)
+#' )
+#' .getTargetVarName(ml)
 #' @export
 .getTargetVarName <- function(ml_input_tibble) {
   .checkArgTibble(ml_input_tibble, ml = TRUE)
