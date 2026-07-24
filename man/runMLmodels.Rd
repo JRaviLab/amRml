@@ -20,7 +20,8 @@ runMLmodels(
   return_pred = TRUE,
   use_saved_split = TRUE,
   shuffle_labels = FALSE,
-  use_pca = FALSE
+  use_pca = FALSE,
+  seed = 5280
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ runMLmodels(
 \item{shuffle_labels}{Logical. Randomly shuffle labels for baseline runs. Default FALSE.}
 
 \item{use_pca}{Logical. Use PCA on predictors. Default FALSE.}
+
+\item{seed}{Integer. Seed for the parallel RNG streams (\code{BiocParallel}). Default 5280.}
 }
 \value{
 NULL (invisible). Called for side effects (model training and result saving).
@@ -121,8 +124,7 @@ For example: \code{"LOO_cross_test_ML_year_performance.tsv"}
 \note{
 This function requires the following packages:
 \itemize{
-\item \pkg{future} - for parallel processing backend
-\item \pkg{future.apply} - for parallel lapply
+\item \pkg{BiocParallel} - for parallel processing backend
 \item \pkg{readr} - for reading/writing TSV files
 \item \pkg{dplyr}, \pkg{purrr}, \pkg{stringr}, \pkg{tibble} - for data manipulation
 }
@@ -143,21 +145,24 @@ runMLmodels("/path/to/results", stratify_by = "year")
 
 # Cross-test with year stratification
 runMLmodels("/path/to/results",
-            stratify_by = "year",
-            cross_test = TRUE,
-            threads = 32)
+  stratify_by = "year",
+  cross_test = TRUE,
+  threads = 32
+)
 
 # LOO analysis stratified by country with cross-testing
 runMLmodels("/path/to/results",
-            stratify_by = "country",
-            LOO = TRUE,
-            cross_test = TRUE,
-            verbose = TRUE)
+  stratify_by = "country",
+  LOO = TRUE,
+  cross_test = TRUE,
+  verbose = TRUE
+)
 
 # Run without saving model fits (save disk space)
 runMLmodels("/path/to/results",
-            stratify_by = "year",
-            return_fit = FALSE)
+  stratify_by = "year",
+  return_fit = FALSE
+)
 }
 
 }

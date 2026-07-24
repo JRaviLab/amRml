@@ -9,14 +9,14 @@ extractTopFeats(fit, prop_vi_top_feats = c(0, 1), n_top_feats = NA)
 \arguments{
 \item{fit}{Best model fit, such as the output of \code{fitBestModel()}}
 
-\item{prop_vi_top_feats}{\link[pillar:num]{pillar::num} A vector of length 2 with elements together
+\item{prop_vi_top_feats}{\link[pillar:num]{num} A vector of length 2 with elements together
 indicating the proportion of total variable importance the top features
 should comprise. To get the features that contribute to the top 10 to 20\% of
 total variable importance, for example, set
 \code{prop_vi_top_feats = c(0.1, 0.2)}.
 Returns all features by default.}
 
-\item{n_top_feats}{\link[pillar:num]{pillar::num} Number of top features to extract}
+\item{n_top_feats}{\link[pillar:num]{num} Number of top features to extract}
 }
 \value{
 A tibble with a column for top features (\code{Variable}), a column for
@@ -26,4 +26,8 @@ per-class columns of importance scores for each \code{Variable})
 \description{
 Returns the top features that an ML model found to be important for
 predicting the AMR phenotype of a given pathogen.
+}
+\examples{
+data(demo_fit)
+extractTopFeats(demo_fit, n_top_feats = 10)
 }

@@ -1,7 +1,8 @@
-#' @keywords internal
 #' Pulls the ML parameters .json and reads what model split parameters are to be
 #' used. These defaults can be overridden if you so choose, but consider regenerating
 #' the ML matrices with these new split/CV values instead.
+#'
+#' @keywords internal
 #' @noRd
 .resolveSplitParams <- function(parquet_path,
                                 defaults = list(
@@ -49,19 +50,11 @@
 #'   }
 #'
 #' @examples
-#' \dontrun{
-#' # Basic directory structure
-#' paths <- createMLResultDir("/path/to/results")
-#'
-#' # LOO analysis stratified by year
-#' paths_loo <- createMLResultDir("/path/to/results",
-#'   stratify_by = "year",
-#'   LOO = TRUE
-#' )
-#'
-#' # MDR analysis
-#' paths_mdr <- createMLResultDir("/path/to/results", MDR = TRUE)
-#' }
+#' out_dir <- file.path(tempdir(), "amRml_createdir_example")
+#' dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+#' createMLResultDir(out_dir)
+#' createMLResultDir(out_dir, stratify_by = "year", LOO = TRUE)
+#' createMLResultDir(out_dir, MDR = TRUE)
 #'
 #' @export
 createMLResultDir <- function(path,
@@ -533,7 +526,7 @@ createMLinputList <- function(path,
 #' Run MDR (multi-drug resistance) machine learning models
 #'
 #' Executes machine learning pipeline for MDR analysis using logistic regression
-#' with parallel processing via the future backend. Trains models on all MDR
+#' with parallel processing via BiocParallel. Trains models on all MDR
 #' parquet files and saves results to designated output directories.
 #'
 #' @param path Character scalar. Base directory containing MDR matrix files.
@@ -549,6 +542,7 @@ createMLinputList <- function(path,
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`). Default 5280.
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -587,7 +581,8 @@ runMDRmodels <- function(path,
                          return_pred = TRUE,
                          use_saved_split = TRUE,
                          shuffle_labels = FALSE,
-                         use_pca = FALSE) {
+                         use_pca = FALSE,
+                         seed = 5280) {
   files <- createMLinputList(path,
     stratify_by = NULL,
     LOO         = FALSE,
@@ -600,21 +595,19 @@ runMDRmodels <- function(path,
     return(invisible(NULL))
   }
 
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add = TRUE)
-  future::plan(future::multisession, workers = threads)
+  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = seed)
 
   if (isTRUE(verbose)) {
-    nw <- tryCatch(future::nbrOfWorkers(), error = function(e) NA_integer_)
-    message("runMDRmodels(): enabling multisession with workers = ", nw)
+    message("runMDRmodels(): enabling SnowParam with workers = ", threads)
   }
 
   # Auto tags for shuffled and PCA
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
   pca_tag <- if (isTRUE(use_pca)) paste0("_pca", as.character(pca_threshold)) else ""
 
-  results_list <- future.apply::future_lapply(
+  results_list <- BiocParallel::bplapply(
     seq_len(nrow(files)),
+    BPPARAM = param,
     FUN = function(i) {
       ref_parquet <- files$ref_file[i]
       output_prefix <- files$output_prefix[i]
@@ -697,8 +690,7 @@ runMDRmodels <- function(path,
       }
 
       NULL
-    },
-    future.seed = TRUE
+    }
   )
 
   if (verbose) {
@@ -734,6 +726,7 @@ runMDRmodels <- function(path,
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`). Default 5280.
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -790,8 +783,7 @@ runMDRmodels <- function(path,
 #' @note
 #' This function requires the following packages:
 #' \itemize{
-#'   \item \pkg{future} - for parallel processing backend
-#'   \item \pkg{future.apply} - for parallel lapply
+#'   \item \pkg{BiocParallel} - for parallel processing backend
 #'   \item \pkg{readr} - for reading/writing TSV files
 #'   \item \pkg{dplyr}, \pkg{purrr}, \pkg{stringr}, \pkg{tibble} - for data manipulation
 #' }
@@ -854,7 +846,8 @@ runMLmodels <- function(path,
                         return_pred = TRUE,
                         use_saved_split = TRUE,
                         shuffle_labels = FALSE,
-                        use_pca = FALSE) {
+                        use_pca = FALSE,
+                        seed = 5280) {
   if (!is.null(stratify_by)) {
     if (!is.character(stratify_by) || length(stratify_by) != 1L) {
       stop("`stratify_by` must be NULL or a single string: 'year' or 'country'.")
@@ -876,13 +869,10 @@ runMLmodels <- function(path,
     return(invisible(NULL))
   }
 
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add = TRUE)
-  future::plan(future::multisession, workers = threads)
+  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = seed)
 
   if (isTRUE(verbose)) {
-    nw <- tryCatch(future::nbrOfWorkers(), error = function(e) NA_integer_)
-    message("runMLmodels(): enabling multisession with workers = ", nw)
+    message("runMLmodels(): enabling SnowParam with workers = ", threads)
   }
 
   # LOO / cross-test configuration prefix
@@ -909,8 +899,9 @@ runMLmodels <- function(path,
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
   pca_tag <- if (isTRUE(use_pca)) paste0("_pca", as.character(pca_threshold)) else ""
 
-  results_list <- future.apply::future_lapply(
+  results_list <- BiocParallel::bplapply(
     seq_len(nrow(files)),
+    BPPARAM = param,
     FUN = function(i) {
       ref_parquet <- files$ref_file[i]
       output_prefix <- files$output_prefix[i]
@@ -1004,8 +995,7 @@ runMLmodels <- function(path,
       }
 
       NULL
-    },
-    future.seed = TRUE
+    }
   )
 
   if (verbose) {
@@ -1039,6 +1029,16 @@ runMLmodels <- function(path,
 #' @param use_saved_split Whether to inherit split/seed/n_fold from ml_parameters.json
 #'
 #' @return Invisibly returns the output directory used for ML results.
+#'
+#' @examples
+#' \dontrun{
+#' runModelingPipeline(
+#'   parquet_duckdb_path = "path/to/Bug_parquet.duckdb",
+#'   threads = 16, n_fold = 5, split = c(1, 0), min_n = 25,
+#'   prop_vi_top_feats = c(0, 1), pca_threshold = 0.99,
+#'   verbose = TRUE, use_saved_split = TRUE
+#' )
+#' }
 #'
 #' @export
 runModelingPipeline <- function(parquet_duckdb_path,

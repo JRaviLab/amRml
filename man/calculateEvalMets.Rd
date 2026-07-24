@@ -19,3 +19,22 @@ accuracy, normalized (to a 0 to 1 scale instead of -1 to 1) Matthews
 correlation coefficient (nMCC), and log2(AUPRC/prior) based on the AMR
 phenotype predictions by an ML model compared against the actual values.
 }
+\examples{
+preds <- tibble::tibble(
+  genome_id = paste0("g", 1:10),
+  genome_drug.resistant_phenotype = factor(
+    rep(c("Resistant", "Susceptible"), each = 5),
+    levels = c("Resistant", "Susceptible")
+  ),
+  .pred_class = factor(
+    c(
+      "Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
+      "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"
+    ),
+    levels = c("Resistant", "Susceptible")
+  ),
+  .pred_Resistant = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
+  .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
+)
+calculateEvalMets(preds)
+}

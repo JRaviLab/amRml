@@ -25,3 +25,7 @@ Returns the minimum number of total observations needed (one bug-drug combo)
 to have at least one observation of the rarer class in each CV fold
 or, in validation mode, across train/val/test.
 }
+\examples{
+calculateMinSamples(n_fold = 5, split = c(1, 0), res_prop = 0.3)
+calculateMinSamples(n_fold = 5, split = c(0.6, 0.2), res_prop = 0.1)
+}

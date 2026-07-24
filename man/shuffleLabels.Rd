@@ -14,11 +14,19 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{seed}{\link[pillar:num]{pillar::num} For reproducible analysis}
+\item{seed}{\link[pillar:num]{num} For reproducible analysis}
 }
 \value{
 Pangenome with randomly shuffled AMR phenotype labels
 }
 \description{
 Randomly shuffles the AMR phenotype labels in the ML-ready tibble.
+}
+\examples{
+ml <- tibble::tibble(
+  genome_id = paste0("g", 1:6),
+  genome_drug.resistant_phenotype = rep(c("Resistant", "Susceptible"), each = 3),
+  feat_a = c(1L, 0L, 1L, 0L, 1L, 0L)
+)
+shuffleLabels(ml, seed = 42)
 }
