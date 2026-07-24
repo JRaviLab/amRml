@@ -16,4 +16,8 @@ data(demo_fit)
 \description{
 A tuned logistic-regression workflow fitted on \link{demo_ml_tibble}.
 }
+\examples{
+data(demo_fit)
+class(demo_fit)
+}
 \keyword{datasets}

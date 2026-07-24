@@ -288,14 +288,14 @@ skipImbalancedMatrix <- function(genome_ids,
       if (group_type %in% c("drug_class", "drug_class_year", "drug_class_country")) {
         genome_ids <- DBI::dbGetQuery(con, sprintf("
           WITH class_phenotypes AS (
-            SELECT \"genome_drug.genome_id\" AS genome_id,
+            SELECT \"genome.genome_id\" AS genome_id,
                    MAX(CASE WHEN \"genome_drug.resistant_phenotype\" = 'Resistant'
                             THEN 1 ELSE 0 END) AS any_resistant,
                    MIN(CASE WHEN \"genome_drug.resistant_phenotype\" = 'Susceptible'
                             THEN 1 ELSE 0 END) AS all_susceptible
             FROM metadata
             WHERE %s
-            GROUP BY \"genome_drug.genome_id\"
+            GROUP BY \"genome.genome_id\"
           )
           SELECT genome_id
           FROM class_phenotypes
@@ -303,7 +303,7 @@ skipImbalancedMatrix <- function(genome_ids,
         ", condition_string))[[1]]
       } else {
         genome_ids <- DBI::dbGetQuery(con, sprintf("
-          SELECT DISTINCT \"genome_drug.genome_id\"
+          SELECT DISTINCT \"genome.genome_id\"
           FROM metadata
           WHERE %s
             AND \"genome_drug.resistant_phenotype\" IN ('Resistant','Susceptible')
@@ -499,7 +499,7 @@ skipImbalancedMatrix <- function(genome_ids,
             "
             COPY (
               SELECT
-                f.\"genome_drug.genome_id\" AS genome_id,
+                f.\"genome.genome_id\" AS genome_id,
                 %s AS feature_id,
                 MAX(CAST(%s AS DOUBLE)) AS value,
                 %s AS \"genome_drug.resistant_phenotype\"
@@ -507,12 +507,12 @@ skipImbalancedMatrix <- function(genome_ids,
               FROM %s
               JOIN selected_genomes USING (genome_id)
               JOIN keep_features kf ON %s = kf.feature_id
-              JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
+              JOIN metadata f ON genome_id = f.\"genome.genome_id\"
               WHERE %s
                 AND f.\"genome_drug.resistant_phenotype\" IN ('Resistant','Susceptible')
                 %s
-              GROUP BY f.\"genome_drug.genome_id\", %s %s
-              ORDER BY f.\"genome_drug.genome_id\", %s
+              GROUP BY f.\"genome.genome_id\", %s %s
+              ORDER BY f.\"genome.genome_id\", %s
             )
             TO '%s'
             (FORMAT 'parquet', COMPRESSION 'zstd')
@@ -736,7 +736,7 @@ skipImbalancedMatrix <- function(genome_ids,
   DBI::dbDisconnect(con0, shutdown = FALSE)
 
   classes <- metadata_all |>
-    dplyr::select(genome_drug.genome_id, resistant_classes) |>
+    dplyr::select(genome.genome_id, resistant_classes) |>
     dplyr::distinct() |>
     dplyr::group_by(resistant_classes) |>
     dplyr::count() |>
@@ -748,7 +748,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
   genomes_to_keep <- metadata_all |>
     dplyr::filter(resistant_classes %in% classes) |>
-    dplyr::pull(genome_drug.genome_id)
+    dplyr::pull(genome.genome_id)
 
   # Build one matrix per feature type and matrix type
   for (ftype in names(feature_types)) {
@@ -828,21 +828,21 @@ skipImbalancedMatrix <- function(genome_ids,
         "
         COPY (
           SELECT
-            f.\"genome_drug.genome_id\" AS genome_id,
+            f.\"genome.genome_id\" AS genome_id,
             %s AS feature_id,
             MAX(CAST(%s AS DOUBLE)) AS value,
             resistant_classes
           FROM %s
           JOIN selected_genomes USING (genome_id)
           JOIN keep_features kf ON %s = kf.feature_id
-          JOIN metadata f ON genome_id = f.\"genome_drug.genome_id\"
+          JOIN metadata f ON genome_id = f.\"genome.genome_id\"
           WHERE resistant_classes <> 'Intermediate'
           GROUP BY
-            f.\"genome_drug.genome_id\",
+            f.\"genome.genome_id\",
             %s,
             resistant_classes
           ORDER BY
-            f.\"genome_drug.genome_id\",
+            f.\"genome.genome_id\",
             %s
         )
         TO '%s'
@@ -944,10 +944,10 @@ skipImbalancedMatrix <- function(genome_ids,
         }
       }),
       prefix = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 3) {
+        if (is.na(i) || i < 5) {
           NA_character_
         } else {
-          paste(x[1:(i - 4)], collapse = "_")
+          paste(x[seq_len(i - 4)], collapse = "_")
         }
       }),
       drug = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
@@ -986,7 +986,7 @@ skipImbalancedMatrix <- function(genome_ids,
     ## --------------------------------------------------------------
     ## Leave-one-drug-out with genome blocking
     ## --------------------------------------------------------------
-    purrr::walk(names(grouped), function(leave_one_out) {
+    new_files <- purrr::map(names(grouped), function(leave_one_out) {
       ## Read held-out drug to get its genome IDs
       heldout_tbl <- arrow::read_parquet(grouped[[leave_one_out]]$file)
 
@@ -1036,7 +1036,6 @@ skipImbalancedMatrix <- function(genome_ids,
       ))
 
       arrow::write_parquet(combined, out_file)
-      created <<- c(created, out_file)
 
       log(
         "debug",
@@ -1045,7 +1044,13 @@ skipImbalancedMatrix <- function(genome_ids,
           " | removed ", length(heldout_genomes), " genomes"
         )
       )
-    })
+
+      out_file
+    }) |>
+      purrr::compact() |>
+      unlist()
+
+    created <- c(created, new_files)
   }
 
   log("info", "All LOO-drug matrices generated with genome-level blocking")
@@ -1105,10 +1110,10 @@ skipImbalancedMatrix <- function(genome_ids,
         }
       }),
       prefix = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 3) {
+        if (is.na(i) || i < 5) {
           NA_character_
         } else {
-          paste(x[1:(i - 4)], collapse = "_")
+          paste(x[seq_len(i - 4)], collapse = "_")
         }
       }),
       drug = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {

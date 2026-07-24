@@ -2,37 +2,29 @@
 % Please edit documentation in R/plot_ml.R
 \name{plotPRC}
 \alias{plotPRC}
-\title{plotPRC()}
+\title{Plot a Precision-Recall Curve}
 \usage{
 plotPRC(test_data_plus_predictions)
 }
 \arguments{
-\item{test_data_plus_predictions}{Test data (tibble) with an added column for
-predicted phenotype labels, such as the output of \code{predict()}.}
+\item{test_data_plus_predictions}{A tibble of test data with added prediction
+columns (e.g. the output of \code{predictML()} or \code{runMLmodels(return_pred=TRUE)}),
+or a path to a TSV file containing the same.}
 }
 \value{
-A precision-recall curve as a \code{ggplot2} object
+A \code{ggplot2} object showing the precision-recall curve.
 }
 \description{
-Plots the precision-recall curve given a set of test data plus predicted AMR
-phenotypes.
+Generates a precision-recall curve (PRC) for AMR phenotype prediction results.
+}
+\details{
+The function uses \code{yardstick::pr_curve()} to compute the PR curve and then
+visualizes it using \code{ggplot2}.
 }
 \examples{
-preds <- tibble::tibble(
-  genome_id = paste0("g", 1:10),
-  genome_drug.resistant_phenotype = factor(
-    rep(c("Resistant", "Susceptible"), each = 5),
-    levels = c("Resistant", "Susceptible")
-  ),
-  .pred_class = factor(
-    c(
-      "Resistant", "Resistant", "Susceptible", "Resistant", "Susceptible",
-      "Susceptible", "Resistant", "Susceptible", "Susceptible", "Resistant"
-    ),
-    levels = c("Resistant", "Susceptible")
-  ),
-  .pred_Resistant = c(0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.6, 0.1, 0.2, 0.55),
-  .pred_Susceptible = c(0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9, 0.8, 0.45)
-)
+data(demo_fit)
+data(demo_ml_tibble)
+preds <- predictML(demo_fit, demo_ml_tibble)
 plotPRC(preds)
+
 }

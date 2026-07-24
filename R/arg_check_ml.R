@@ -41,11 +41,11 @@ NULL
       "genome_drug.resistant_phenotype" %in% colnames(tibble),
       "resistant_classes" %in% colnames(tibble)
     )) {
-      stop(paste(
-        "The input tibble must have a target variable column named",
-        "either `genome_drug.resistant_phenotype` or `resistant_classes`, but",
+      stop(
+        "The input tibble must have a target variable column named ",
+        "either `genome_drug.resistant_phenotype` or `resistant_classes`, but ",
         "not both."
-      ))
+      )
     }
   }
 }
@@ -107,11 +107,11 @@ NULL
   is_train_val_test <- (train_prop > 0 && val_prop > 0 && test_prop > 0)
 
   if (!(is_pure_cv || is_train_val_test)) {
-    stop(paste0(
+    stop(
       "Unsupported split proportions. Use either:\n",
       "  - pure CV: split = c(1, 0)\n",
       "  - classical splits (train/val/test): c(train_prop, val_prop) with train > 0, val > 0, and test = 1 - train - val > 0."
-    ))
+    )
   }
 
   # Sum must be <= 1 for all valid cases
@@ -192,10 +192,10 @@ NULL
   }
 
   if (smallest_n_obs_rs < 1 || smallest_n_obs_rs %% 1 != 0) {
-    stop(paste(
-      "The `smallest_n_obs_rs` argument must be a whole, positive",
+    stop(
+      "The `smallest_n_obs_rs` argument must be a whole, positive ",
       "number greater than 0."
-    ))
+    )
   }
 }
 
@@ -207,10 +207,10 @@ NULL
 #'
 .checkArgUsePCA <- function(use_pca) {
   if (!is.logical(use_pca)) {
-    stop(paste(
-      "The `use_pca` argument can only take logical values:",
+    stop(
+      "The `use_pca` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -240,10 +240,10 @@ NULL
 #'
 .checkArgMultiClass <- function(multi_class) {
   if (!is.logical(multi_class)) {
-    stop(paste(
-      "The `multi_class` argument can only take logical values:",
+    stop(
+      "The `multi_class` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -281,10 +281,10 @@ NULL
 #'
 .checkArgModel <- function(model) {
   if (!(model %in% c("LR", "RF", "BT"))) {
-    stop(paste(
-      "The `model` argument must be one of:",
+    stop(
+      "The `model` argument must be one of: ",
       "'LR' (logistic regression), 'RF' (random forest), 'BT' (boosted tree)."
-    ))
+    )
   }
 }
 
@@ -434,10 +434,10 @@ NULL
 #'
 .checkArgSelectBestMetric <- function(select_best_metric) {
   if (!(select_best_metric %in% c("f_meas", "pr_auc", "mcc", "bal_accuracy"))) {
-    stop(paste(
-      "The `select_best_metric` argument must be one of: 'f_meas',",
+    stop(
+      "The `select_best_metric` argument must be one of: 'f_meas', ",
       "'pr_auc', 'mcc', 'bal_accuracy'."
-    ))
+    )
   }
 }
 
@@ -453,10 +453,10 @@ NULL
   .checkArgTibble(test_data_plus_predictions, ml = TRUE)
 
   if (!(".pred_class" %in% colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` is missing a `.pred_class`",
+    stop(
+      "`test_data_plus_predictions` is missing a `.pred_class` ",
       "column. Try using the output of `predictML()`."
-    ))
+    )
   }
 }
 
@@ -489,10 +489,10 @@ NULL
 #'
 .checkArgPropVITopFeats <- function(prop_vi_top_feats) {
   if (!is.numeric(prop_vi_top_feats) || length(prop_vi_top_feats) != 2) {
-    stop(paste(
-      "The `prop_vi_top_feats` argument must be a vector of length",
+    stop(
+      "The `prop_vi_top_feats` argument must be a vector of length ",
       "2 with numeric values."
-    ))
+    )
   }
 
   if (any(prop_vi_top_feats > 1) || any(prop_vi_top_feats < 0)) {
@@ -515,10 +515,10 @@ NULL
 #'
 .checkArgShuffleLabels <- function(shuffle_labels) {
   if (!is.logical(shuffle_labels)) {
-    stop(paste(
-      "The `shuffle_labels` argument can only take logical values:",
+    stop(
+      "The `shuffle_labels` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -530,10 +530,10 @@ NULL
 #'
 .checkArgReturnTuneRes <- function(return_tune_res) {
   if (!is.logical(return_tune_res)) {
-    stop(paste(
-      "The `return_tune_res` argument can only take logical values:",
+    stop(
+      "The `return_tune_res` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -545,10 +545,10 @@ NULL
 #'
 .checkArgReturnFit <- function(return_fit) {
   if (!is.logical(return_fit)) {
-    stop(paste(
-      "The `return_fit` argument can only take logical values:",
+    stop(
+      "The `return_fit` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -561,10 +561,10 @@ NULL
 #'
 .checkArgReturnPred <- function(return_pred) {
   if (!is.logical(return_pred)) {
-    stop(paste(
-      "The `return_pred` argument can only take logical values:",
+    stop(
+      "The `return_pred` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -576,10 +576,10 @@ NULL
 #'
 .checkArgVerbose <- function(verbose) {
   if (!is.logical(verbose)) {
-    stop(paste(
-      "The `verbose` argument can only take logical values:",
+    stop(
+      "The `verbose` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -613,10 +613,10 @@ NULL
 #'
 .checkArgByVI <- function(by_vi) {
   if (!is.logical(by_vi)) {
-    stop(paste(
-      "The `by_vi` argument can only take logical values:",
+    stop(
+      "The `by_vi` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -629,10 +629,10 @@ NULL
 #'
 .checkArgByNum <- function(by_num) {
   if (!is.logical(by_num)) {
-    stop(paste(
-      "The `by_num` argument can only take logical values:",
+    stop(
+      "The `by_num` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -657,10 +657,10 @@ NULL
   }
 
   if (any(diff(percent_removal_vec) <= 0)) {
-    stop(paste(
-      "The elements of `percent_removal_vec` must be in ascending",
+    stop(
+      "The elements of `percent_removal_vec` must be in ascending ",
       "order with no repeats."
-    ))
+    )
   }
 }
 
@@ -673,10 +673,10 @@ NULL
 #'
 .checkArgReturnFeats <- function(return_feats) {
   if (!is.logical(return_feats)) {
-    stop(paste(
-      "The `return_feats` argument can only take logical values:",
+    stop(
+      "The `return_feats` argument can only take logical values: ",
       "`TRUE` or `FALSE`."
-    ))
+    )
   }
 }
 
@@ -713,10 +713,10 @@ NULL
   if (!(y_default_eval %in%
     c("avg_f1_score", "avg_log2_apop", "avg_bal_acc", "avg_mcc", "avg_nmcc"))
   ) {
-    stop(paste(
-      "`y_default_eval` must be one of:",
+    stop(
+      "`y_default_eval` must be one of: ",
       "'avg_f1_score', 'avg_log2_apop', 'avg_bal_acc', 'avg_mcc', 'avg_nmcc'."
-    ))
+    )
   }
 }
 
