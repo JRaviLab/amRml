@@ -630,15 +630,14 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
 #' @param top_clusters Output of summariseClusters().
 #' @param cluster_feature_parquet Path to the Parquet file mapping variables to clusters.
 #' @param protein_names_parquet Path to the Parquet file with cluster name annotations.
-#' @param keep_direct_model_cluster Whether to keep model -> cluster edges.
 #'
 #' @return A list with feature_table, cluster_table, nodes, edges, and graph.
 #' @export
 buildSignalNetwork <- function(top_features,
                                top_clusters,
                                cluster_feature_parquet,
-                               protein_names_parquet,
-                               keep_direct_model_cluster = TRUE) {
+                               protein_names_parquet
+                              ) {
   stopifnot(is.data.frame(top_features))
   stopifnot(is.data.frame(top_clusters))
   stopifnot(file.exists(cluster_feature_parquet))
