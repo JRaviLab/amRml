@@ -136,18 +136,16 @@ runMLPipeline <- function(
   }
 
   if (model != "LR" & multi_class) {
-    stop(paste(
-      "Multi-class classification can be performed only with",
+    stop(
+      "Multi-class classification can be performed only with ",
       "logistic regression in our current implementation."
-    ))
+    )
   }
 
   if (verbose) {
     message(
-      paste(
-        "`ml_input_tibble` has", num_obs_ml_input_tibble, "observations of",
-        getNumFeat(ml_input_tibble), "features."
-      )
+      "`ml_input_tibble` has ", num_obs_ml_input_tibble, " observations of ",
+      getNumFeat(ml_input_tibble), " features."
     )
   }
 
@@ -158,7 +156,11 @@ runMLPipeline <- function(
       dplyr::mutate(prop = n / sum(n))
 
     if (verbose) {
-      print(rs_props_original_ml_input_tibble)
+      rs_props_summary <- paste(
+        utils::capture.output(rs_props_original_ml_input_tibble),
+        collapse = "\n"
+      )
+      message(rs_props_summary)
     }
 
     res_prop_original_ml_input_tibble <- rs_props_original_ml_input_tibble |>
@@ -183,19 +185,19 @@ runMLPipeline <- function(
     external_test_data <- TRUE
 
     if (multi_class) {
-      stop(paste(
-        "Multi-class classification cannot be performed with",
+      stop(
+        "Multi-class classification cannot be performed with ",
         "external test data with the current implementation."
-      ))
+      )
     }
 
     num_obs_test_data <- nrow(test_data)
 
     if (verbose) {
-      message(paste(
-        "`test_data` has", num_obs_test_data,
-        "observations of", getNumFeat(test_data), "features."
-      ))
+      message(
+        "`test_data` has ", num_obs_test_data,
+        " observations of ", getNumFeat(test_data), " features."
+      )
     }
 
     rs_props_test_data <- test_data |>
@@ -203,7 +205,11 @@ runMLPipeline <- function(
       dplyr::mutate(prop = n / sum(n))
 
     if (verbose) {
-      print(rs_props_test_data)
+      test_data_props_summary <- paste(
+        utils::capture.output(rs_props_test_data),
+        collapse = "\n"
+      )
+      message(test_data_props_summary)
     }
 
     # Get the proportion of resistant genomes in the external `test_data`.
@@ -248,12 +254,12 @@ runMLPipeline <- function(
 
     # Stratify by R/S phenotype
     res_train_indices <- sample(res_indices, n_train_res)
-    sus_train_indices <- (1:n_train)[!(1:n_train %in% res_indices)]
+    sus_train_indices <- seq_len(n_train)[!(seq_len(n_train) %in% res_indices)]
     train_indices <- c(res_train_indices, sus_train_indices)
 
-    val_indices <- (1:nrow(original_ml_input_tibble))[!(1:nrow(
+    val_indices <- seq_len(nrow(original_ml_input_tibble))[!(seq_len(nrow(
       original_ml_input_tibble
-    ) %in% train_indices)]
+    )) %in% train_indices)]
 
     data_split[[2]] <- as.integer(train_indices)
     data_split[[3]] <- as.integer(val_indices)
@@ -261,7 +267,7 @@ runMLPipeline <- function(
     n_train <- nrow(original_ml_input_tibble)
     n_val <- 0
 
-    data_split[[2]] <- 1:nrow(original_ml_input_tibble)
+    data_split[[2]] <- seq_len(nrow(original_ml_input_tibble))
     data_split[[3]] <- NA
     data_split[[4]] <- tibble::tibble(id = "Resample1")
   }
@@ -314,7 +320,7 @@ runMLPipeline <- function(
   nmcc <- .calculatenMCC(test_data_plus_predictions)
 
   if (verbose) {
-    message(paste("Matthews correlation coefficient:", mcc, "| nMCC:", nmcc))
+    message("Matthews correlation coefficient: ", mcc, " | nMCC: ", nmcc)
   }
 
   top_feat_tibble <- extractTopFeats(fit,
@@ -342,7 +348,7 @@ runMLPipeline <- function(
     # `top_feats`.
     n_random_feats <- n_top_feats - length(top_feats)
 
-    random_indices <- sample(1:length(zero_vi_feats), n_random_feats)
+    random_indices <- sample(seq_along(zero_vi_feats), n_random_feats)
     random_feats <- zero_vi_feats[random_indices]
 
     top_feats <- c(top_feats, random_feats)
