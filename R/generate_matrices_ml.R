@@ -23,6 +23,53 @@ NULL
   }
 }
 
+#' Title
+#'
+#' @param parquet_dir
+#'
+#' @returns
+#'
+#' @export
+#' @examples
+.getFeatureTypes <- function(parquet_dir) {
+
+  parquet_files <- list.files(
+    parquet_dir,
+    pattern = "(_count.*\\.parquet$)|(struct.*\\.parquet$)",
+    full.names = TRUE
+  )
+
+  feature_types <- lapply(parquet_files, function(file) {
+
+    schema_cols <- names(arrow::read_parquet(file, as_data_frame = FALSE))
+
+    id_col <- setdiff(
+      schema_cols,
+      c("genome_id", "value")
+    )
+
+    if (length(id_col) != 1) {
+      stop(
+        "Could not determine feature ID column for: ",
+        basename(file)
+      )
+    }
+
+    list(
+      view = sub("\\.parquet$", "", basename(file)),
+      id_col = id_col
+    )
+  })
+
+  names(feature_types) <- vapply(
+    feature_types,
+    function(x) x$id_col,
+    character(1)
+  )
+
+  feature_types
+}
+
 #' Generate a 3 letter code for species names
 #'
 #' This function creates an abbreviated species names
@@ -179,27 +226,64 @@ skipImbalancedMatrix <- function(genome_ids,
   .sql_escape(path)
 }
 
+#' Title
+#'
+#' @param con
+#' @param parquet_dir
+#'
+#' @returns
+#'
+#' @export
+#' @examples
 .register_parquet_views <- function(con, parquet_dir) {
-  views <- c(
-    metadata      = "metadata",
-    gene_count    = "gene_count",
-    protein_count = "protein_count",
-    domain_count  = "domain_count",
-    struct        = "struct"
+
+  feature_types <- .getFeatureTypes(parquet_dir)
+
+  available_views <- c("metadata")
+
+  metadata_files <- Sys.glob(
+    file.path(parquet_dir, "metadata.parquet")
   )
 
-  for (view_name in names(views)) {
-    sql_path <- .parquet_dataset_sql(parquet_dir, views[[view_name]])
+  if (length(metadata_files) == 0) {
+    stop("metadata parquet not found in: ", parquet_dir)
+  }
+
+  sql_path <- .parquet_dataset_sql(parquet_dir, "metadata")
+
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "CREATE OR REPLACE VIEW metadata AS
+       SELECT * FROM read_parquet('%s')",
+      sql_path
+    )
+  )
+
+  for (ftype in feature_types) {
+
+    sql_path <- .parquet_dataset_sql(
+      parquet_dir,
+      ftype$view
+    )
+
     DBI::dbExecute(
       con,
       sprintf(
-        "CREATE OR REPLACE VIEW %s AS SELECT * FROM read_parquet('%s')",
-        view_name, sql_path
+        "CREATE OR REPLACE VIEW %s AS
+         SELECT * FROM read_parquet('%s')",
+        ftype$view,
+        sql_path
       )
+    )
+
+    available_views <- c(
+      available_views,
+      ftype$view
     )
   }
 
-  invisible(TRUE)
+  invisible(available_views)
 }
 
 #' Metadata and Feature parquets to bug-drug-feature parquet as ML input
@@ -264,13 +348,28 @@ skipImbalancedMatrix <- function(genome_ids,
     ifelse(is.null(stratify_column), "None", stratify_column)
   ))
 
-  feature_types <- list(
-    genes    = list(view = "gene_count",    id_col = "gene"),
-    proteins = list(view = "protein_count", id_col = "protein"),
-    domains  = list(view = "domain_count",  id_col = "domain"),
-    struct   = list(view = "struct",        id_col = "struct")
-  )
+  # feature_types <- list(
+  #   genes    = list(view = "gene_count",    id_col = "gene"),
+  #   proteins = list(view = "protein_count", id_col = "protein"),
+  #   domains  = list(view = "domain_count",  id_col = "domain"),
+  #   struct   = list(view = "struct",        id_col = "struct")
+  # )
 
+ feature_types <- .getFeatureTypes(parquet_dir)
+
+if (length(feature_types) == 0) {
+  stop(
+    "No feature parquet files found. Expected *_count.parquet and/or struct.parquet."
+  )
+}
+
+log(
+  "info",
+  paste0(
+    "Detected feature types: ",
+    paste(names(feature_types), collapse = ", ")
+  )
+)
   matrix_types <- list(
     counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
     binary        = list(value_col = "present", filter = "variance > 0", binary_only = FALSE, label = "binary"),
@@ -291,7 +390,12 @@ skipImbalancedMatrix <- function(genome_ids,
   }
 
   con0 <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-  on.exit(DBI::dbDisconnect(con0, shutdown = TRUE), add = TRUE)
+ on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
+  
   .register_parquet_views(con0, parquet_dir)
 
   bug <- .generate3ltrCode(basename(parquet_dir))
@@ -311,7 +415,11 @@ skipImbalancedMatrix <- function(genome_ids,
 
     for (i in seq_len(nrow(all_groups))) {
       con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-      on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+      on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
       .register_parquet_views(con, parquet_dir)
 
       group_values <- all_groups[i, , drop = FALSE]
@@ -714,13 +822,28 @@ skipImbalancedMatrix <- function(genome_ids,
   MDR_matrix_path <- gsub("\\\\", "/", file.path(path, "MDR_matrix"))
   if (!dir.exists(MDR_matrix_path)) dir.create(MDR_matrix_path, recursive = TRUE)
 
-  feature_types <- list(
-    genes    = list(view = "gene_count",    id_col = "gene"),
-    proteins = list(view = "protein_count", id_col = "protein"),
-    domains  = list(view = "domain_count",  id_col = "domain"),
-    struct   = list(view = "struct",        id_col = "struct")
-  )
+  # feature_types <- list(
+  #   genes    = list(view = "gene_count",    id_col = "gene"),
+  #   proteins = list(view = "protein_count", id_col = "protein"),
+  #   domains  = list(view = "domain_count",  id_col = "domain"),
+  #   struct   = list(view = "struct",        id_col = "struct")
+  # )
 
+  feature_types <- .getFeatureTypes(parquet_dir)
+
+if (length(feature_types) == 0) {
+  stop(
+    "No feature parquet files found. Expected *_count.parquet and/or struct.parquet."
+  )
+}
+
+log(
+  "info",
+  paste0(
+    "Detected feature types: ",
+    paste(names(feature_types), collapse = ", ")
+  )
+)
   matrix_types <- list(
     counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
     binary        = list(value_col = "present", filter = "variance > 0", binary_only = FALSE, label = "binary"),
@@ -728,7 +851,11 @@ skipImbalancedMatrix <- function(genome_ids,
   )
 
   con0 <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-  on.exit(DBI::dbDisconnect(con0, shutdown = TRUE), add = TRUE)
+  on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
   .register_parquet_views(con0, parquet_dir)
 
   bug <- .generate3ltrCode(basename(parquet_dir))
@@ -768,7 +895,11 @@ skipImbalancedMatrix <- function(genome_ids,
       out_file_sql <- gsub("\\\\", "/", out_file)
 
       con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-      on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+      on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
       .register_parquet_views(con, parquet_dir)
 
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
