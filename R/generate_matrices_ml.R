@@ -137,7 +137,8 @@ skipImbalancedMatrix <- function(genome_ids,
                                  n_fold = 5,
                                  split = c(1, 0),
                                  min_total_obs = 40,
-                                 verbosity = c("minimal", "debug")) {
+                                 verbosity = c("minimal", "debug")
+                                ) {
   log <- .make_logger(verbosity)
 
   total_obs <- sum(phenotype_counts$count)
@@ -203,7 +204,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
 #' Metadata and Feature parquets to bug-drug-feature parquet as ML input
 #'
-#' @param parquet_duckdb_path [character] The path to the DuckDB that contains the view of metadata and feature parquets
+#' @param parquet_dir [character] The path to the directory that contains the metadata and feature parquets
 #' @param path [character] The path to the working directory
 #' @param n_fold [numeric] the number of cross-validation folds
 #' @param split if folds has been set to NULL, indicating classical splits instead
@@ -694,7 +695,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
 #' Generate ML input matrix for multidrug resistance analysis
 #'
-#' @param parquet_duckdb_path [character] Path to the DuckDB that contains the view of metadata and feature parquets
+#' @param parquet_dir [character] Path to the directory that contains the metadata and feature parquets
 #' @param path [character] Working directory
 #' @param min_n [numeric] Minimum number of samples for each combination of drug classes
 #' @param verbosity [character] "minimal" or "debug"; when "debug", prints detailed steps
@@ -1203,7 +1204,7 @@ skipImbalancedMatrix <- function(genome_ids,
 #' d) Leave-one-out from the years and countries for drug/class
 #' e) MDR based on classes
 #'
-#' @param parquet_duckdb_path [character] path to the DuckDB that contains the view of metadata and feature parquets
+#' @param parquet_dir [character] path to the directory that contains the metadata and feature parquets
 #' @param out_path [character] path to the directory where the results files (matrices) will be written
 #' @param n_fold [numeric] number of cross-validation folds; default is 5
 #' @param split [numeric] training/validation split specification. Two formats accepted:
@@ -1219,8 +1220,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #' \dontrun{
 #' # Generate ML input matrices with 5-fold cross-validation (using shorthand)
 #' generateMLInputs(
-#'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
-#'   out_path = "results/",
+#'   parquet_dir = "data/",
+#'   out_path = "data/",
 #'   n_fold = 5,
 #'   split = 0, # shorthand for CV mode
 #'   min_n = 25,
@@ -1229,8 +1230,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #'
 #' # Same as above but using vector notation
 #' generateMLInputs(
-#'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
-#'   out_path = "results/",
+#'   parquet_dir = "data/",
+#'   out_path = "data/",
 #'   n_fold = 5,
 #'   split = c(1, 0), # explicit CV mode
 #'   verbosity = "minimal"
@@ -1238,8 +1239,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #'
 #' # Generate with classical train/val/test split (70/15/15)
 #' generateMLInputs(
-#'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
-#'   out_path = "results/",
+#'   parquet_dir = "data/",
+#'   out_path = "data/",
 #'   n_fold = NULL,
 #'   split = c(0.7, 0.15), # 70% train, 15% val, 15% test
 #'   min_n = 25,
@@ -1247,8 +1248,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #' )
 #' }
 #' @export
-generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
-                             out_path = "results/",
+generateMLInputs <- function(parquet_dir = "data/",
+                             out_path = "data/",
                              n_fold = 5,
                              split = c(1, 0), # Default: CV
                              min_n = 25,
@@ -1257,8 +1258,8 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   log <- .make_logger(verbosity)
 
   # Validate inputs before processing
-  if (!file.exists(parquet_duckdb_path)) {
-    stop("DuckDB file not found: ", parquet_duckdb_path)
+  if (!dir.exists(parquet_dir)) {
+    stop("Parquet directory not found: ", parquet_dir)
   }
 
   if (!dir.exists(dirname(out_path))) {
@@ -1266,10 +1267,10 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   }
 
   # Normalize input paths
-  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
+  parquet_dir <- normalizePath(parquet_dir)
   path <- normalizePath(out_path)
 
-  .checkArgPath(parquet_duckdb_path)
+  .checkArgPath(parquet_dir)
 
   split <- .normalize_split(split)
 
@@ -1288,7 +1289,7 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     val_prop    = val_prop,
     test_prop   = test_prop,
     seed        = 5280,
-    timestamp <- as.character(Sys.time())
+    timestamp = as.character(Sys.time())
   )
 
   jsonlite::write_json(
@@ -1308,7 +1309,7 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   }
 
   # Proceed (propagate verbosity to downstream steps)
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+  .parquet2Matrix(parquet_dir, out_path, n_fold, split,
     stratify_by = "year",
     verbosity = verbosity
   )
@@ -1317,7 +1318,7 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     verbosity = verbosity
   )
 
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+  .parquet2Matrix(parquet_dir, out_path, n_fold, split,
     stratify_by = "country",
     verbosity = verbosity
   )
@@ -1326,11 +1327,11 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     verbosity = verbosity
   )
 
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+  .parquet2Matrix(parquet_dir, out_path, n_fold, split,
     stratify_by = NULL,
     verbosity = verbosity
   )
-  .parquet2MDRMatrix(parquet_duckdb_path, out_path, min_n,
+  .parquet2MDRMatrix(parquet_dir, out_path, min_n,
     verbosity = verbosity
   )
 
