@@ -11,6 +11,8 @@
 #' 
 #' @export
 #' @examples
+#' scoreFeaturesWithinSeed(all_top_features.parquet)
+#' 
 scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
 
   stopifnot(file.exists(all_top_features_parquet))
@@ -70,6 +72,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
 #'
 #' @export
 #' @examples
+#' summariseFeatureAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 summariseFeatureAcrossSeeds <- function(scored_features = scoreFeaturesWithinSeed(all_top_features_parquet)) {
  feature_summary <- scored_features |>
     dplyr::group_by(
@@ -116,7 +119,6 @@ summariseFeatureAcrossSeeds <- function(scored_features = scoreFeaturesWithinSee
 #' Every drug/class may not have Variables from all feature types. 
 #'
 #' @export
-#' @examples
 topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeatureAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
                                         threshold_sd_rank = 1
@@ -166,7 +168,6 @@ dplyr::filter(sign_consistent)
 #' cluster max rank score (max of mean_rank_score), cluster rank score standard deviation, and cluster best rank.
 #'
 #' @export
-#' @examples
 summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_summary),
                                cluster_feature_parquet
                               ) {
@@ -208,7 +209,6 @@ summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_s
 #' @returns a tibble of shared clusters, including cluster, number of distinct drugs or classes, and a comma-separated string of the distinct drugs or classes.
 #'
 #' @export
-#' @examples
 findSharedClusters <- function(top_clusters = summariseClusters(top_features, cluster_feature_parquet),
                                 label = "drug",
                                  min_drugs_or_classes = 2
