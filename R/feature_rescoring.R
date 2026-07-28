@@ -4,15 +4,15 @@
 #'
 #' @returns a tibble of scored top features with their contribution, rank, and rank score within each seed.
 #' within a seed
-#' contribution is calculated as the importance of a feature divided by the sum of importance scores for all features. 
-#' Rank is assigned based on the descending order of contribution, and 
+#' contribution is calculated as the importance of a feature divided by the sum of importance scores for all features.
+#' Rank is assigned based on the descending order of contribution, and
 #' rank score is calculated as (n_features - rank) / (n_features - 1), where n_features is the total number of features within the same seed.
 #' rank score is ranged between 0 and 1, with higher values indicating higher importance.
-#' 
+#'
 #' @export
 #' @examples
 #' scoreFeaturesWithinSeed(all_top_features.parquet)
-#' 
+#'
 scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
 
   stopifnot(file.exists(all_top_features_parquet))
@@ -20,18 +20,18 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
     dplyr::filter(!shuffled) |>
     dplyr::select(
       species, drug_label, drug_or_class, seed,
-      feature_type, feature_subtype, Variable,
-      Importance, Sign
+      feature_type, feature_subtype, variable=Variable,
+      importance=Importance, sign=Sign
     ) |>
     dplyr::mutate(
-      Variable = dplyr::case_when(
-        feature_type == "domains" ~ sub("_.+$", "", Variable),
-        feature_type == "proteins" ~ sub("fig.", "fig|", Variable, fixed = TRUE),
+      variable = dplyr::case_when(
+        feature_type == "domains" ~ sub("_.+$", "", variable),
+        feature_type == "proteins" ~ sub("fig.", "fig|", variable, fixed = TRUE),
         feature_type == "args" ~ sub(
           "^X", "",
-          gsub("\\.NCBIFAM", "", Variable)
+          gsub("\\.NCBIFAM", "", variable)
         ),
-        TRUE ~ Variable
+        TRUE ~ variable
       )
     )|>
     dplyr::group_by(
@@ -43,7 +43,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
       seed
     ) |>
     dplyr::mutate(
-      contribution = Importance / sum(Importance, na.rm = TRUE),
+      contribution = importance / sum(importance, na.rm = TRUE),
       rank = dplyr::dense_rank(dplyr::desc(contribution)),
       n_features = dplyr::n(),
       rank_score = dplyr::if_else(
@@ -62,18 +62,18 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
 #'
 #' @param scored_features The tibble of scored top features with their contribution, rank, and rank score within each seed generated from `scoreFeaturesWithinSeed()`
 #'
-#' @returns a tibble of summarized features across seeds, including the number of seeds, 
-#' mean and median rank, 
-#' mean and median contribution, 
-#' mean rank score (scaled between 0 and 1 with higher values indicating higher importance), 
-#' best rank, 
-#' rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank varies across seeds), 
+#' @returns a tibble of summarized features across seeds, including the number of seeds,
+#' mean and median rank,
+#' mean and median contribution,
+#' mean rank score (scaled between 0 and 1 with higher values indicating higher importance),
+#' best rank,
+#' rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank varies across seeds),
 #' sign consistency (TRUE if the sign is same across seeds), and sign (the sign of the feature; POS, NEG or MIXED).
 #'
 #' @export
 #' @examples
-#' summariseFeatureAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
-summariseFeatureAcrossSeeds <- function(scored_features = scoreFeaturesWithinSeed(all_top_features_parquet)) {
+#' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
+summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSeed(all_top_features_parquet)) {
  feature_summary <- scored_features |>
     dplyr::group_by(
       species,
@@ -81,7 +81,7 @@ summariseFeatureAcrossSeeds <- function(scored_features = scoreFeaturesWithinSee
       drug_or_class,
       feature_type,
       feature_subtype,
-      Variable
+      variable
     ) |>
     dplyr::summarise(
     n_seeds = dplyr::n_distinct(seed),
@@ -93,44 +93,44 @@ summariseFeatureAcrossSeeds <- function(scored_features = scoreFeaturesWithinSee
     best_rank = min(rank, na.rm = TRUE),
     rank_consistent = dplyr::n_distinct(rank) == 1,
     rank_sd = sd(rank, na.rm = TRUE),
-    sign_consistent = dplyr::n_distinct(Sign) == 1,
-    sign = if (sign_consistent) dplyr::first(Sign) else "MIXED",
+    sign_consistent = dplyr::n_distinct(sign) == 1,
+    sign = if (sign_consistent) dplyr::first(sign) else "MIXED",
     .groups = "drop"
-  ) 
+  )
 
   return(feature_summary)
 }
 
 #' Build a per-drug top-feature table with cutoffs
 #' This returns the top features for each drug/class.
-#' 
-#' @param feature_summary The tibble of summarized features across seeds generated from `summariseFeatureAcrossSeeds()`
+#'
+#' @param feature_summary The tibble of summarized features across seeds generated from `summariseFeaturesAcrossSeeds()`
 #' @param rank_score_quantile The quantile threshold for filtering features based on their mean rank scores
 #' @param threshold_sd_rank The threshold for filtering features based on the standard deviation of ranks across seeds
 #'
-#' @returns a tibble of top features for each drug/class, 
-#' filtered based on the specified rank score quantile and standard deviation threshold. 
-#' The resulting filtered table includes species, drug label, drug or class, feature type, feature subtype, variable, 
-#' mean rank score, mean rank, best rank, median rank, mean contribution, median contribution, number of seeds, 
+#' @returns a tibble of top features for each drug/class,
+#' filtered based on the specified rank score quantile and standard deviation threshold.
+#' The resulting filtered table includes species, drug label, drug or class, feature type, feature subtype, variable,
+#' mean rank score, mean rank, best rank, median rank, mean contribution, median contribution, number of seeds,
 #' rank standard deviation, sign consistency, and sign.
 #' The features are filtered to include only those with a negative sign, low rank standard deviation,
 #' and are grouped by drug label and drug or class, retaining only the features with the
 #' maximum number of seeds and mean rank scores above the specified quantile threshold.
-#' Every drug/class may not have Variables from all feature types. 
+#' Every drug/class may not have variables from all feature types.
 #'
 #' @export
-topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeatureAcrossSeeds(scored_features),
+topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeaturesAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
                                         threshold_sd_rank = 1
                                         ) {
-  
+
 top_features <- feature_summary |>
   dplyr::filter(
     sign == "NEG",
     rank_sd <= threshold_sd_rank
-  ) |> 
-  dplyr::group_by(species, drug_label, drug_or_class, feature_type, Variable) |>
-    dplyr::mutate( n_subtype = dplyr::n_distinct(feature_subtype), 
+  ) |>
+  dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
+    dplyr::mutate( n_subtype = dplyr::n_distinct(feature_subtype),
   subtype_csv = paste(sort(unique(feature_subtype)), collapse = ",") ) |>
   dplyr::ungroup() |>
   dplyr::group_by(drug_label, drug_or_class) |>
@@ -146,10 +146,10 @@ top_features <- feature_summary |>
   dplyr::ungroup() |>
     dplyr::distinct(
       species, drug_label, drug_or_class,
-      feature_type, feature_subtype, Variable, n_subtype, subtype_csv,
+      feature_type, feature_subtype, variable, n_subtype, subtype_csv,
       mean_rank_score, mean_rank, best_rank,
       median_rank, mean_contribution, median_contribution,
-      n_seeds, rank_sd, 
+      n_seeds, rank_sd,
       sign_consistent, sign
     ) |>
 dplyr::filter(sign_consistent)
@@ -164,7 +164,7 @@ dplyr::filter(sign_consistent)
 #'
 #' @returns a tibble of summarized clusters, including species, drug label, drug or class, cluster, frequency (number of features in the cluster),
 #' number of distinct variables, number of distinct feature types, feature types as a comma-separated string,
-#' cluster mean rank score (mean of mean_rank_score), cluster median rank score (median of mean_rank_score), 
+#' cluster mean rank score (mean of mean_rank_score), cluster median rank score (median of mean_rank_score),
 #' cluster max rank score (max of mean_rank_score), cluster rank score standard deviation, and cluster best rank.
 #'
 #' @export
@@ -172,20 +172,20 @@ summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_s
                                cluster_feature_parquet
                               ) {
   stopifnot(file.exists(cluster_feature_parquet))
-  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet)) 
+  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet))
 
   top_clusters <- top_features |>
-    dplyr::left_join(cluster_feature, by = dplyr::join_by(Variable == feature)) |>
+    dplyr::left_join(cluster_feature, by = dplyr::join_by(variable == feature)) |>
     dplyr::group_by(
       species,
       drug_label,
       drug_or_class,
-      cluster 
+      cluster
     ) |>
     dplyr::summarise(
       frequency = dplyr::n(),
-      n_variables = dplyr::n_distinct(Variable),
-      variables_csv = paste(sort(unique(Variable)), collapse = ","),
+      n_variables = dplyr::n_distinct(variable),
+      variables_csv = paste(sort(unique(variable)), collapse = ","),
       n_feature_types = dplyr::n_distinct(feature_type),
       feature_types_csv = paste(sort(unique(feature_type)), collapse = ","),
       cluster_mean_rank_score = mean(mean_rank_score, na.rm = TRUE),
@@ -217,7 +217,7 @@ findSharedClusters <- function(top_clusters = summariseClusters(top_features, cl
     dplyr::filter(!is.na(cluster), drug_label == label) |>
     dplyr::group_by(cluster) |>
     dplyr::mutate(
-      n_drug_or_class = dplyr::n_distinct(drug_or_class), 
+      n_drug_or_class = dplyr::n_distinct(drug_or_class),
       drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
     ) |>
     dplyr::filter(n_drug_or_class >= min_drugs_or_classes) |>
@@ -250,7 +250,7 @@ findUniqueClusters <- function(top_clusters = summariseClusters(top_features, cl
     dplyr::filter(!is.na(cluster), drug_label == label) |>
     dplyr::group_by(cluster) |>
     dplyr::mutate(
-      n_drug_or_class = dplyr::n_distinct(drug_or_class), 
+      n_drug_or_class = dplyr::n_distinct(drug_or_class),
       drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
     ) |>
     dplyr::filter(n_drug_or_class == 1) |>
@@ -274,7 +274,7 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
 #'
 #' @return A list with feature_table, cluster_table, nodes, edges, and graph.
 #' @export
-buildSignalNetwork <- function(top_features,
+buildFeatureNetwork <- function(top_features,
                                top_clusters,
                                cluster_feature_parquet,
                                protein_names_parquet
@@ -286,7 +286,7 @@ buildSignalNetwork <- function(top_features,
 
   required_feature_cols <- c(
     "species", "drug_label", "drug_or_class",
-    "feature_type", "Variable",
+    "feature_type", "variable",
     "mean_rank_score"
   )
   required_cluster_cols <- c(
@@ -318,7 +318,7 @@ buildSignalNetwork <- function(top_features,
 
   feature_table <- top_features |>
     dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
-    dplyr::group_by(species, model_id, feature_type, Variable) |>
+    dplyr::group_by(species, model_id, feature_type, variable) |>
     dplyr::summarise(
       mean_score = mean(mean_rank_score, na.rm = TRUE),
       .groups = "drop"
@@ -354,15 +354,15 @@ buildSignalNetwork <- function(top_features,
     )
 
   feature_nodes <- feature_table |>
-    dplyr::group_by(species, Variable) |>
+    dplyr::group_by(species, variable) |>
     dplyr::summarise(
       score = mean(mean_score, na.rm = TRUE),
       breadth = dplyr::n_distinct(model_id),
       .groups = "drop"
     ) |>
     dplyr::transmute(
-      name = Variable,
-      label = Variable,
+      name = variable,
+      label = variable,
       node_type = "feature",
       species = species,
       score = score,
@@ -397,7 +397,7 @@ buildSignalNetwork <- function(top_features,
   feature_edges <- feature_table |>
     dplyr::transmute(
       from = model_id,
-      to = Variable,
+      to = variable,
       weight = mean_score,
       edge_type = "model_feature"
     ) |>
@@ -413,10 +413,10 @@ buildSignalNetwork <- function(top_features,
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
   feature_cluster_edges <- feature_table |>
-    dplyr::left_join(cluster_feature, by = dplyr::join_by(Variable == feature)) |>
+    dplyr::left_join(cluster_feature, by = dplyr::join_by(variable == feature)) |>
     dplyr::filter(!is.na(cluster)) |>
     dplyr::transmute(
-      from = Variable,
+      from = variable,
       to = cluster,
       weight = 1,
       edge_type = "feature_cluster"
@@ -424,9 +424,9 @@ buildSignalNetwork <- function(top_features,
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
   edges <- dplyr::bind_rows(feature_edges, feature_cluster_edges)
-  
+
     edges <- dplyr::bind_rows(edges, cluster_edges)
-  
+
 
   missing_vertices <- setdiff(unique(c(edges$from, edges$to)), nodes$name)
   if (length(missing_vertices) > 0) {
@@ -480,7 +480,7 @@ buildSignalNetwork <- function(top_features,
 #'
 #' @returns A \code{networkD3} widget.
 #' @export
-plotSignalNetworkD3 <- function(signal_result,
+plotFeatureNetworkD3 <- function(signal_result,
                                 height = 800,
                                 width = "100%"
                               ) {
@@ -558,9 +558,9 @@ plotSignalNetworkD3 <- function(signal_result,
 }
 
 
-# final run would be 
+# final run would be:
 # top_features <- topFeaturesPerDrugOrClass(rank_score_quantile = 0.75)
 # top_clusters <- summariseClusters(top_features, cluster_feature_parquet = cluster_feature_parquet)
-# signal_result <- buildSignalNetwork(top_features = top_features, top_clusters = top_clusters, 
+# signal_result <- buildFeatureNetwork(top_features = top_features, top_clusters = top_clusters,
 #   cluster_feature_parquet = cluster_feature_parquet, protein_names_parquet = protein_names_parquet)
-# plotSignalNetworkD3(signal_result)
+# plotFeatureNetworkD3(signal_result)
