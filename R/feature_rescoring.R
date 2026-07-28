@@ -265,7 +265,7 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
   return(unique_clusters)
 }
 
-#' Build a signal network from selected top features and top clusters
+#' Build a feature network from selected top features and top clusters
 #'
 #' @param top_features Output of topFeaturesPerDrugOrClass().
 #' @param top_clusters Output of summariseClusters().
@@ -462,7 +462,7 @@ buildFeatureNetwork <- function(top_features,
     )
   }
 
-  signal_result <- list(
+  feature_network <- list(
     feature_table = feature_table,
     cluster_table = cluster_table,
     nodes = nodes,
@@ -470,26 +470,26 @@ buildFeatureNetwork <- function(top_features,
     graph = graph
   )
 
-  return(signal_result)
+  return(feature_network)
 }
-#' Plot the signal network with networkD3
+#' Plot the feature network with networkD3
 #'
-#' @param signal_result Output of \code{identifyTopSignals()}.
+#' @param feature_network Output of \code{identifyTopFeatures()}.
 #' @param height Widget height in pixels.
 #' @param width Widget width.
 #'
 #' @returns A \code{networkD3} widget.
 #' @export
-plotFeatureNetworkD3 <- function(signal_result,
+plotFeatureNetworkD3 <- function(feature_network,
                                 height = 800,
                                 width = "100%"
                               ) {
 
-  stopifnot(is.list(signal_result))
-  stopifnot(!is.null(signal_result$nodes))
-  stopifnot(!is.null(signal_result$edges))
+  stopifnot(is.list(feature_network))
+  stopifnot(!is.null(feature_network$nodes))
+  stopifnot(!is.null(feature_network$edges))
 
-  nodes <- signal_result$nodes |>
+  nodes <- feature_network$nodes |>
     dplyr::distinct(name, .keep_all = TRUE) |>
     dplyr::mutate(
       id = dplyr::row_number() - 1L,
@@ -502,7 +502,7 @@ plotFeatureNetworkD3 <- function(signal_result,
       )
     )
 
-  links <- signal_result$edges |>
+  links <- feature_network$edges |>
     dplyr::filter(!is.na(from), !is.na(to)) |>
     # dplyr::filter(
     #   show_direct_model_cluster | edge_type != "model_cluster"
@@ -561,6 +561,6 @@ plotFeatureNetworkD3 <- function(signal_result,
 # final run would be:
 # top_features <- topFeaturesPerDrugOrClass(rank_score_quantile = 0.75)
 # top_clusters <- summariseClusters(top_features, cluster_feature_parquet = cluster_feature_parquet)
-# signal_result <- buildFeatureNetwork(top_features = top_features, top_clusters = top_clusters,
+# feature_network <- buildFeatureNetwork(top_features = top_features, top_clusters = top_clusters,
 #   cluster_feature_parquet = cluster_feature_parquet, protein_names_parquet = protein_names_parquet)
-# plotFeatureNetworkD3(signal_result)
+# plotFeatureNetworkD3(feature_network)
