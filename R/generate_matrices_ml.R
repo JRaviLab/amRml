@@ -216,7 +216,8 @@ skipImbalancedMatrix <- function(genome_ids,
                             n_fold,
                             split,
                             stratify_by = NULL,
-                            verbosity = c("minimal", "debug")) {
+                            verbosity = c("minimal", "debug")
+                          ) {
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
@@ -702,7 +703,8 @@ skipImbalancedMatrix <- function(genome_ids,
 .parquet2MDRMatrix <- function(parquet_dir,
                                path,
                                min_n,
-                               verbosity = c("minimal", "debug")) {
+                               verbosity = c("minimal", "debug")
+                              ) {
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
@@ -862,7 +864,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
 #' Build leave-one-out (LOO) merged parquet matrices from drug parquet files.
 #'
-#' @param path Character. Base directory containing stratified parquet matrices.
+#' @param path Character. Base directory containing parquet matrices.
 #'             Expected subdirs: matrix/..
 #' @param verbosity Character. "minimal" or "debug"; when "debug", prints detailed steps.
 #' @return Invisibly returns a tibble with paths of created LOO parquet files.
@@ -1029,6 +1031,14 @@ skipImbalancedMatrix <- function(genome_ids,
   invisible(tibble::tibble(created_file = created))
 }
 
+#' Build Cross drug testing matrices
+#'
+#' @param path Character. Base directory containing parquet matrices.
+#'             Expected subdirs: matrix/..
+#' @param verbosity Character. "minimal" or "debug"; when "debug", prints detailed steps.
+#'
+#' @returns
+#' @examples
 .parquet2CrossDrugTestMatrix <- function(
   path,
   verbosity = c("minimal", "debug")
