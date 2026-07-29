@@ -35,7 +35,7 @@ NULL
 
   parquet_files <- list.files(
     parquet_dir,
-    pattern = "(_count.*\\.parquet$)|(struct.*\\.parquet$)",
+    pattern = "(_count.parquet$)|(struct.parquet$)",
     full.names = TRUE
   )
 
@@ -462,7 +462,7 @@ log(
       }
 
       phenotype_counts_all <- DBI::dbGetQuery(con, sprintf("
-        SELECT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
+        SELECT DISTINCT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
         FROM metadata
         WHERE %s
         GROUP BY \"genome_drug.resistant_phenotype\"
