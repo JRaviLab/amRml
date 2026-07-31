@@ -34,10 +34,10 @@ removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
   feats_to_remove <- top_feat_tibble |> dplyr::pull(Variable)
 
   if (length(feats_to_remove) == 0) {
-    stop(paste(
-      "No more feats to remove; try adjusting `percent_removal_vec`",
+    stop(
+      "No more feats to remove; try adjusting `percent_removal_vec` ",
       "in `runIFE()` to include a wider range between percentages."
-    ))
+    )
   }
 
   ml_input_tibble_top_feats_removed <- ml_input_tibble |>
@@ -82,7 +82,7 @@ removeTopFeats <- function(ml_input_tibble, top_feat_tibble) {
 #' @export
 runIFE <- function(
   ml_input_tibble, by_num = TRUE, by_vi = FALSE,
-  percent_removal_vec = 10 * 1:9, mix_vec = 0, return_feats = FALSE,
+  percent_removal_vec = 10 * seq_len(9), mix_vec = 0, return_feats = FALSE,
   verbose = TRUE
 ) {
   .checkArgByNum(by_num)
@@ -92,10 +92,10 @@ runIFE <- function(
   .checkArgVerbose(verbose)
 
   if (sum(c(by_num, by_vi)) != 1) {
-    stop(paste(
-      "Set either `by_num` or `by_vi` to `TRUE` and the other to",
+    stop(
+      "Set either `by_num` or `by_vi` to `TRUE` and the other to ",
       "`FALSE` (not both `TRUE` or both `FALSE`)."
-    ))
+    )
   }
 
   # Create empty objects to store results.
@@ -119,7 +119,7 @@ runIFE <- function(
     message("Training with all features")
   }
 
-  for (i in 1:(length(percent_removal_vec) + 1)) {
+  for (i in seq_len(length(percent_removal_vec) + 1)) {
     if (i == 1) {
       n_feats_removed <- 0
     }
@@ -227,19 +227,19 @@ runIFE <- function(
     # Removal of top features
     if (by_vi) {
       if (verbose) {
-        message(paste("Cumulatively removed top ",
-          percent_removal_vec[i], "% of total variable importance",
-          sep = ""
-        ))
+        message(
+          "Cumulatively removed top ",
+          percent_removal_vec[i], "% of total variable importance"
+        )
       }
       ml_input_tibble <- ml_input_tibble |>
         removeTopFeats(feats_to_remove_tibble)
     } else if (by_num) {
       if (verbose) {
-        message(paste("Cumulatively removed top ",
-          percent_removal_vec[i], "% of all features",
-          sep = ""
-        ))
+        message(
+          "Cumulatively removed top ",
+          percent_removal_vec[i], "% of all features"
+        )
       }
       feats_to_remove_tibble <- ml_res$top_feat_tibble
 
@@ -264,7 +264,7 @@ runIFE <- function(
 
   # Adjust `percent_removal_vec` to appropriate length (if IFE stopped running
   # early due to encountering an error).
-  percent_removal_vec <- percent_removal_vec[1:(length(num_obs_vec) - 1)]
+  percent_removal_vec <- percent_removal_vec[seq_len(length(num_obs_vec) - 1)]
 
   ife_performance_tibble <- tibble::tibble(
     percent_removed = c(0, percent_removal_vec),

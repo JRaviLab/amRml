@@ -15,8 +15,8 @@ F1 score, AUPRC, balanced accuracy, nMCC, and log2(AUPRC/prior)
 }
 \description{
 Returns the F1 score, area under the precision-recall curve (AUPRC), balanced
-accuracy, normalized (to a 0 to 1 scale instead of -1 to 1) Matthews
-correlation coefficient (nMCC), and log2(AUPRC/prior) based on the AMR
+accuracy, Matthews correlation coefficient (MCC), normalized MCC (nMCC),
+and log2(AUPRC/prior) based on the AMR
 phenotype predictions by an ML model compared against the actual values.
 }
 \examples{

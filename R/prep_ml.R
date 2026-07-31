@@ -96,18 +96,18 @@ loadMLInputTibble <- function(parquet_path) {
     "genome_drug.resistant_phenotype" %in% colnames(long_tibble),
     "resistant_classes" %in% colnames(long_tibble)
   )) {
-    stop(paste(
-      "The tibble loaded from `parquet_path` must have a target",
-      "variable column named either `genome_drug.resistant_phenotype` or",
+    stop(
+      "The tibble loaded from `parquet_path` must have a target ",
+      "variable column named either `genome_drug.resistant_phenotype` or ",
       "`resistant_classes`, but not both."
-    ))
+    )
   }
 
   if (!all(c("genome_id", "feature_id", "value") %in% colnames(long_tibble))) {
-    stop(paste(
-      "The data is missing one or more of the following required",
+    stop(
+      "The data is missing one or more of the following required ",
       "columns: 'genome_id', 'feature_id', 'value'."
-    ))
+    )
   }
 
   target_var <- .getTargetVarName(long_tibble)

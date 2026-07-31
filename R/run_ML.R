@@ -326,7 +326,7 @@ createMLinputList <- function(path,
           # Case A: stratified -> prefix before the stratify label
           if (!is.na(i)) {
             if (i - 1 >= 1) {
-              return(paste(x[1:(i - 1)], collapse = "_"))
+              return(paste(x[seq_len(i - 1)], collapse = "_"))
             }
             return("")
           }
@@ -334,11 +334,11 @@ createMLinputList <- function(path,
           # Case B: unstratified -> prefix is first two tokens
           if (x[2] == "drug" && x[3] != "class") {
             # Case A: Cje_drug_X
-            return(paste(x[1:2], collapse = "_"))
+            return(paste(x[seq_len(2)], collapse = "_"))
           }
           if (x[2] == "drug" && x[3] == "class") {
             # Case A: Cje_drug_X
-            return(paste(x[1:3], collapse = "_"))
+            return(paste(x[seq_len(3)], collapse = "_"))
           }
         })
       )
@@ -659,7 +659,7 @@ runMDRmodels <- function(path,
       if (inherits(res, "try-error")) {
         warning(
           "Model failed for: ", output_prefix,
-          "\n  Error: ", attr(res, "condition")$message
+          "\n  ", attr(res, "condition")$message
         )
         return(NULL)
       }
@@ -964,7 +964,7 @@ runMLmodels <- function(path,
       if (inherits(res, "try-error")) {
         warning(
           "Model failed for: ", output_prefix,
-          "\n  Error: ", attr(res, "condition")$message
+          "\n  ", attr(res, "condition")$message
         )
         return(NULL)
       }

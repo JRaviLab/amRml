@@ -19,4 +19,8 @@ Stratified subset (30 Resistant + 30 Susceptible) of the AMP-genes-binary
 matrix from the bundled \code{Sfl_parquet.duckdb}, restricted to 80 feature
 columns.
 }
+\examples{
+data(demo_ml_tibble)
+dim(demo_ml_tibble)
+}
 \keyword{datasets}

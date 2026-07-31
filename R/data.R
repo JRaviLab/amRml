@@ -7,6 +7,9 @@
 #' @format A tibble with 60 rows and 82 columns: `genome_id`,
 #'   `genome_drug.resistant_phenotype`, and 80 binary feature columns.
 #' @source `inst/scripts/make_demo_data.R`.
+#' @examples
+#' data(demo_ml_tibble)
+#' dim(demo_ml_tibble)
 "demo_ml_tibble"
 
 #' Demo LR fit
@@ -15,4 +18,7 @@
 #'
 #' @format A fitted `workflow` object (output of [fitBestModel()]).
 #' @source `inst/scripts/make_demo_data.R`.
+#' @examples
+#' data(demo_fit)
+#' class(demo_fit)
 "demo_fit"

@@ -531,10 +531,10 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` does not have a column for",
+    stop(
+      "`test_data_plus_predictions` does not have a column for ",
       "`genome_drug.resistant_phenotype`."
-    ))
+    )
   }
 
   f1 <- test_data_plus_predictions |>
@@ -561,10 +561,10 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` does not have a column for",
+    stop(
+      "`test_data_plus_predictions` does not have a column for ",
       "`genome_drug.resistant_phenotype`."
-    ))
+    )
   }
 
   auprc <- test_data_plus_predictions |>
@@ -590,10 +590,10 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` does not have a column for",
+    stop(
+      "`test_data_plus_predictions` does not have a column for ",
       "`genome_drug.resistant_phenotype`."
-    ))
+    )
   }
 
   auprc <- .calculateAUPRC(test_data_plus_predictions)
@@ -603,15 +603,15 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     nrow(test_data_plus_predictions)
 
   if (prior > 0.3 && prior < 0.7) {
-    warning(paste(
-      "Classes are roughly balanced.",
+    warning(
+      "Classes are roughly balanced. ",
       "Calculation of log2(AUPRC/prior) may be inappropriate."
-    ))
+    )
   } else if (prior >= 0.7) {
-    warning(paste(
-      "Classes are imbalanced for this model.",
+    warning(
+      "Classes are imbalanced for this model. ",
       "The use of the log2(AUPRC/prior) metric may be more informative in this imbalanced model."
-    ))
+    )
   }
 
   log2_apop <- log2(auprc / prior) |> round(2)
@@ -631,10 +631,10 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` does not have a column for",
+    stop(
+      "`test_data_plus_predictions` does not have a column for ",
       "`genome_drug.resistant_phenotype`."
-    ))
+    )
   }
 
   bal_acc <- test_data_plus_predictions |>
@@ -660,10 +660,10 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` does not have a column for",
+    stop(
+      "`test_data_plus_predictions` does not have a column for ",
       "`genome_drug.resistant_phenotype`."
-    ))
+    )
   }
 
   sens <- test_data_plus_predictions |>
@@ -690,10 +690,10 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
 
   if (!("genome_drug.resistant_phenotype" %in%
     colnames(test_data_plus_predictions))) {
-    stop(paste(
-      "`test_data_plus_predictions` does not have a column for",
+    stop(
+      "`test_data_plus_predictions` does not have a column for ",
       "`genome_drug.resistant_phenotype`."
-    ))
+    )
   }
 
   spec <- test_data_plus_predictions |>
@@ -799,7 +799,7 @@ extractTopFeats <- function(
     dplyr::arrange(dplyr::desc(Importance))
 
   if (!is.na(n_top_feats)) {
-    top_feats_and_VIs <- feats_arranged |> dplyr::slice(1:n_top_feats)
+    top_feats_and_VIs <- feats_arranged |> dplyr::slice(seq_len(n_top_feats))
   } else if (any(!is.na(prop_vi_top_feats))) {
     cum_vi_lower <- prop_vi_top_feats[1] * sum(feats_arranged$Importance)
     cum_vi_upper <- prop_vi_top_feats[2] * sum(feats_arranged$Importance)
@@ -818,10 +818,10 @@ extractTopFeats <- function(
   # Take a different approach if using multi-class (the previous code would give
   # a less meaningful result).
   if (is(fit$fit$actions$model$spec, "multinom_reg")) {
-    warning(paste(
-      "Extracting top features from a multi-class model.",
+    warning(
+      "Extracting top features from a multi-class model. ",
       "The `prop_vi_top_feats` and `n_top_feats` arguments do not apply."
-    ))
+    )
 
     fit_penalty <- .getFitHps(fit)["penalty"] |> as.numeric()
     glmnet_fit <- parsnip::extract_fit_engine(fit)

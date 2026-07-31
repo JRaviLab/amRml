@@ -1055,10 +1055,10 @@ log(
         }
       }),
       prefix = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 3) {
+        if (is.na(i) || i < 5) {
           NA_character_
         } else {
-          paste(x[1:(i - 4)], collapse = "_")
+          paste(x[seq_len(i - 4)], collapse = "_")
         }
       }),
       drug = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
@@ -1097,7 +1097,7 @@ log(
     ## --------------------------------------------------------------
     ## Leave-one-drug-out with genome blocking
     ## --------------------------------------------------------------
-    purrr::walk(names(grouped), function(leave_one_out) {
+    new_files <- purrr::map(names(grouped), function(leave_one_out) {
       ## Read held-out drug to get its genome IDs
       heldout_tbl <- arrow::read_parquet(grouped[[leave_one_out]]$file)
 
@@ -1147,7 +1147,6 @@ log(
       ))
 
       arrow::write_parquet(combined, out_file)
-      created <<- c(created, out_file)
 
       log(
         "debug",
@@ -1156,7 +1155,13 @@ log(
           " | removed ", length(heldout_genomes), " genomes"
         )
       )
-    })
+
+      out_file
+    }) |>
+      purrr::compact() |>
+      unlist()
+
+    created <- c(created, new_files)
   }
 
   log("info", "All LOO-drug matrices generated with genome-level blocking")
@@ -1224,10 +1229,10 @@ log(
         }
       }),
       prefix = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
-        if (is.na(i) || i < 3) {
+        if (is.na(i) || i < 5) {
           NA_character_
         } else {
-          paste(x[1:(i - 4)], collapse = "_")
+          paste(x[seq_len(i - 4)], collapse = "_")
         }
       }),
       drug = purrr::pmap_chr(list(parts, idx_sparse), \(x, i) {
