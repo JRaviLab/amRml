@@ -42,16 +42,14 @@ knitr::opts_chunk$set(
 ## ----run-pipeline-------------------------------------------------------------
 # results <- runMLPipeline(
 #   ml_input_tibble = ml_data,
-#   model = "LR",                              # "LR", "RF", or "BT"
+#   model = "LR",                              # "LR"
 #   split = c(0.6, 0.2),                       # Train/validation proportions
 #   n_fold = 2,                                # CV folds (when validation = 0)
 #   prop_vi_top_feats = c(0, 1),               # Feature importance range
 #   n_top_feats = NA,                          # Or specify exact number
 #   use_pca = FALSE,                           # Use PCA dimensionality reduction
 #   penalty_vec = 10^seq(-4, -1, length.out = 10),  # LR penalty values
-#   mix_vec = 0:5 / 5,                         # LR mixture values (0=L2, 1=L1)
-#   min_n_vec = c(2, 6, 12),                   # RF/BT min_n values
-#   tree_vec = c(100, 500, 1000),              # RF/BT tree counts
+#   mix_vec = 0:5 / 5,                         # LR mixture values (0=L2, 1=L1)                              
 #   select_best_metric = "mcc",                # "mcc", "f_meas", "pr_auc", "bal_accuracy"
 #   seed = 123,
 #   shuffle_labels = FALSE,                    # For baseline comparisons
@@ -71,8 +69,6 @@ knitr::opts_chunk$set(
 # 
 # # Build model specification
 # lr_model <- buildLRModel(multi_class = FALSE)
-# rf_model <- buildRFModel()
-# bt_model <- buildBTModel()
 # 
 # # Build workflow
 # wflow <- buildWflow(lr_model, recipe)
@@ -84,14 +80,6 @@ knitr::opts_chunk$set(
 #   penalty_vec = 10^seq(-4, -1, length.out = 10),
 #   mix_vec = 0:5 / 5
 # )
-# 
-# # For random forest or boosted tree:
-# # grid <- buildTuningGrid(
-# #   model = "RF",
-# #   n_feat = getNumFeat(train_data),
-# #   min_n_vec = c(2, 6, 12),
-# #   tree_vec = c(100, 500, 1000)
-# # )
 # 
 # # Tune hyperparameters
 # tune_res <- tuneGrid(wflow, data_split, grid, n_fold = 5)
