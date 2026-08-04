@@ -1249,7 +1249,8 @@ if (nrow(files) == 0) {
 #'   4. Runs logistic regression ML models (standard + stratified + cross-test + MDR)
 #'   5. Saves performance metrics, fitted models, predictions, and top feature rankings
 #'
-#' @param parquet_duckdb_path Path to a `<bug>_parquet.duckdb` produced by data_processing.R
+#' @param parquet_dir Path to a species-named directory (e.g. `Shigella_flexneri/`) of
+#'   metadata and feature parquets, as produced by data_processing.R
 #' @param threads Number of parallel workers. Default: 16
 #' @param n_fold Cross-validation folds (default: 5). Use 0 or NULL for classical splits.
 #' @param split Training/validation split (default: c(1,0) for CV mode)
@@ -1262,7 +1263,7 @@ if (nrow(files) == 0) {
 #' @return Invisibly returns the output directory used for ML results.
 #'
 #' @export
-runModelingPipeline <- function(parquet_duckdb_path,
+runModelingPipeline <- function(parquet_dir,
                                 threads = 16,
                                 n_fold = 5,
                                 split = c(1, 0),
@@ -1271,24 +1272,24 @@ runModelingPipeline <- function(parquet_duckdb_path,
                                 pca_threshold = 0.99,
                                 verbose = TRUE,
                                 use_saved_split = TRUE) {
-  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
-  if (!file.exists(parquet_duckdb_path)) {
+  parquet_dir <- normalizePath(parquet_dir)
+  if (!dir.exists(parquet_dir)) {
     stop(
-      "Parquet-backed DuckDB at ", parquet_duckdb_path, " not found.\n",
-      "Are you using `{Bug}.duckdb` instead of `{Bug}_parquet.duckdb?`"
+      "Parquet directory at ", parquet_dir, " not found.\n",
+      "Expected a species-named directory (e.g. Shigella_flexneri/) of parquet files."
     )
   }
 
-  out_root <- dirname(parquet_duckdb_path)
+  out_root <- dirname(parquet_dir)
 
   if (verbose) {
     message("\n=== amRml: Full pipeline runner ===")
-    message("Using parquet-backed DB:\n  ", parquet_duckdb_path)
+    message("Using parquet directory:\n  ", parquet_dir)
   }
 
   if (verbose) message("\n[1/4] Generating ML feature matrices.")
   generateMLInputs(
-    parquet_duckdb_path = parquet_duckdb_path,
+    parquet_dir = parquet_dir,
     out_path = out_root,
     n_fold = n_fold,
     split = split,
@@ -1367,7 +1368,7 @@ runModelingPipeline <- function(parquet_duckdb_path,
 }
 
       
-runModelingPipelineIntense <- function(parquet_duckdb_path,
+runModelingPipelineIntense <- function(parquet_dir,
                                        threads = 16,
                                        n_seeds = 3,
                                        n_fold = 5,
@@ -1378,16 +1379,16 @@ runModelingPipelineIntense <- function(parquet_duckdb_path,
                                        verbose = TRUE,
                                        use_saved_split = TRUE) {
 
-  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
+  parquet_dir <- normalizePath(parquet_dir)
 
-  if (!file.exists(parquet_duckdb_path)) {
+  if (!dir.exists(parquet_dir)) {
     stop(
-      "Parquet-backed DuckDB at ", parquet_duckdb_path, " not found.\n",
-      "Are you using `{Bug}.duckdb` instead of `{Bug}_parquet.duckdb?`"
+      "Parquet directory at ", parquet_dir, " not found.\n",
+      "Expected a species-named directory (e.g. Shigella_flexneri/) of parquet files."
     )
   }
 
-  out_root <- dirname(parquet_duckdb_path)
+  out_root <- dirname(parquet_dir)
 
   # -------------------------------
   # Helper for safe execution
@@ -1423,7 +1424,7 @@ runModelingPipelineIntense <- function(parquet_duckdb_path,
 
   if (verbose) {
     message("\n=== amRml: Full pipeline runner ===")
-    message("Using parquet-backed DB:\n  ", parquet_duckdb_path)
+    message("Using parquet directory:\n  ", parquet_dir)
   }
 
   # -------------------------------
@@ -1432,7 +1433,7 @@ runModelingPipelineIntense <- function(parquet_duckdb_path,
  # safe_run(
 #    "[1] Generating ML feature matrices",
 #    generateMLInputs,
- #   parquet_duckdb_path = parquet_duckdb_path,
+ #   parquet_dir = parquet_dir,
  #   out_path = out_root,
  #   n_fold = n_fold,
  #   split = split,
