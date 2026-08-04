@@ -23,6 +23,82 @@ NULL
   }
 }
 
+#' Title
+#'
+#' @param parquet_dir
+#'
+#' @returns
+#'
+#' @export
+#' @examples
+.getFeatureTypes <- function(parquet_dir) {
+
+  parquet_files <- list.files(
+    parquet_dir,
+    pattern = "(_count.parquet$)|(struct.parquet$)",
+    full.names = TRUE
+  )
+
+  feature_types <- lapply(parquet_files, function(file) {
+
+    schema_cols <- names(arrow::read_parquet(file, as_data_frame = FALSE))
+
+    id_col <- setdiff(
+      schema_cols,
+      c("genome_id", "value")
+    )
+
+    if (length(id_col) != 1) {
+      stop(
+        "Could not determine feature ID column for: ",
+        basename(file)
+      )
+    }
+
+    list(
+      view = sub("\\.parquet$", "", basename(file)),
+      id_col = id_col
+    )
+  })
+
+  names(feature_types) <- vapply(
+    feature_types,
+    function(x) x$id_col,
+    character(1)
+  )
+
+  feature_types
+}
+
+#' Generate a 3 letter code for species names
+#'
+#' This function creates an abbreviated species names
+#' For species names, it uses the first letter of the genus and
+#' the first two letters of the species. For single-word names, it appends "sp".
+#'
+#' @param directory_name Character string containing a directory name, which is expected to be a species name in the format "Genus_species".
+#'
+#' Defaults to `"Bacillus_subtilis"`.
+#'
+#' @return A single character string representing the combined shortened name.
+#'
+#' @examples
+#' \dontrun{
+#' .generate3ltrCode("Bacillus_subtilis")
+#' }
+#'
+.generate3ltrCode <- function(directory_name) {
+  
+      parts <- stringr::str_split(directory_name, "_")[[1]]
+      if (length(parts) == 1) {
+        # If only one word, use "sp" as the second part
+        abbreviation <- paste0(stringr::str_sub(parts[1], 1, 1), "sp")
+      } else {
+        abbreviation <- paste0(stringr::str_sub(parts[1], 1, 1), stringr::str_sub(parts[2], 1, 2))
+      }
+  return(abbreviation)
+}
+
 #' .calculateMinSamples()
 #'
 #' Returns the minimum number of total observations needed (one bug-drug combo)
@@ -108,7 +184,8 @@ skipImbalancedMatrix <- function(genome_ids,
                                  n_fold = 5,
                                  split = c(1, 0),
                                  min_total_obs = 40,
-                                 verbosity = c("minimal", "debug")) {
+                                 verbosity = c("minimal", "debug")
+                                ) {
   log <- .make_logger(verbosity)
 
   total_obs <- sum(phenotype_counts$count)
@@ -139,10 +216,79 @@ skipImbalancedMatrix <- function(genome_ids,
   return(skip)
 }
 
+.sql_escape <- function(x) {
+  gsub("'", "''", x, fixed = TRUE)
+}
+
+.parquet_dataset_sql <- function(parquet_dir, dataset_name) {
+  parquet_dir <- normalizePath(parquet_dir, winslash = "/", mustWork = TRUE)
+  path <- file.path(parquet_dir, paste0(dataset_name, "*.parquet"))
+  .sql_escape(path)
+}
+
+#' Title
+#'
+#' @param con
+#' @param parquet_dir
+#'
+#' @returns
+#'
+#' @export
+#' @examples
+.register_parquet_views <- function(con, parquet_dir) {
+
+  feature_types <- .getFeatureTypes(parquet_dir)
+
+  available_views <- c("metadata")
+
+  metadata_files <- Sys.glob(
+    file.path(parquet_dir, "metadata.parquet")
+  )
+
+  if (length(metadata_files) == 0) {
+    stop("metadata parquet not found in: ", parquet_dir)
+  }
+
+  sql_path <- .parquet_dataset_sql(parquet_dir, "metadata")
+
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "CREATE OR REPLACE VIEW metadata AS
+       SELECT * FROM read_parquet('%s')",
+      sql_path
+    )
+  )
+
+  for (ftype in feature_types) {
+
+    sql_path <- .parquet_dataset_sql(
+      parquet_dir,
+      ftype$view
+    )
+
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "CREATE OR REPLACE VIEW %s AS
+         SELECT * FROM read_parquet('%s')",
+        ftype$view,
+        sql_path
+      )
+    )
+
+    available_views <- c(
+      available_views,
+      ftype$view
+    )
+  }
+
+  invisible(available_views)
+}
 
 #' Metadata and Feature parquets to bug-drug-feature parquet as ML input
 #'
-#' @param parquet_duckdb_path [character] The path to the DuckDB that contains the view of metadata and feature parquets
+#' @param parquet_dir [character] The path to the directory that contains the metadata and feature parquets
 #' @param path [character] The path to the working directory
 #' @param n_fold [numeric] the number of cross-validation folds
 #' @param split if folds has been set to NULL, indicating classical splits instead
@@ -150,17 +296,18 @@ skipImbalancedMatrix <- function(genome_ids,
 #' @param verbosity [character] "minimal" or "debug"
 #' @return invisible tibble of created files
 #' @keywords internal
-.parquet2Matrix <- function(parquet_duckdb_path,
+.parquet2Matrix <- function(parquet_dir,
                             path,
                             n_fold,
                             split,
                             stratify_by = NULL,
-                            verbosity = c("minimal", "debug")) {
+                            verbosity = c("minimal", "debug")
+                          ) {
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
-  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
-  path <- normalizePath(path)
+  parquet_dir <- normalizePath(parquet_dir, winslash = "/", mustWork = TRUE)
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
 
   # Choose stratification column
   if (is.null(stratify_by) || !(stratify_by %in% c("year", "country"))) {
@@ -193,7 +340,7 @@ skipImbalancedMatrix <- function(genome_ids,
     stratify_column <- NULL
   }
 
-  if (!dir.exists(matrix_path)) dir.create(matrix_path, recursive = TRUE)
+  if (!dir.exists(matrix_path)) dir.create(matrix_path, recursive = TRUE, showWarnings = FALSE)
 
   log("info", paste0("Matrix output directory: ", matrix_path))
   log("debug", paste0(
@@ -201,61 +348,65 @@ skipImbalancedMatrix <- function(genome_ids,
     ifelse(is.null(stratify_column), "None", stratify_column)
   ))
 
-  # Feature and matrix types
-  feature_types <- list(
-    genes    = list(view = "gene_count", id_col = "gene"),
-    proteins = list(view = "protein_count", id_col = "protein"),
-    domains  = list(view = "domain_count", id_col = "domain"),
-    struct   = list(view = "struct", id_col = "struct")
-  )
+  # feature_types <- list(
+  #   genes    = list(view = "gene_count",    id_col = "gene"),
+  #   proteins = list(view = "protein_count", id_col = "protein"),
+  #   domains  = list(view = "domain_count",  id_col = "domain"),
+  #   struct   = list(view = "struct",        id_col = "struct")
+  # )
 
+ feature_types <- .getFeatureTypes(parquet_dir)
+
+if (length(feature_types) == 0) {
+  stop(
+    "No feature parquet files found. Expected *_count.parquet and/or struct.parquet."
+  )
+}
+
+log(
+  "info",
+  paste0(
+    "Detected feature types: ",
+    paste(names(feature_types), collapse = ", ")
+  )
+)
   matrix_types <- list(
-    counts        = list(value_col = "value", filter = "variance > 0", binary_only = FALSE, label = "counts"),
+    counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
     binary        = list(value_col = "present", filter = "variance > 0", binary_only = FALSE, label = "binary"),
-    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE, label = "binary")
+    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE,  label = "binary")
   )
 
-  # Initialize skipped log
   log_path <- file.path(matrix_path, "skipped_drugs.log")
   readr::write_lines("Drug\tReason\tTotal_obs\tPhenotype_distribution", log_path)
 
-  # Safe DBI-quoting
   quote_condition <- function(group_cols, group_values, con) {
-    ids <- vapply(
-      group_cols,
-      function(col) DBI::dbQuoteIdentifier(con, col),
-      character(1)
-    )
-    vals <- vapply(
-      group_cols,
-      function(col) {
-        val <- group_values[[col]][1]
-        DBI::dbQuoteString(con, as.character(val))
-      },
-      character(1)
-    )
+    ids <- vapply(group_cols, function(col) DBI::dbQuoteIdentifier(con, col), character(1))
+    vals <- vapply(group_cols, function(col) {
+      val <- group_values[[col]][1]
+      DBI::dbQuoteString(con, as.character(val))
+    }, character(1))
 
     paste(sprintf("%s = %s", ids, vals), collapse = " AND ")
   }
 
-  con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
-  on.exit(DBI::dbDisconnect(con0, shutdown = FALSE), add = TRUE)
-  DBI::dbExecute(con0, sprintf(
-    "SET file_search_path='%s'",
-    dirname(parquet_duckdb_path)
-  ))
+  con0 <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+ on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
+  
+  .register_parquet_views(con0, parquet_dir)
 
-  bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
-  log("info", paste0("Connected to DuckDB for bug: ", bug))
+  bug <- .generate3ltrCode(basename(parquet_dir))
+  log("info", paste0("Connected to parquet directory for bug: ", bug))
 
-  # Iterate over grouping variables
   all_group_definitions <- lapply(grouping_variables, function(cols) {
     idcols <- paste0('"', cols, '"', collapse = ", ")
     DBI::dbGetQuery(con0, sprintf("SELECT DISTINCT %s FROM metadata", idcols)) |>
       tidyr::drop_na()
   })
 
-  # Each group gets processed with a fresh DB connection
   for (group_type in names(grouping_variables)) {
     group_cols <- grouping_variables[[group_type]]
     all_groups <- all_group_definitions[[group_type]]
@@ -263,12 +414,13 @@ skipImbalancedMatrix <- function(genome_ids,
     log("debug", paste0("Found ", nrow(all_groups), " groups for type: ", group_type))
 
     for (i in seq_len(nrow(all_groups))) {
-      # New connection for this group
-      con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
-      DBI::dbExecute(con, sprintf(
-        "SET file_search_path='%s'",
-        dirname(parquet_duckdb_path)
-      ))
+      con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+      on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
+      .register_parquet_views(con, parquet_dir)
 
       group_values <- all_groups[i, , drop = FALSE]
       group_label <- paste(group_values, collapse = "_")
@@ -277,14 +429,12 @@ skipImbalancedMatrix <- function(genome_ids,
 
       condition_string <- quote_condition(group_cols, group_values, con)
 
-      # Strat filter
       strat_filter <- if (!is.null(stratify_column)) {
         sprintf("AND \"%s\" IS NOT NULL AND \"%s\" != ''", stratify_column, stratify_column)
       } else {
         ""
       }
 
-      # Genome selection logic
       if (group_type %in% c("drug_class", "drug_class_year", "drug_class_country")) {
         genome_ids <- DBI::dbGetQuery(con, sprintf("
           WITH class_phenotypes AS (
@@ -311,50 +461,37 @@ skipImbalancedMatrix <- function(genome_ids,
         ", condition_string, strat_filter))[[1]]
       }
 
-      # Phenotype counts
       phenotype_counts_all <- DBI::dbGetQuery(con, sprintf("
-        SELECT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
+        SELECT DISTINCT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
         FROM metadata
         WHERE %s
         GROUP BY \"genome_drug.resistant_phenotype\"
       ", condition_string))
 
       phenotype_summary <- paste(
-        apply(
-          phenotype_counts_all, 1,
-          function(row) paste0(row["phenotype"], "=", row["count"])
-        ),
+        apply(phenotype_counts_all, 1, function(row) paste0(row["phenotype"], "=", row["count"])),
         collapse = "; "
       )
 
-      # Apply skip logic
-      if (skipImbalancedMatrix(genome_ids, phenotype_counts_all, n_fold, split,
-        verbosity = verbosity
-      )) {
+      if (skipImbalancedMatrix(genome_ids, phenotype_counts_all, n_fold, split, verbosity = verbosity)) {
         readr::write_lines(
-          sprintf(
-            "%s\tToo few samples for CV/split\t%d\t%s",
-            group_label, length(genome_ids), phenotype_summary
-          ),
+          sprintf("%s\tToo few samples for CV/split\t%d\t%s",
+                  group_label, length(genome_ids), phenotype_summary),
           log_path,
           append = TRUE
         )
-
-        DBI::dbDisconnect(con, shutdown = FALSE)
+        DBI::dbDisconnect(con, shutdown = TRUE)
         next
       }
 
       if (length(genome_ids) < 40) {
         readr::write_lines(
-          sprintf(
-            "%s\tToo few observations\t%d\t%s",
-            group_label, length(genome_ids), phenotype_summary
-          ),
+          sprintf("%s\tToo few observations\t%d\t%s",
+                  group_label, length(genome_ids), phenotype_summary),
           log_path,
           append = TRUE
         )
-
-        DBI::dbDisconnect(con, shutdown = FALSE)
+        DBI::dbDisconnect(con, shutdown = TRUE)
         next
       }
 
@@ -369,31 +506,22 @@ skipImbalancedMatrix <- function(genome_ids,
 
       if (nrow(phen2) < 2) {
         readr::write_lines(
-          sprintf(
-            "%s\tOnly one phenotype class\t%d\t%s",
-            group_label, length(genome_ids), phenotype_summary
-          ),
+          sprintf("%s\tOnly one phenotype class\t%d\t%s",
+                  group_label, length(genome_ids), phenotype_summary),
           log_path,
           append = TRUE
         )
-
-        DBI::dbDisconnect(con, shutdown = FALSE)
+        DBI::dbDisconnect(con, shutdown = TRUE)
         next
       }
 
-      # Create selected_genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
-      DBI::dbWriteTable(con, "selected_genomes",
-        data.frame(genome_id = genome_ids),
-        append = TRUE
-      )
+      DBI::dbWriteTable(con, "selected_genomes", data.frame(genome_id = genome_ids), append = TRUE)
 
-      # Feature and matrix generation steps
       for (ftype in names(feature_types)) {
         fview <- feature_types[[ftype]]$view
         fid <- feature_types[[ftype]]$id_col
 
-        # binary view
         DBI::dbExecute(con, sprintf("
           CREATE OR REPLACE VIEW %s_binary AS
           SELECT genome_id, %s,
@@ -401,7 +529,6 @@ skipImbalancedMatrix <- function(genome_ids,
           FROM %s
         ", ftype, fid, fview))
 
-        # counts view
         if (ftype != "struct") {
           DBI::dbExecute(con, sprintf("
             CREATE OR REPLACE VIEW %s_counts AS
@@ -421,7 +548,6 @@ skipImbalancedMatrix <- function(genome_ids,
           value_col <- matrix_types[[mtype]]$value_col
           filter_clause <- matrix_types[[mtype]]$filter
 
-          # select features with non-zero variance
           keep_query <- sprintf("
             SELECT %s AS feature_id, VAR_POP(%s) AS variance
             FROM %s
@@ -432,22 +558,12 @@ skipImbalancedMatrix <- function(genome_ids,
 
           keep_features <- DBI::dbGetQuery(con, keep_query)[["feature_id"]]
           if (length(keep_features) == 0) {
-            log("info", paste0(
-              "All features filtered for ",
-              ftype, " - ", mtype, " - ", group_label
-            ))
+            log("info", paste0("All features filtered for ", ftype, " - ", mtype, " - ", group_label))
             next
           }
 
-          DBI::dbExecute(
-            con,
-            "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)"
-          )
-          DBI::dbWriteTable(con,
-            "keep_features",
-            data.frame(feature_id = keep_features),
-            append = TRUE
-          )
+          DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
+          DBI::dbWriteTable(con, "keep_features", data.frame(feature_id = keep_features), append = TRUE)
 
           mtype_label <- matrix_types[[mtype]]$label
 
@@ -458,26 +574,23 @@ skipImbalancedMatrix <- function(genome_ids,
               bug, group_type, group_label, ftype, mtype_label
             )
           )
-
           long_out_path_sql <- gsub("\\\\", "/", long_out_path)
 
-          # phenotype case
-          phenotype_case <- if (group_type %in%
-            c("drug_class", "drug_class_year", "drug_class_country")) {
+          phenotype_case <- if (group_type %in% c("drug_class", "drug_class_year", "drug_class_country")) {
             "
-               CASE
-                  WHEN MAX(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Resistant'
-                                THEN 1 ELSE 0 END)=1 THEN 'Resistant'
-                  WHEN MIN(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Susceptible'
-                                THEN 1 ELSE 0 END)=1 THEN 'Susceptible'
-               END
+              CASE
+                WHEN MAX(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Resistant'
+                              THEN 1 ELSE 0 END)=1 THEN 'Resistant'
+                WHEN MIN(CASE WHEN f.\"genome_drug.resistant_phenotype\"='Susceptible'
+                              THEN 1 ELSE 0 END)=1 THEN 'Susceptible'
+              END
             "
           } else {
             "
               MAX(
                 CASE f.\"genome_drug.resistant_phenotype\"
-                   WHEN 'Resistant' THEN 'Resistant'
-                   WHEN 'Susceptible' THEN 'Susceptible'
+                  WHEN 'Resistant' THEN 'Resistant'
+                  WHEN 'Susceptible' THEN 'Susceptible'
                 END
               )
             "
@@ -525,13 +638,10 @@ skipImbalancedMatrix <- function(genome_ids,
 
           ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
 
-          # On copy failure, log + continue without stopping entire pipeline
           if (inherits(ok, "try-error")) {
             readr::write_lines(
-              sprintf(
-                "%s\tCOPY_failed\t%d\t%s",
-                group_label, length(genome_ids), phenotype_summary
-              ),
+              sprintf("%s\tCOPY_failed\t%d\t%s",
+                      group_label, length(genome_ids), phenotype_summary),
               log_path,
               append = TRUE
             )
@@ -543,10 +653,11 @@ skipImbalancedMatrix <- function(genome_ids,
         }
       }
 
-      # Close group connection to avoid stack overflow behaviors
-      DBI::dbDisconnect(con, shutdown = FALSE)
+      DBI::dbDisconnect(con, shutdown = TRUE)
     }
   }
+
+  invisible(tibble::tibble())
 }
 
 #' Build leave-one-out (LOO) merged parquet matrices from stratified parquet files.
@@ -692,48 +803,65 @@ skipImbalancedMatrix <- function(genome_ids,
 
 #' Generate ML input matrix for multidrug resistance analysis
 #'
-#' @param parquet_duckdb_path [character] Path to the DuckDB that contains the view of metadata and feature parquets
+#' @param parquet_dir [character] Path to the directory that contains the metadata and feature parquets
 #' @param path [character] Working directory
 #' @param min_n [numeric] Minimum number of samples for each combination of drug classes
 #' @param verbosity [character] "minimal" or "debug"; when "debug", prints detailed steps
 #' @return invisible(TRUE); side effect: writes MDR matrices to disk
 #' @keywords internal
-.parquet2MDRMatrix <- function(parquet_duckdb_path,
+.parquet2MDRMatrix <- function(parquet_dir,
                                path,
                                min_n,
-                               verbosity = c("minimal", "debug")) {
+                               verbosity = c("minimal", "debug")
+                              ) {
   verbosity <- match.arg(verbosity)
   log <- .make_logger(verbosity)
 
-  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
-  path <- normalizePath(path)
+  parquet_dir <- normalizePath(parquet_dir, winslash = "/", mustWork = TRUE)
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
   MDR_matrix_path <- gsub("\\\\", "/", file.path(path, "MDR_matrix"))
   if (!dir.exists(MDR_matrix_path)) dir.create(MDR_matrix_path, recursive = TRUE)
 
-  # Listing feature types and DuckDB views
-  feature_types <- list(
-    genes    = list(view = "gene_count", id_col = "gene"),
-    proteins = list(view = "protein_count", id_col = "protein"),
-    domains  = list(view = "domain_count", id_col = "domain"),
-    struct   = list(view = "struct", id_col = "struct")
+  # feature_types <- list(
+  #   genes    = list(view = "gene_count",    id_col = "gene"),
+  #   proteins = list(view = "protein_count", id_col = "protein"),
+  #   domains  = list(view = "domain_count",  id_col = "domain"),
+  #   struct   = list(view = "struct",        id_col = "struct")
+  # )
+
+  feature_types <- .getFeatureTypes(parquet_dir)
+
+if (length(feature_types) == 0) {
+  stop(
+    "No feature parquet files found. Expected *_count.parquet and/or struct.parquet."
   )
-  # Listing matrix types and filters
+}
+
+log(
+  "info",
+  paste0(
+    "Detected feature types: ",
+    paste(names(feature_types), collapse = ", ")
+  )
+)
   matrix_types <- list(
-    counts        = list(value_col = "value", filter = "variance > 0", binary_only = FALSE, label = "counts"),
+    counts        = list(value_col = "value",   filter = "variance > 0", binary_only = FALSE, label = "counts"),
     binary        = list(value_col = "present", filter = "variance > 0", binary_only = FALSE, label = "binary"),
-    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE, label = "binary")
+    struct_binary = list(value_col = "present", filter = "variance > 0", binary_only = TRUE,  label = "binary")
   )
 
-  # Connect to DuckDB
-  con0 <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
-  DBI::dbExecute(con0, sprintf(
-    "SET file_search_path='%s'",
-    dirname(parquet_duckdb_path)
-  ))
-  # Discover bug name and which genomes to include
-  bug <- stringr::str_remove(basename(parquet_duckdb_path), "_parquet\\.duckdb$")
+  con0 <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
+  .register_parquet_views(con0, parquet_dir)
+
+  bug <- .generate3ltrCode(basename(parquet_dir))
+  log("info", paste0("Connected to parquet directory for bug: ", bug))
   metadata_all <- DBI::dbGetQuery(con0, "SELECT * FROM metadata")
-  DBI::dbDisconnect(con0, shutdown = FALSE)
+  DBI::dbDisconnect(con0, shutdown = TRUE)
 
   classes <- metadata_all |>
     dplyr::select(genome.genome_id, resistant_classes) |>
@@ -750,7 +878,6 @@ skipImbalancedMatrix <- function(genome_ids,
     dplyr::filter(resistant_classes %in% classes) |>
     dplyr::pull(genome.genome_id)
 
-  # Build one matrix per feature type and matrix type
   for (ftype in names(feature_types)) {
     fview <- feature_types[[ftype]]$view
     fid <- feature_types[[ftype]]$id_col
@@ -767,21 +894,17 @@ skipImbalancedMatrix <- function(genome_ids,
       )
       out_file_sql <- gsub("\\\\", "/", out_file)
 
-      # Fresh connection for this matrix
-      con <- DBI::dbConnect(duckdb::duckdb(), parquet_duckdb_path)
-      DBI::dbExecute(con, sprintf(
-        "SET file_search_path='%s'",
-        dirname(parquet_duckdb_path)
-      ))
+      con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+      on.exit({
+  if (DBI::dbIsValid(con)) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  }
+}, add = TRUE)
+      .register_parquet_views(con, parquet_dir)
 
-      # Selected genomes
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE selected_genomes (genome_id VARCHAR)")
-      DBI::dbWriteTable(con, "selected_genomes",
-        data.frame(genome_id = genomes_to_keep),
-        append = TRUE
-      )
+      DBI::dbWriteTable(con, "selected_genomes", data.frame(genome_id = genomes_to_keep), append = TRUE)
 
-      # Binary view
       DBI::dbExecute(con, sprintf("
         CREATE OR REPLACE VIEW %s_binary AS
         SELECT genome_id, %s,
@@ -789,7 +912,6 @@ skipImbalancedMatrix <- function(genome_ids,
         FROM %s
       ", ftype, fid, fview))
 
-      # Counts view
       if (ftype != "struct") {
         DBI::dbExecute(con, sprintf("
           CREATE OR REPLACE VIEW %s_counts AS
@@ -813,19 +935,14 @@ skipImbalancedMatrix <- function(genome_ids,
       keep_features <- DBI::dbGetQuery(con, keep_query)[["feature_id"]]
       if (length(keep_features) == 0) {
         log("info", paste0("All features filtered for MDR: ", ftype, " - ", mtype))
-        DBI::dbDisconnect(con, shutdown = FALSE)
+        DBI::dbDisconnect(con, shutdown = TRUE)
         next
       }
 
       DBI::dbExecute(con, "CREATE OR REPLACE TEMP TABLE keep_features (feature_id VARCHAR)")
-      DBI::dbWriteTable(con, "keep_features",
-        data.frame(feature_id = keep_features),
-        append = TRUE
-      )
+      DBI::dbWriteTable(con, "keep_features", data.frame(feature_id = keep_features), append = TRUE)
 
-
-      copy_sql <- sprintf(
-        "
+      copy_sql <- sprintf("
         COPY (
           SELECT
             f.\"genome.genome_id\" AS genome_id,
@@ -848,13 +965,7 @@ skipImbalancedMatrix <- function(genome_ids,
         TO '%s'
         (FORMAT 'parquet', COMPRESSION 'zstd')
       ",
-        fid, # %s -> feature_id expression column name
-        value_col, # %s -> value column to CAST
-        mview, # %s -> source view (binary or counts)
-        fid, # %s -> join to keep_features
-        fid, # %s -> group by feature id
-        fid, # %s -> order by feature id
-        out_file_sql # %s -> destination parquet file
+        fid, value_col, mview, fid, fid, fid, out_file_sql
       )
 
       ok <- try(DBI::dbExecute(con, copy_sql), silent = TRUE)
@@ -864,7 +975,7 @@ skipImbalancedMatrix <- function(genome_ids,
         log("info", paste0("Exported MDR matrix: ", out_file))
       }
 
-      DBI::dbDisconnect(con, shutdown = FALSE)
+      DBI::dbDisconnect(con, shutdown = TRUE)
     }
   }
 
@@ -885,7 +996,7 @@ skipImbalancedMatrix <- function(genome_ids,
 
 #' Build leave-one-out (LOO) merged parquet matrices from drug parquet files.
 #'
-#' @param path Character. Base directory containing stratified parquet matrices.
+#' @param path Character. Base directory containing parquet matrices.
 #'             Expected subdirs: matrix/..
 #' @param verbosity Character. "minimal" or "debug"; when "debug", prints detailed steps.
 #' @return Invisibly returns a tibble with paths of created LOO parquet files.
@@ -1057,6 +1168,14 @@ skipImbalancedMatrix <- function(genome_ids,
   invisible(tibble::tibble(created_file = created))
 }
 
+#' Build Cross drug testing matrices
+#'
+#' @param path Character. Base directory containing parquet matrices.
+#'             Expected subdirs: matrix/..
+#' @param verbosity Character. "minimal" or "debug"; when "debug", prints detailed steps.
+#'
+#' @returns
+#' @examples
 .parquet2CrossDrugTestMatrix <- function(
   path,
   verbosity = c("minimal", "debug")
@@ -1221,7 +1340,7 @@ skipImbalancedMatrix <- function(genome_ids,
 #' d) Leave-one-out from the years and countries for drug/class
 #' e) MDR based on classes
 #'
-#' @param parquet_duckdb_path [character] path to the DuckDB that contains the view of metadata and feature parquets
+#' @param parquet_dir [character] path to the directory that contains the metadata and feature parquets
 #' @param out_path [character] path to the directory where the results files (matrices) will be written
 #' @param n_fold [numeric] number of cross-validation folds; default is 5
 #' @param split [numeric] training/validation split specification. Two formats accepted:
@@ -1237,8 +1356,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #' \dontrun{
 #' # Generate ML input matrices with 5-fold cross-validation (using shorthand)
 #' generateMLInputs(
-#'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
-#'   out_path = "results/",
+#'   parquet_dir = "data/",
+#'   out_path = "data/",
 #'   n_fold = 5,
 #'   split = 0, # shorthand for CV mode
 #'   min_n = 25,
@@ -1247,8 +1366,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #'
 #' # Same as above but using vector notation
 #' generateMLInputs(
-#'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
-#'   out_path = "results/",
+#'   parquet_dir = "data/",
+#'   out_path = "data/",
 #'   n_fold = 5,
 #'   split = c(1, 0), # explicit CV mode
 #'   verbosity = "minimal"
@@ -1256,8 +1375,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #'
 #' # Generate with classical train/val/test split (70/15/15)
 #' generateMLInputs(
-#'   parquet_duckdb_path = "results/Cje_parquet.duckdb",
-#'   out_path = "results/",
+#'   parquet_dir = "data/",
+#'   out_path = "data/",
 #'   n_fold = NULL,
 #'   split = c(0.7, 0.15), # 70% train, 15% val, 15% test
 #'   min_n = 25,
@@ -1265,8 +1384,8 @@ skipImbalancedMatrix <- function(genome_ids,
 #' )
 #' }
 #' @export
-generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
-                             out_path = "results/",
+generateMLInputs <- function(parquet_dir = "data/",
+                             out_path = "data/",
                              n_fold = 5,
                              split = c(1, 0), # Default: CV
                              min_n = 25,
@@ -1275,8 +1394,8 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   log <- .make_logger(verbosity)
 
   # Validate inputs before processing
-  if (!file.exists(parquet_duckdb_path)) {
-    stop("DuckDB file not found: ", parquet_duckdb_path)
+  if (!dir.exists(parquet_dir)) {
+    stop("Parquet directory not found: ", parquet_dir)
   }
 
   if (!dir.exists(dirname(out_path))) {
@@ -1284,10 +1403,10 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   }
 
   # Normalize input paths
-  parquet_duckdb_path <- normalizePath(parquet_duckdb_path)
+  parquet_dir <- normalizePath(parquet_dir)
   path <- normalizePath(out_path)
 
-  .checkArgPath(parquet_duckdb_path)
+  .checkArgPath(parquet_dir)
 
   split <- .normalize_split(split)
 
@@ -1306,7 +1425,7 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     val_prop    = val_prop,
     test_prop   = test_prop,
     seed        = 5280,
-    timestamp <- as.character(Sys.time())
+    timestamp = as.character(Sys.time())
   )
 
   jsonlite::write_json(
@@ -1326,7 +1445,7 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
   }
 
   # Proceed (propagate verbosity to downstream steps)
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+  .parquet2Matrix(parquet_dir, out_path, n_fold, split,
     stratify_by = "year",
     verbosity = verbosity
   )
@@ -1335,7 +1454,7 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     verbosity = verbosity
   )
 
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+  .parquet2Matrix(parquet_dir, out_path, n_fold, split,
     stratify_by = "country",
     verbosity = verbosity
   )
@@ -1344,11 +1463,11 @@ generateMLInputs <- function(parquet_duckdb_path = "results/Cje_parquet.duckdb",
     verbosity = verbosity
   )
 
-  .parquet2Matrix(parquet_duckdb_path, out_path, n_fold, split,
+  .parquet2Matrix(parquet_dir, out_path, n_fold, split,
     stratify_by = NULL,
     verbosity = verbosity
   )
-  .parquet2MDRMatrix(parquet_duckdb_path, out_path, min_n,
+  .parquet2MDRMatrix(parquet_dir, out_path, min_n,
     verbosity = verbosity
   )
 
