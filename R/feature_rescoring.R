@@ -1,11 +1,15 @@
 #' Score features within each seed
 #'
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
+#' @param core_contribution_threshold The cumulative-contribution cutoff (default 0.75, i.e. 75%) used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.
+#' @param exclude_feature_types Feature types to drop before any scoring happens (default \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.
 #'
-#' @returns a tibble of scored top features with their contribution, rank, and rank score within each seed.
+#' @returns a tibble of scored top features with their contribution, cumulative contribution, core membership, rank, and rank score within each seed.
 #' within a seed
 #' contribution is calculated as the importance of a feature divided by the sum of importance scores for all features.
-#' Rank is assigned based on the descending order of contribution, and
+#' cum_contrib is the cumulative contribution when features are sorted in descending order of contribution; features tied on contribution are assigned the same cum_contrib, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
+#' in_core is TRUE when cum_contrib is at or below core_contribution_threshold; a tied block that pushes the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
+#' Rank is assigned based on the descending order of contribution, with tied contributions receiving the average of the ranks they span, and
 #' rank score is calculated as (n_features - rank) / (n_features - 1), where n_features is the total number of features within the same seed.
 #' rank score is ranged between 0 and 1, with higher values indicating higher importance.
 #'
@@ -13,11 +17,11 @@
 #' @examples
 #' scoreFeaturesWithinSeed(all_top_features.parquet)
 #'
-scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
+scoreFeaturesWithinSeed <- function(all_top_features_parquet, core_contribution_threshold = 0.75, exclude_feature_types = "struct") {
 
   stopifnot(file.exists(all_top_features_parquet))
   scored_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
-    dplyr::filter(!shuffled) |>
+    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types) |>
     dplyr::select(
       species, drug_label, drug_or_class, seed,
       feature_type, feature_subtype, variable=Variable,
@@ -44,7 +48,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
     ) |>
     dplyr::mutate(
       contribution = importance / sum(importance, na.rm = TRUE),
-      rank = dplyr::dense_rank(dplyr::desc(contribution)),
+      rank = rank(dplyr::desc(contribution), ties.method = "average"),
       n_features = dplyr::n(),
       rank_score = dplyr::if_else(
         n_features > 1,
@@ -52,7 +56,15 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
         1
       )
     ) |>
-    dplyr::ungroup()
+    dplyr::arrange(dplyr::desc(contribution), .by_group = TRUE) |>
+    dplyr::mutate(running_contrib = cumsum(contribution)) |>
+    dplyr::group_by(contribution, .add = TRUE) |>
+    dplyr::mutate(
+      cum_contrib = max(running_contrib),
+      in_core = cum_contrib <= core_contribution_threshold
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::select(-running_contrib)
 
   return(scored_top_features)
 }
@@ -65,9 +77,9 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet) {
 #' @returns a tibble of summarized features across seeds, including the number of seeds,
 #' mean and median rank,
 #' mean and median contribution,
-#' mean rank score (scaled between 0 and 1 with higher values indicating higher importance),
+#' mean and median rank score (scaled between 0 and 1 with higher values indicating higher importance),
 #' best rank,
-#' rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank varies across seeds),
+#' rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank_score varies across seeds, computed on the normalized rank_score rather than raw rank so it is comparable across groups with different numbers of features),
 #' sign consistency (TRUE if the sign is same across seeds), and sign (the sign of the feature; POS, NEG or MIXED).
 #'
 #' @export
@@ -90,9 +102,10 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
     median_rank = median(rank, na.rm = TRUE),
     median_contribution = median(contribution, na.rm = TRUE),
     mean_rank_score = mean(rank_score, na.rm = TRUE),
+    median_rank_score = median(rank_score, na.rm = TRUE),
     best_rank = min(rank, na.rm = TRUE),
     rank_consistent = dplyr::n_distinct(rank) == 1,
-    rank_sd = sd(rank, na.rm = TRUE),
+    rank_sd = sd(rank_score, na.rm = TRUE),
     sign_consistent = dplyr::n_distinct(sign) == 1,
     sign = if (sign_consistent) dplyr::first(sign) else "MIXED",
     .groups = "drop"
@@ -135,19 +148,13 @@ top_features <- feature_summary |>
   dplyr::ungroup() |>
   dplyr::group_by(drug_label, drug_or_class) |>
   dplyr::filter(
-  #   n_seeds == max(n_seeds),
-    mean_rank_score >= quantile(mean_rank_score, rank_score_quantile)
+    median_rank_score >= quantile(median_rank_score, rank_score_quantile)
   ) |>
-  # dplyr::slice_max(
-  #   order_by = mean_rank_score,
-  #   n = 10,
-  #   with_ties = FALSE
-  # ) |>
   dplyr::ungroup() |>
     dplyr::distinct(
       species, drug_label, drug_or_class,
       feature_type, feature_subtype, variable, n_subtype, subtype_csv,
-      mean_rank_score, mean_rank, best_rank,
+      mean_rank_score, median_rank_score, mean_rank, best_rank,
       median_rank, mean_contribution, median_contribution,
       n_seeds, rank_sd,
       sign_consistent, sign
@@ -164,18 +171,28 @@ dplyr::filter(sign_consistent)
 #'
 #' @returns a tibble of summarized clusters, including species, drug label, drug or class, cluster, frequency (number of features in the cluster),
 #' number of distinct variables, number of distinct feature types, feature types as a comma-separated string,
-#' cluster mean rank score (mean of mean_rank_score), cluster median rank score (median of mean_rank_score),
-#' cluster max rank score (max of mean_rank_score), cluster rank score standard deviation, and cluster best rank.
+#' cluster mean rank score (mean of median_rank_score, down-weighted by 1/n_clusters for features that map to multiple clusters so promiscuous domains/COGs don't inflate every cluster they touch),
+#' cluster median rank score (median of the same down-weighted score), cluster max rank score (max of the unweighted median_rank_score, i.e. the single strongest feature backing this cluster regardless of its fan-out to other clusters), cluster rank score standard deviation, and cluster best rank.
+#' median_rank_score is used throughout (rather than mean_rank_score) for consistency with the seed-noise-robust selection made in `topFeaturesPerDrugOrClass()`.
 #'
 #' @export
 summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_summary),
                                cluster_feature_parquet
                               ) {
   stopifnot(file.exists(cluster_feature_parquet))
-  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet))
+  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet)) |>
+    dplyr::add_count(feature, name = "n_clusters")
 
   top_clusters <- top_features |>
-    dplyr::left_join(cluster_feature, by = dplyr::join_by(variable == feature)) |>
+    dplyr::left_join(
+      cluster_feature,
+      by = dplyr::join_by(variable == feature),
+      relationship = "many-to-many"
+    ) |>
+    dplyr::mutate(
+      n_clusters = dplyr::coalesce(n_clusters, 1L),
+      weighted_rank_score = median_rank_score / n_clusters
+    ) |>
     dplyr::group_by(
       species,
       drug_label,
@@ -188,10 +205,10 @@ summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_s
       variables_csv = paste(sort(unique(variable)), collapse = ","),
       n_feature_types = dplyr::n_distinct(feature_type),
       feature_types_csv = paste(sort(unique(feature_type)), collapse = ","),
-      cluster_mean_rank_score = mean(mean_rank_score, na.rm = TRUE),
-      cluster_median_rank_score = median(mean_rank_score, na.rm = TRUE),
-      cluster_max_rank_score = max(mean_rank_score, na.rm = TRUE),
-      cluster_rank_score_sd = sd(mean_rank_score, na.rm = TRUE),
+      cluster_mean_rank_score = mean(weighted_rank_score, na.rm = TRUE),
+      cluster_median_rank_score = median(weighted_rank_score, na.rm = TRUE),
+      cluster_max_rank_score = max(median_rank_score, na.rm = TRUE),
+      cluster_rank_score_sd = sd(weighted_rank_score, na.rm = TRUE),
       cluster_best_rank = min(best_rank, na.rm = TRUE),
       .groups = "drop"
     ) |>
@@ -234,10 +251,12 @@ findSharedClusters <- function(top_clusters = summariseClusters(top_features, cl
 #' @param label The label to filter clusters by, either "drug" or "drug_class"
 #' @param protein_names_parquet The path to the Parquet file containing the annotations to protein cluster names
 #'
-#' @returns
+#' @returns a tibble of clusters unique to a single drug/class, including drug or class, cluster,
+#' cluster name (from protein name annotations), and cluster mean rank score, sorted by cluster mean rank score in descending order.
 #'
 #' @export
 #' @examples
+#' findUniqueClusters(summariseClusters(top_features, cluster_feature_parquet), label = "drug", protein_names_parquet)
 findUniqueClusters <- function(top_clusters = summariseClusters(top_features, cluster_feature_parquet),
                             label = "drug",
                             protein_names_parquet
@@ -273,6 +292,7 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
 #' @param protein_names_parquet Path to the Parquet file with cluster name annotations.
 #'
 #' @return A list with feature_table, cluster_table, nodes, edges, and graph.
+#' Node/edge weights are built from median_rank_score (features) and cluster_mean_rank_score (clusters, itself median-based per `summariseClusters()`), consistent with the seed-noise-robust selection made in `topFeaturesPerDrugOrClass()`.
 #' @export
 buildFeatureNetwork <- function(top_features,
                                top_clusters,
@@ -287,7 +307,7 @@ buildFeatureNetwork <- function(top_features,
   required_feature_cols <- c(
     "species", "drug_label", "drug_or_class",
     "feature_type", "variable",
-    "mean_rank_score"
+    "median_rank_score"
   )
   required_cluster_cols <- c(
     "species", "drug_label", "drug_or_class",
@@ -320,7 +340,9 @@ buildFeatureNetwork <- function(top_features,
     dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
     dplyr::group_by(species, model_id, feature_type, variable) |>
     dplyr::summarise(
-      mean_score = mean(mean_rank_score, na.rm = TRUE),
+      # mean of median_rank_score across subtype (bin/count) rows for this variable --
+      # this is where bin/count reconciliation currently happens (implicitly)
+      feature_score = mean(median_rank_score, na.rm = TRUE),
       .groups = "drop"
     )
 
@@ -332,7 +354,7 @@ buildFeatureNetwork <- function(top_features,
     ) |>
     dplyr::group_by(species, model_id, cluster, proteinName) |>
     dplyr::summarise(
-      mean_score = mean(cluster_mean_rank_score, na.rm = TRUE),
+      cluster_score = mean(cluster_mean_rank_score, na.rm = TRUE),
       .groups = "drop"
     )
 
@@ -356,7 +378,7 @@ buildFeatureNetwork <- function(top_features,
   feature_nodes <- feature_table |>
     dplyr::group_by(species, variable) |>
     dplyr::summarise(
-      score = mean(mean_score, na.rm = TRUE),
+      score = mean(feature_score, na.rm = TRUE),
       breadth = dplyr::n_distinct(model_id),
       .groups = "drop"
     ) |>
@@ -373,7 +395,7 @@ buildFeatureNetwork <- function(top_features,
   cluster_nodes <- cluster_table |>
     dplyr::group_by(species, cluster, proteinName) |>
     dplyr::summarise(
-      score = mean(mean_score, na.rm = TRUE),
+      score = mean(cluster_score, na.rm = TRUE),
       breadth = dplyr::n_distinct(model_id),
       .groups = "drop"
     ) |>
@@ -398,7 +420,7 @@ buildFeatureNetwork <- function(top_features,
     dplyr::transmute(
       from = model_id,
       to = variable,
-      weight = mean_score,
+      weight = feature_score,
       edge_type = "model_feature"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
@@ -407,18 +429,22 @@ buildFeatureNetwork <- function(top_features,
     dplyr::transmute(
       from = model_id,
       to = cluster,
-      weight = mean_score,
+      weight = cluster_score,
       edge_type = "model_cluster"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
   feature_cluster_edges <- feature_table |>
-    dplyr::left_join(cluster_feature, by = dplyr::join_by(variable == feature)) |>
+    dplyr::left_join(
+      cluster_feature |> dplyr::add_count(feature, name = "n_clusters"),
+      by = dplyr::join_by(variable == feature),
+      relationship = "many-to-many"
+    ) |>
     dplyr::filter(!is.na(cluster)) |>
     dplyr::transmute(
       from = variable,
       to = cluster,
-      weight = 1,
+      weight = 1 / n_clusters,
       edge_type = "feature_cluster"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
