@@ -99,6 +99,54 @@ NULL
   return(abbreviation)
 }
 
+#' 
+#' For LOO and cross-drug matrices, which are built by removing genomes and so
+#' can end up single-class or tiny, checking if they should be skipped. 
+#' [skipImbalancedMatrix()] guards the matricesbuilt from source metadata 
+#' instead, and sizes them per cross-validation fold;
+#' a test set is scored once, so it only needs enough genomes to define a metric.
+#'
+#' @param tbl [tibble] matrix about to be written; needs `genome_id` and
+#'   `genome_drug.resistant_phenotype`.
+#' @param label [character] name used in the log line.
+#' @param min_genomes [numeric] fewest distinct genomes, both classes together.
+#' @param min_minority_genomes [numeric] fewest distinct genomes in the rarer
+#'   class. Below 2, sensitivity can only be 0 or 1 and MCC is usually undefined.
+#'   Pass `n_fold` when the subset is training data.
+#' @param verbosity [character] "minimal" or "debug".
+#' @return `TRUE` if the matrix should be skipped.
+#' @keywords internal
+#' @noRd
+.skipUnusableMatrix <- function(tbl,
+                                label,
+                                min_genomes = 5,
+                                min_minority_genomes = 2,
+                                verbosity = c("minimal", "debug")) {
+  log <- .make_logger(verbosity)
+  phenotype <- "genome_drug.resistant_phenotype"
+
+  # One row per genome/phenotype pair. A genome can carry both phenotypes in a
+  # pooled LOO matrix, so count distinct genomes rather than rows.
+  per_genome <- unique(tbl[, c("genome_id", phenotype)])
+  counts <- table(per_genome[[phenotype]])
+
+  reason <- if (length(counts) < 2) {
+    "fewer than two phenotype classes"
+  } else if (length(unique(per_genome$genome_id)) < min_genomes) {
+    paste0("fewer than ", min_genomes, " genomes")
+  } else if (min(counts) < min_minority_genomes) {
+    paste0("rarer class below ", min_minority_genomes, " genomes")
+  } else {
+    return(FALSE)
+  }
+
+  log("info", sprintf(
+    "Skipped %s: %s (%s)", label, reason,
+    paste(sprintf("%s=%d", names(counts), as.integer(counts)), collapse = "; ")
+  ))
+  TRUE
+}
+
 #' .calculateMinSamples()
 #'
 #' Returns the minimum number of total observations needed (one bug-drug combo)
@@ -461,12 +509,28 @@ log(
         ", condition_string, strat_filter))[[1]]
       }
 
+      # The join below drops genomes with no feature rows, so drop them here too
+      # and count what remains. skipImbalancedMatrix() sizes the group from these
+      # counts, and has to see the population the matrix will actually contain.
+      view_names <- vapply(feature_types, function(ft) ft$view, character(1))
+
+      feature_genome_query <- paste(
+        sprintf("SELECT DISTINCT genome_id FROM %s", view_names),
+        collapse = " INTERSECT "
+      )
+      feature_genomes <- DBI::dbGetQuery(con, feature_genome_query)$genome_id
+
+      genome_ids <- intersect(genome_ids, feature_genomes)
+
       phenotype_counts_all <- DBI::dbGetQuery(con, sprintf("
-        SELECT DISTINCT \"genome_drug.resistant_phenotype\" AS phenotype, COUNT(*) AS count
+        SELECT DISTINCT \"genome.genome_id\" AS genome_id,
+               \"genome_drug.resistant_phenotype\" AS phenotype
         FROM metadata
         WHERE %s
-        GROUP BY \"genome_drug.resistant_phenotype\"
-      ", condition_string))
+          AND \"genome_drug.resistant_phenotype\" IN ('Resistant','Susceptible')
+      ", condition_string)) |>
+        dplyr::filter(genome_id %in% genome_ids) |>
+        dplyr::count(phenotype, name = "count")
 
       phenotype_summary <- paste(
         apply(phenotype_counts_all, 1, function(row) paste0(row["phenotype"], "=", row["count"])),
@@ -776,6 +840,16 @@ log(
 
         combined <- purrr::map(subset$file, arrow::read_parquet) |>
           dplyr::bind_rows()
+
+        if (.skipUnusableMatrix(
+          combined,
+          label = paste0(
+            drug_class, " leave-out ", leave_one_out, " (", sub_feature, ")"
+          ),
+          verbosity = verbosity
+        )) {
+          return(NULL)
+        }
 
         out_file <- gsub("\\\\", "/", file.path(
           LOO_path,
@@ -1138,6 +1212,14 @@ log(
       ## Safety check (can comment out once stable)
       stopifnot(!any(combined[["genome_id"]] %in% heldout_genomes))
 
+      if (.skipUnusableMatrix(
+        combined,
+        label = paste0("leave-out ", leave_one_out, " (", sub_feature, ")"),
+        verbosity = verbosity
+      )) {
+        return(NULL)
+      }
+
       out_file <- gsub("\\\\", "/", file.path(
         LOO_path,
         paste0(
@@ -1302,6 +1384,14 @@ log(
 
         ## Safety check
         stopifnot(!any(test_tbl[["genome_id"]] %in% train_genomes))
+
+        if (.skipUnusableMatrix(
+          test_tbl,
+          label = paste0(drugA, " tested on ", drugB, " (", sub_feature, ")"),
+          verbosity = verbosity
+        )) {
+          next
+        }
 
         out_file <- gsub("\\\\", "/", file.path(
           out_path,
