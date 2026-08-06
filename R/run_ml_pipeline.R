@@ -24,8 +24,7 @@ NULL
 #' classification for one bug/drug combination) or `resistant_classes`
 #' (multi-class classification for determining the drug classes to which each
 #' genome is resistant), but not both.
-#' @param model [chr] Logistic regression ("LR"), random forest ("RF"), or
-#' boosted tree ("BT")
+#' @param model [chr] Logistic regression ("LR")
 #' @param split [num] Vector of length 2 indicating the proportion of data to
 #' be designated as training and validation, respectively. Note: if `test_data`
 #' is provided, these numbers will be scaled so that they sum to 1 and will
@@ -408,16 +407,10 @@ runMLPipeline <- function(
       tibble::add_column(spec, .after = "nmcc")
   }
 
-  if (model == "LR") {
     performance_tibble <- performance_tibble |>
       tibble::add_column(fit_penalty, .before = "mcc") |>
       tibble::add_column(fit_mixture, .before = "mcc")
-  } else if (model == "RF" || model == "BT") {
-    performance_tibble <- performance_tibble |>
-      tibble::add_column(fit_trees, .before = "mcc") |>
-      tibble::add_column(fit_mtry, .before = "mcc") |>
-      tibble::add_column(fit_min_n, .before = "mcc")
-  }
+  
 
   if (external_test_data) {
     performance_tibble <- performance_tibble |>
