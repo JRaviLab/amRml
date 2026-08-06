@@ -132,35 +132,37 @@ parse_ml_filename <- function(filename) {
 #' @export
 buildTopFeatsPq <- function(
   path,
-  stratify_by = NULL,
-  LOO = FALSE,
-  MDR = FALSE,
-  cross_test = FALSE,
+  # stratify_by = NULL,
+  # LOO = FALSE,
+  # MDR = FALSE,
+  # cross_test = FALSE,
   out_parquet = "all_top_features.parquet",
   compression = "zstd",
   verbose = TRUE
 ) {
-  if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
-    stop("`path` must be a non-empty character scalar.")
-  }
-  path <- normalizePath(path)
+  # if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
+  #   stop("`path` must be a non-empty character scalar.")
+  # }
+  # path <- normalizePath(path)
 
-  if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
-    stop("`stratify_by` must be NULL, 'year', or 'country'.")
-  }
-  if (isTRUE(LOO) && is.null(stratify_by)) {
-    stop("With LOO=TRUE, stratify_by must be 'year' or 'country'.")
-  }
-  if (isTRUE(MDR) && (!is.null(stratify_by) || isTRUE(LOO) || isTRUE(cross_test))) {
-    stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
-  }
+  # if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
+  #   stop("`stratify_by` must be NULL, 'year', or 'country'.")
+  # }
+  # if (isTRUE(LOO) && is.null(stratify_by)) {
+  #   stop("With LOO=TRUE, stratify_by must be 'year' or 'country'.")
+  # }
+  # if (isTRUE(MDR) && (!is.null(stratify_by) || isTRUE(LOO) || isTRUE(cross_test))) {
+  #   stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
+  # }
 
   # -----------------------
   # Resolve directories (ensures existence)
   # -----------------------
   paths <- createMLResultDir(path,
-    stratify_by = stratify_by, LOO = LOO,
-    cross_test = cross_test, MDR = MDR
+    stratify_by = NULL,
+  LOO = FALSE,
+  MDR = FALSE,
+  cross_test = FALSE
   )
   top_dir <- paths$ML_top_features
 
@@ -213,10 +215,10 @@ buildTopFeatsPq <- function(
 #' @export
 buildPerfPq <- function(
   path,
-  stratify_by = NULL,
-  LOO = FALSE,
-  MDR = FALSE,
-  cross_test = FALSE,
+  # stratify_by = NULL,
+  # LOO = FALSE,
+  # MDR = FALSE,
+  # cross_test = FALSE,
   out_parquet = "all_perf.parquet",
   compression = "zstd",
   verbose = TRUE
@@ -226,22 +228,22 @@ buildPerfPq <- function(
   }
   path <- normalizePath(path)
 
-  if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
-    stop("`stratify_by` must be NULL, 'year', or 'country'.")
-  }
-  if (isTRUE(LOO) && is.null(stratify_by)) {
-    stop("With LOO=TRUE, stratify_by must be 'year' or 'country'.")
-  }
-  if (isTRUE(MDR) && (!is.null(stratify_by) || isTRUE(LOO) || isTRUE(cross_test))) {
-    stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
-  }
+  # if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
+  #   stop("`stratify_by` must be NULL, 'year', or 'country'.")
+  # }
+  # if (isTRUE(LOO) && is.null(stratify_by)) {
+  #   stop("With LOO=TRUE, stratify_by must be 'year' or 'country'.")
+  # }
+  # if (isTRUE(MDR) && (!is.null(stratify_by) || isTRUE(LOO) || isTRUE(cross_test))) {
+  #   stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
+  # }
 
   # -----------------------
   # Resolve directories from your function (ensures they exist)
   # -----------------------
   paths <- createMLResultDir(path,
-    stratify_by = stratify_by, LOO = LOO,
-    cross_test = cross_test, MDR = MDR
+    stratify_by = NULL, LOO = FALSE,
+    cross_test = FALSE, MDR = FALSE
   )
   perf_dir <- paths$ML_performance
 
