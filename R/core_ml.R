@@ -603,12 +603,12 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     nrow(test_data_plus_predictions)
 
   if (prior > 0.3 && prior < 0.7) {
-    warning(
+    message(
       "Classes are roughly balanced. ",
       "Calculation of log2(AUPRC/prior) may be inappropriate."
     )
   } else if (prior >= 0.7) {
-    warning(
+    message(
       "Classes are imbalanced for this model. ",
       "The use of the log2(AUPRC/prior) metric may be more informative in this imbalanced model."
     )
