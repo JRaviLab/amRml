@@ -699,7 +699,7 @@ parsed_drugs <- parsed |>
 #
 #' @export
 runMDRmodels <- function(path,
-                         threads = 16,
+                         threads = 8,
                          split = c(0.8, 0),
                          n_fold = 5,
                          prop_vi_top_feats = c(0, 1),
@@ -972,7 +972,7 @@ runMLmodels <- function(path,
                         stratify_by = NULL,
                         LOO = FALSE,
                         cross_test = FALSE,
-                        threads = 16,
+                        threads = 8,
                         split = c(1, 0),
                         n_fold = 5,
                         prop_vi_top_feats = c(0, 1),
@@ -1264,7 +1264,7 @@ if (nrow(files) == 0) {
 #'
 #' @export
 runModelingPipeline <- function(parquet_dir,
-                                threads = 16,
+                                threads = 8,
                                 n_fold = 5,
                                 split = c(1, 0),
                                 min_n = 25,
@@ -1369,7 +1369,7 @@ runModelingPipeline <- function(parquet_dir,
 
       
 runModelingPipelineIntense <- function(parquet_dir,
-                                       threads = 16,
+                                       threads = 8,
                                        n_seeds = 3,
                                        n_fold = 5,
                                        split = c(1, 0),
@@ -1652,7 +1652,7 @@ runModelingPipelineIntense <- function(parquet_dir,
 
       
             runMultipleMDR <- function(path,
-                                threads = 16,
+                                threads = 8,
                                 n_seeds = 3,
                                 n_fold = 5,
                                 split = c(1, 0),
