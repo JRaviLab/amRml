@@ -99,13 +99,17 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
     n_seeds = dplyr::n_distinct(seed),
     mean_rank = mean(rank, na.rm = TRUE),
     mean_contribution = mean(contribution, na.rm = TRUE),
+    mean_cum_contrib = mean(cum_contrib, na.rm = TRUE),
+    mean_rank_score = mean(rank_score, na.rm = TRUE),
     median_rank = median(rank, na.rm = TRUE),
     median_contribution = median(contribution, na.rm = TRUE),
-    mean_rank_score = mean(rank_score, na.rm = TRUE),
+    median_cum_contrib = median(cum_contrib, na.rm = TRUE),
     median_rank_score = median(rank_score, na.rm = TRUE),
     best_rank = min(rank, na.rm = TRUE),
     rank_consistent = dplyr::n_distinct(rank) == 1,
     rank_sd = sd(rank_score, na.rm = TRUE),
+    in_core_consistent = dplyr::n_distinct(in_core) == 1,
+    in_core = if (in_core_consistent) dplyr::first(in_core) else FALSE,
     sign_consistent = dplyr::n_distinct(sign) == 1,
     sign = if (sign_consistent) dplyr::first(sign) else "MIXED",
     .groups = "drop"
@@ -139,7 +143,7 @@ topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeaturesAcrossS
 
 top_features <- feature_summary |>
   dplyr::filter(
-    sign == "NEG",
+    # sign == "NEG",
     rank_sd <= threshold_sd_rank
   ) |>
   dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
