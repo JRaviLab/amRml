@@ -107,7 +107,13 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
     median_rank_score = median(rank_score, na.rm = TRUE),
     best_rank = min(rank, na.rm = TRUE),
     rank_consistent = dplyr::n_distinct(rank) == 1,
-    rank_sd = sd(rank_score, na.rm = TRUE),
+    rank_score_sd = sd(rank_score, na.rm = TRUE),
+    # coefficient of variation (I was trying to see how much closer is SD to mean)
+    rank_score_cv = dplyr::if_else(
+      mean_rank_score != 0,
+      rank_score_sd / mean_rank_score,
+      NA_real_
+    ),
     in_core_consistent = dplyr::n_distinct(in_core) == 1,
     in_core = if (in_core_consistent) dplyr::first(in_core) else FALSE,
     sign_consistent = dplyr::n_distinct(sign) == 1,
@@ -138,13 +144,16 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
 #' @export
 topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeaturesAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
-                                        threshold_sd_rank = 1
+                                        threshold_sd_rank = 1,
+                                        cumulative_contribution_threshold = 0.75
                                         ) {
 
 top_features <- feature_summary |>
   dplyr::filter(
     # sign == "NEG",
-    rank_sd <= threshold_sd_rank
+    rank_score_sd <= threshold_sd_rank,
+    in_core,
+    median_cum_contribution <= cumulative_contribution_threshold
   ) |>
   dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
     dplyr::mutate( n_subtype = dplyr::n_distinct(feature_subtype),
@@ -160,7 +169,7 @@ top_features <- feature_summary |>
       feature_type, feature_subtype, variable, n_subtype, subtype_csv,
       mean_rank_score, median_rank_score, mean_rank, best_rank,
       median_rank, mean_contribution, median_contribution,
-      n_seeds, rank_sd,
+      n_seeds, rank_score_sd,
       sign_consistent, sign
     ) |>
 dplyr::filter(sign_consistent)
