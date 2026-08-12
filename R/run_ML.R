@@ -675,6 +675,7 @@ parsed_drugs <- parsed |>
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`).
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -863,6 +864,7 @@ runMDRmodels <- function(path,
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`).
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'

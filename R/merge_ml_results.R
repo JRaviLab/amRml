@@ -610,7 +610,7 @@ buildPerfPqMDR <- function(
 #' Build Parquet file from MDR ML predictions
 #'
 #'
-#' @param perf_dir_path Directory containing prediction TSV files
+#' @param pred_dir_path Directory containing prediction TSV files
 #'
 #' @return Writes a Parquet file to the same directory
 #'
@@ -675,7 +675,6 @@ buildPerfPqLOOCountry <- function(
 
 #' Build Parquet file from LOO year ML performances
 #' @param perf_dir_path Directory containing performance TSV files
-#' @param top_feat_dir_path Directory containing top feature TSV files
 #'
 #' @return Writes a Parquet file to the same directory
 #'
