@@ -1,3 +1,50 @@
+
+#' Filter the optimal model based on MCC threshold and comparison to shuffled data
+#'
+#' @param all_performance_parquet The path to the all performance parquet file 
+#' @param MCC_threshold Numeric The minimum MCC to filter the optimal model (default NULL, no filtering)
+#' @param compare_to_shuffled Logical whether to compare the MCC of the model with and without shuffled data (default is TRUE) 
+#'
+#' @returns a tibble of optimal models
+#'
+#' @export
+#' @examples
+filterOptimalModel <- function(all_performance_parquet, 
+  MCC_threshold = NULL, 
+  compare_to_shuffled = TRUE) 
+  {
+  stopifnot(file.exists(all_performance_parquet))
+  all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) 
+  
+all_perf |>
+  dplyr::select(
+    species, drug_label, drug_or_class,
+    seed, feature_type, feature_subtype,
+    model, fit_penalty, fit_mixture,
+    shuffled, mcc
+  ) |>
+  tidyr::pivot_wider(
+    names_from = shuffled,
+    values_from = mcc,
+    names_prefix = "shuffled_"
+  ) |>
+  dplyr::rename(
+    nonshuffled_MCC = shuffled_FALSE,
+    shuffled_MCC = shuffled_TRUE
+  ) |>
+  dplyr::mutate(
+    MCC_diff = nonshuffled_MCC - shuffled_MCC
+  ) |>
+  dplyr::filter(
+  if (!is.null(MCC_threshold)) {
+dplyr::filter(nonshuffled_MCC >= MCC_threshold)
+} else {
+TRUE
+},
+  if (compare_to_shuffled) (MCC_diff > 0 | is.na(shuffled_MCC)) else TRUE
+)
+}
+
 #' Score features within each seed
 #'
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
