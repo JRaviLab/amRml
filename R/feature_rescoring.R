@@ -36,11 +36,7 @@ all_perf |>
     MCC_diff = nonshuffled_MCC - shuffled_MCC
   ) |>
   dplyr::filter(
-  if (!is.null(MCC_threshold)) {
-dplyr::filter(nonshuffled_MCC >= MCC_threshold)
-} else {
-TRUE
-},
+  if (!is.null(MCC_threshold))(nonshuffled_MCC >= MCC_threshold) else TRUE,
   if (compare_to_shuffled) (MCC_diff > 0 | is.na(shuffled_MCC)) else TRUE
 )
 }
@@ -133,6 +129,12 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet, core_contribution_
 #' @examples
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSeed(all_top_features_parquet)) {
+  
+  # find max number of seeds
+  max_seeds <- scored_features |>
+  dplyr::summarise(n_seeds = dplyr::n_distinct(seed)) |>
+  dplyr::pull(n_seeds)
+
  feature_summary <- scored_features |>
     dplyr::group_by(
       species,
@@ -143,10 +145,10 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
       variable
     ) |>
     dplyr::summarise(
-    n_seeds = dplyr::n_distinct(seed),
-    mean_rank = mean(rank, na.rm = TRUE),
-    mean_contribution = mean(contribution, na.rm = TRUE),
-    mean_cum_contrib = mean(cum_contrib, na.rm = TRUE),
+    seed_ratio = dplyr::n_distinct(seed)/max_seeds,
+    # mean_rank = mean(rank, na.rm = TRUE),
+    # mean_contribution = mean(contribution, na.rm = TRUE),
+    # mean_cum_contrib = mean(cum_contrib, na.rm = TRUE),
     mean_rank_score = mean(rank_score, na.rm = TRUE),
     median_rank = median(rank, na.rm = TRUE),
     median_contribution = median(contribution, na.rm = TRUE),
@@ -175,9 +177,13 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
 #' This returns the top features for each drug/class.
 #'
 #' @param feature_summary The tibble of summarized features across seeds generated from `summariseFeaturesAcrossSeeds()`
-#' @param rank_score_quantile The quantile threshold for filtering features based on their mean rank scores
-#' @param threshold_sd_rank The threshold for filtering features based on the standard deviation of ranks across seeds
-#'
+#' @param rank_score_quantile The quantile threshold for filtering features based on their median rank scores
+#' @param cv_threshold The threshold for filtering features based on the coefficient of variation of rank scores
+#' @param cumulative_contribution_threshold The threshold for filtering features based on the median cumulative contribution
+#' @param seed_ratio_threshold The threshold for filtering features based on the proportion of seeds in which the feature appears 
+#' @param both_subtypes Logical indicating whether to filter features to keep the ones that appears in both binary and count subtypes 
+#' @param compare_median_to_sd_rank_score Logical indicating whether to filter features to keep the ones that have higher median rank score than standard deviation
+#' 
 #' @returns a tibble of top features for each drug/class,
 #' filtered based on the specified rank score quantile and standard deviation threshold.
 #' The resulting filtered table includes species, drug label, drug or class, feature type, feature subtype, variable,
@@ -191,36 +197,32 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
 #' @export
 topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeaturesAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
-                                        threshold_sd_rank = 1,
-                                        cumulative_contribution_threshold = 0.75
+                                        cv_threshold = 1,
+                                        cumulative_contribution_threshold = 0.75,
+                                        #additional filters
+                                        seed_ratio_threshold = NULL,
+                                        both_subtypes = FALSE,
+                                        compare_median_to_sd_rank_score = FALSE 
                                         ) {
 
 top_features <- feature_summary |>
   dplyr::filter(
-    # sign == "NEG",
-    rank_score_sd <= threshold_sd_rank,
+    if (!is.null(seed_ratio)) seed_ratio == seed_ratio_threshold else TRUE,
+    rank_score_cv <= cv_threshold,
     in_core,
-    median_cum_contribution <= cumulative_contribution_threshold
+    sign_consistent,
+    median_cum_contrib <= cumulative_contribution_threshold,
+    median_rank_score >= quantile(median_rank_score, rank_score_quantile)
   ) |>
   dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
     dplyr::mutate( n_subtype = dplyr::n_distinct(feature_subtype),
   subtype_csv = paste(sort(unique(feature_subtype)), collapse = ",") ) |>
   dplyr::ungroup() |>
-  dplyr::group_by(drug_label, drug_or_class) |>
-  dplyr::filter(
-    median_rank_score >= quantile(median_rank_score, rank_score_quantile)
-  ) |>
-  dplyr::ungroup() |>
-    dplyr::distinct(
-      species, drug_label, drug_or_class,
-      feature_type, feature_subtype, variable, n_subtype, subtype_csv,
-      mean_rank_score, median_rank_score, mean_rank, best_rank,
-      median_rank, mean_contribution, median_contribution,
-      n_seeds, rank_score_sd,
-      sign_consistent, sign
-    ) |>
-dplyr::filter(sign_consistent)
-
+dplyr::filter(
+  if(both_subtypes) (subtype_csv == "binary,counts") else TRUE,
+  if(compare_median_to_sd_rank_score) (median_rank_score > rank_score_sd) else TRUE
+    )
+  
   return(top_features)
 }
 
