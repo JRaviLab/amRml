@@ -4,9 +4,9 @@
 \name{amRml-package}
 \alias{amRml}
 \alias{amRml-package}
-\title{amRml: Machile learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite}
+\title{amRml: Machine learning framework to predict AMR across molecular scales | pkg 2 of 3-pkg amR suite}
 \description{
-Comprehensive machine learning (ML) pipeline for predicting antimicrobial resistance (AMR) in ESKAPE pathogens across molecular scales (gene, protein, domain, structure). Implements logistic regression using tidymodels framework. Supports multi-drug resistance (MDR) and cross-resistance predictions with multiple holdout strategies (geographic, temporal, species). Includes model evaluation, feature importance analysis, cross-scale performance comparison, and functional characterization of top features. Designed to work with data from amRdata package and generate results for amRshiny visualization. Can work independently with example ESKAPE pathogen datasets, too.
+Comprehensive machine learning (ML) pipeline for predicting antimicrobial resistance (AMR) in ESKAPE pathogens across molecular scales (gene, protein, domain, structure). Implements logistic regression using tidymodels framework. Supports multi-drug resistance (MDR) and cross-resistance predictions with multiple holdout strategies (geographic, temporal, species). Includes model evaluation, feature importance analysis, cross-scale performance comparison, and functional characterization of top features. Designed to work with data from amRdata package and generate results for amRviz visualization. Can work independently with example ESKAPE pathogen datasets, too.
 }
 \seealso{
 Useful links:
@@ -30,6 +30,9 @@ Other contributors:
   \item Evan Brenner \email{evan.brenner@cuanschutz.edu} [contributor]
   \item Abhirupa Ghosh \email{abhirupa.ghosh@cuanschutz.edu} [contributor]
   \item David Mayer \email{david.mayer@cuanschutz.edu} [contributor]
+  \item Emily Boyer \email{emily.boyer@cuanschutz.edu} [contributor]
+  \item Charmie Vang \email{charmie.vang@cuanschutz.edu} [contributor]
+  \item Alexander McKim \email{alexander.mckim@cuanschutz.edu} (\href{https://orcid.org/0000-0002-7802-7591}{ORCID}) [contributor]
 }
 
 }

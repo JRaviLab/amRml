@@ -1,7 +1,10 @@
-#' @keywords internal
+#' Resolve ML split parameters
+#'
 #' Pulls the ML parameters .json and reads what model split parameters are to be
 #' used. These defaults can be overridden if you so choose, but consider regenerating
 #' the ML matrices with these new split/CV values instead.
+#'
+#' @keywords internal
 #' @noRd
 .resolveSplitParams <- function(parquet_path,
                                 defaults = list(
@@ -672,6 +675,7 @@ parsed_drugs <- parsed |>
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`).
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -724,21 +728,19 @@ runMDRmodels <- function(path,
     return(invisible(NULL))
   }
 
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add = TRUE)
-  future::plan(future::multisession, workers = threads)
+  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = seed)
 
   if (isTRUE(verbose)) {
-    nw <- tryCatch(future::nbrOfWorkers(), error = function(e) NA_integer_)
-    message("runMDRmodels(): enabling multisession with workers = ", nw)
+    message("runMDRmodels(): enabling SnowParam with workers = ", threads)
   }
 
   # Auto tags for shuffled and PCA
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
   pca_tag <- if (isTRUE(use_pca)) paste0("_pca", as.character(pca_threshold)) else ""
 
-  results_list <- future.apply::future_lapply(
+  results_list <- BiocParallel::bplapply(
     seq_len(nrow(files)),
+    BPPARAM = param,
     FUN = function(i) {
       ref_parquet <- files$ref_file[i]
       output_prefix <- files$output_prefix[i]
@@ -826,8 +828,7 @@ runMDRmodels <- function(path,
       }
 
       NULL
-    },
-    future.seed = TRUE
+    }
   )
 
   if (verbose) {
@@ -863,6 +864,7 @@ runMDRmodels <- function(path,
 #' @param use_saved_split Logical. Whether to inherit split/seed/n_fold from ml_parameters.json. Default TRUE.
 #' @param shuffle_labels Logical. Randomly shuffle labels for baseline runs. Default FALSE.
 #' @param use_pca Logical. Use PCA on predictors. Default FALSE.
+#' @param seed Integer. Seed for the parallel RNG streams (`BiocParallel`).
 #'
 #' @return NULL (invisible). Called for side effects (model training and result saving).
 #'
@@ -1093,13 +1095,10 @@ if (nrow(files) == 0) {
   return(invisible(NULL))
 }
 
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add = TRUE)
-  future::plan(future::multisession, workers = threads)
+  param <- BiocParallel::SnowParam(workers = threads, type = "SOCK", RNGseed = seed)
 
   if (isTRUE(verbose)) {
-    nw <- tryCatch(future::nbrOfWorkers(), error = function(e) NA_integer_)
-    message("runMLmodels(): enabling multisession with workers = ", nw)
+    message("runMLmodels(): enabling SnowParam with workers = ", threads)
   }
 
   # LOO / cross-test configuration prefix
@@ -1126,8 +1125,9 @@ if (nrow(files) == 0) {
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
   pca_tag <- if (isTRUE(use_pca)) paste0("_pca", as.character(pca_threshold)) else ""
 
-  results_list <- future.apply::future_lapply(
+  results_list <- BiocParallel::bplapply(
     seq_len(nrow(files)),
+    BPPARAM = param,
     FUN = function(i) {
       ref_parquet <- files$ref_file[i]
       output_prefix <- files$output_prefix[i]
@@ -1225,8 +1225,7 @@ if (nrow(files) == 0) {
       }
 
       NULL
-    },
-    future.seed = TRUE
+    }
   )
 
   if (verbose) {

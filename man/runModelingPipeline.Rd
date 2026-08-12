@@ -5,8 +5,8 @@
 \title{Run the entire AMR ML pipeline from a parquet-backed DuckDB}
 \usage{
 runModelingPipeline(
-  parquet_duckdb_path,
-  threads = 16,
+  parquet_dir,
+  threads = 8,
   n_fold = 5,
   split = c(1, 0),
   min_n = 25,
@@ -17,7 +17,8 @@ runModelingPipeline(
 )
 }
 \arguments{
-\item{parquet_duckdb_path}{Path to a \verb{<bug>_parquet.duckdb} produced by data_processing.R}
+\item{parquet_dir}{Path to a species-named directory (e.g. \verb{Shigella_flexneri/}) of
+metadata and feature parquets, as produced by data_processing.R}
 
 \item{threads}{Number of parallel workers. Default: 16}
 
@@ -48,15 +49,4 @@ Given a DuckDB file produced by \code{runDataProcessing()}, it:
 \item Runs logistic regression ML models (standard + stratified + cross-test + MDR)
 \item Saves performance metrics, fitted models, predictions, and top feature rankings
 }
-}
-\examples{
-\dontrun{
-runModelingPipeline(
-  parquet_duckdb_path = "path/to/Bug_parquet.duckdb",
-  threads = 16, n_fold = 5, split = c(1, 0), min_n = 25,
-  prop_vi_top_feats = c(0, 1), pca_threshold = 0.99,
-  verbose = TRUE, use_saved_split = TRUE
-)
-}
-
 }

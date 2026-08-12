@@ -116,10 +116,6 @@ parse_ml_filename <- function(filename) {
 #' combines them into a single table, and writes a Parquet file.
 #'
 #' @param path Base directory containing ML results
-#' @param stratify_by NULL, "year", or "country"
-#' @param LOO Logical; leave-one-out analysis
-#' @param MDR Logical; MDR mode
-#' @param cross_test Logical; cross-testing mode
 #' @param out_parquet Output file name
 #' @param compression Compression method (default: "zstd")
 #' @param verbose Logical; print progress
@@ -127,7 +123,9 @@ parse_ml_filename <- function(filename) {
 #' @return A tibble with metadata columns + feature importance data
 #'
 #' @examples
+#' \dontrun{
 #' buildTopFeatsPq("data/Campylobacter")
+#' }
 #'
 #' @export
 buildTopFeatsPq <- function(
@@ -210,7 +208,9 @@ buildTopFeatsPq <- function(
 #' @return A tibble with metadata columns + performance metrics
 #'
 #' @examples
+#' \dontrun{
 #' buildPerfPq("data/Campylobacter")
+#' }
 #'
 #' @export
 buildPerfPq <- function(
@@ -286,10 +286,13 @@ buildPerfPq <- function(
 #'
 #' @return Writes a Parquet file to the same directory
 #'
+#' @examples
+#' \dontrun{
 #' # Year stratified
 #' buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_year_performance/")
 #' # Country stratified
 #' buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_country_performance/")
+#' }
 #' @export
 buildPerfPqYearCountry <- function(
   perf_dir_path
@@ -332,8 +335,10 @@ buildPerfPqYearCountry <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # Cross testing
 #' buildPerfPqCrossDrug(perf_dir_path = "data/Campylobacter/cross_test_ML_performance/")
+#' }
 #'
 #' @export
 buildPerfPqCrossDrug <- function(
@@ -362,7 +367,9 @@ buildPerfPqCrossDrug <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' buildPerfPqCrossYear(perf_dir_path = "data/Campylobacter/cross_test_ML_year_performance/")
+#' }
 #'
 #' @export
 buildPerfPqCrossYear <- function(
@@ -391,7 +398,9 @@ buildPerfPqCrossYear <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' buildPerfPqCrossCountry(perf_dir_path = "data/Campylobacter/cross_test_ML_country_performance/")
+#' }
 #'
 #' @export
 buildPerfPqCrossCountry <- function(
@@ -420,8 +429,10 @@ buildPerfPqCrossCountry <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # LOO drug
 #' buildPerfPqLOODrug(perf_dir_path = "data/Campylobacter/LOO_ML_performance/")
+#' }
 #'
 #' @export
 buildPerfPqLOODrug <- function(
@@ -450,11 +461,13 @@ buildPerfPqLOODrug <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # Year stratified
 #' buildTopFeatsPqYearCountry(top_feat_dir_path = "data/Campylobacter/ML_year_top_features/")
 #'
 #' # Country stratified
 #' buildTopFeatsPqYearCountry(top_feat_dir_path = "data/Campylobacter/ML_country_top_features/")
+#' }
 #'
 #' @export
 buildTopFeatsPqYearCountry <- function(
@@ -502,8 +515,10 @@ buildTopFeatsPqYearCountry <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # LOO drug
 #' buildTopFeatsPqLOODrug(top_feat_dir_path = "data/Campylobacter/LOO_ML_top_features/")
+#' }
 #'
 #' @export
 buildTopFeatsPqLOODrug <- function(
@@ -532,8 +547,10 @@ buildTopFeatsPqLOODrug <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # MDR
 #' buildTopFeatsPqMDR(top_feat_dir_path = "data/Campylobacter/MDR_ML_top_features/")
+#' }
 #'
 #' @export
 buildTopFeatsPqMDR <- function(
@@ -564,8 +581,10 @@ buildTopFeatsPqMDR <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # MDR
 #' buildPerfPqMDR(perf_dir_path = "data/Campylobacter/MDR_ML_performance/")
+#' }
 #'
 #' @export
 buildPerfPqMDR <- function(
@@ -591,13 +610,15 @@ buildPerfPqMDR <- function(
 #' Build Parquet file from MDR ML predictions
 #'
 #'
-#' @param perf_dir_path Directory containing prediction TSV files
+#' @param pred_dir_path Directory containing prediction TSV files
 #'
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # MDR
 #' buildPredPqMDR(pred_dir_path = "data/Campylobacter/MDR_ML_pred/")
+#' }
 #'
 #' @export
 buildPredPqMDR <- function(
@@ -627,8 +648,10 @@ buildPredPqMDR <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # LOO country
 #' buildPerfPqLOOCountry(perf_dir_path = "data/Campylobacter/LOO_ML_country_performance/")
+#' }
 #'
 #' @export
 buildPerfPqLOOCountry <- function(
@@ -652,13 +675,14 @@ buildPerfPqLOOCountry <- function(
 
 #' Build Parquet file from LOO year ML performances
 #' @param perf_dir_path Directory containing performance TSV files
-#' @param top_feat_dir_path Directory containing top feature TSV files
 #'
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #' # LOO year
 #' buildPerfPqLOOYear(perf_dir_path = "data/Campylobacter/LOO_ML_year_performance/")
+#' }
 #'
 #' @export
 buildPerfPqLOOYear <- function(
@@ -687,9 +711,11 @@ buildPerfPqLOOYear <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #'
 #' # LOO country
 #' buildTopFeatsPqLOOCountry(top_feat_dir_path = "data/Campylobacter/LOO_ML_country_top_features/")
+#' }
 #'
 #' @export
 buildTopFeatsPqLOOCountry <- function(
@@ -718,9 +744,11 @@ buildTopFeatsPqLOOCountry <- function(
 #' @return Writes a Parquet file to the same directory
 #'
 #' @examples
+#' \dontrun{
 #'
 #' # LOO year
 #' buildTopFeatsPqLOOYear(top_feat_dir_path = "data/Campylobacter/LOO_ML_year_top_features/")
+#' }
 #'
 #' @export
 buildTopFeatsPqLOOYear <- function(
