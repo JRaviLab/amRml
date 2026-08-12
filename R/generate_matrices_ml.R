@@ -23,14 +23,20 @@ NULL
   }
 }
 
-#' Title
+#' Discover feature tables in a parquet directory
 #'
-#' @param parquet_dir
+#' Finds the feature parquets in `parquet_dir` (those matching `*_count.parquet`
+#' or `struct.parquet`) and determines each one's feature ID column by
+#' elimination, being whichever column is neither `genome_id` nor `value`.
 #'
-#' @returns
+#' @param parquet_dir [character] Path to a species-named directory of parquets,
+#'   such as `inst/extdata/Shigella_flexneri`.
+#' @returns A named list with one element per feature table, each a list of
+#'   `view` (the parquet basename without extension) and `id_col` (the feature
+#'   ID column). Names are the ID columns.
 #'
-#' @export
-#' @examples
+#' @keywords internal
+#' @noRd
 .getFeatureTypes <- function(parquet_dir) {
 
   parquet_files <- list.files(
@@ -274,15 +280,17 @@ skipImbalancedMatrix <- function(genome_ids,
   .sql_escape(path)
 }
 
-#' Title
+#' Register parquet files as DuckDB views
 #'
-#' @param con
-#' @param parquet_dir
+#' Creates one DuckDB view per parquet in `parquet_dir`: `metadata` plus one for
+#' each feature table found by `.getFeatureTypes()`.
 #'
-#' @returns
+#' @param con A DuckDB connection, as returned by `DBI::dbConnect()`.
+#' @param parquet_dir [character] Path to a species-named directory of parquets.
+#' @returns Invisibly, a character vector of the view names created.
 #'
-#' @export
-#' @examples
+#' @keywords internal
+#' @noRd
 .register_parquet_views <- function(con, parquet_dir) {
 
   feature_types <- .getFeatureTypes(parquet_dir)
@@ -1256,8 +1264,11 @@ log(
 #'             Expected subdirs: matrix/..
 #' @param verbosity Character. "minimal" or "debug"; when "debug", prints detailed steps.
 #'
-#' @returns
-#' @examples
+#' @returns Invisibly, a tibble with one `created_file` column listing the
+#'   matrices written to `cross_drug_test/`.
+#'
+#' @keywords internal
+#' @noRd
 .parquet2CrossDrugTestMatrix <- function(
   path,
   verbosity = c("minimal", "debug")
