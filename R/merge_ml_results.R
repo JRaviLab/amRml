@@ -21,6 +21,7 @@
 #'
 #' @examples
 #' parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.tsv")
+#' parse_ml_filename("Csp_drug_year_AMX_2010-2015_genes_binary_year_42_performance.tsv")
 #'
 #' @export
 parse_ml_filename <- function(filename) {
@@ -63,25 +64,30 @@ parse_ml_filename <- function(filename) {
     # Case A: drug_class
     if (xs[i + 1] == "class") {
       out$drug_label <- "drug_class"
-      out$drug_or_class <- xs[i + 2]
-      i <- i + 3
+      i <- i + 2
     }
     # Case B: simple drug
     else {
       out$drug_label <- "drug"
-      out$drug_or_class <- xs[i + 1]
-      i <- i + 2
+      i <- i + 1
     }
   } else {
     stop("ERROR: expected 'drug' token after species")
   }
 
   # ---------------------------
-  # 4. Stratified?
+  # 4. Stratified? (the strat label, if present, comes before the
+  # drug/drug_class value, e.g. "..._drug_year_AMX_2010-2015_...")
   # ---------------------------
   if (i <= length(xs) && xs[i] %in% c("year", "country")) {
     out$strat_label <- xs[i]
     i <- i + 1
+  }
+
+  out$drug_or_class <- xs[i]
+  i <- i + 1
+
+  if (!is.na(out$strat_label)) {
     out$strat_value <- xs[i]
     i <- i + 1
   }

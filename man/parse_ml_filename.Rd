@@ -30,5 +30,6 @@ feature types, and seed information.
 }
 \examples{
 parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.tsv")
+parse_ml_filename("Csp_drug_year_AMX_2010-2015_genes_binary_year_42_performance.tsv")
 
 }
