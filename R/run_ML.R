@@ -201,9 +201,17 @@ createMLinputList <- function(path,
 
   path <- normalizePath(path)
 
-#  if (isTRUE(LOO) && (is.null(stratify_by) || !(stratify_by %in% c("year", "country")))) {
- #   stop("For Leave-One-Out (LOO) models, stratify_by must be 'year' or 'country'.")
- # }
+  # Leave-one-drug-out cross-testing (LOO + cross_test) is a separate mode
+  # that doesn't stratify by year/country - see the `cross_test && LOO`
+  # branch below. Stratified LOO (leave-one-year/country-out) always needs
+  # stratify_by, whether or not it's also cross-tested.
+  if (isTRUE(LOO) && !isTRUE(cross_test) &&
+    (is.null(stratify_by) || !(stratify_by %in% c("year", "country")))) {
+    stop(
+      "For Leave-One-Out (LOO) models without cross-testing, ",
+      "stratify_by must be 'year' or 'country'."
+    )
+  }
 
   if (isTRUE(MDR) && (!is.null(stratify_by) || LOO || cross_test)) {
     stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
@@ -579,7 +587,9 @@ parsed_drugs <- parsed |>
     out_top     = paths$ML_top_features,
     out_models  = paths$ML_models,
     out_pred    = paths$ML_prediction
-  ) 
+  )
+
+            return(out)
             }
       # LOO requires special directory structure resolution
       test_path <- file.path(path, stringr::str_remove(basename(paths$matrix_path), "^LOO_"))
@@ -1002,7 +1012,12 @@ runMLmodels <- function(path,
     MDR         = FALSE,
     cross_test  = cross_test
   )
-    
+
+  if (nrow(files) == 0) {
+    message("No files found to process. Exiting.")
+    return(invisible(NULL))
+  }
+
 .findNonRanPrefixes <- function(files,
                                 seed,
                                 shuffle_labels = FALSE) {
