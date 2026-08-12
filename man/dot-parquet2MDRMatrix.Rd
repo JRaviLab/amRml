@@ -4,15 +4,10 @@
 \alias{.parquet2MDRMatrix}
 \title{Generate ML input matrix for multidrug resistance analysis}
 \usage{
-.parquet2MDRMatrix(
-  parquet_duckdb_path,
-  path,
-  min_n,
-  verbosity = c("minimal", "debug")
-)
+.parquet2MDRMatrix(parquet_dir, path, min_n, verbosity = c("minimal", "debug"))
 }
 \arguments{
-\item{parquet_duckdb_path}{\link{character} Path to the DuckDB that contains the view of metadata and feature parquets}
+\item{parquet_dir}{\link{character} Path to the directory that contains the metadata and feature parquets}
 
 \item{path}{\link{character} Working directory}
 

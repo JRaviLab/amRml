@@ -9,8 +9,8 @@ runMLmodels(
   stratify_by = NULL,
   LOO = FALSE,
   cross_test = FALSE,
-  threads = 16,
-  split = c(0.8, 0),
+  threads = 8,
+  split = c(1, 0),
   n_fold = 5,
   prop_vi_top_feats = c(0, 1),
   pca_threshold = 0.99,
@@ -21,7 +21,7 @@ runMLmodels(
   use_saved_split = TRUE,
   shuffle_labels = FALSE,
   use_pca = FALSE,
-  seed = 5280
+  seed = 123
 )
 }
 \arguments{
@@ -57,7 +57,7 @@ runMLmodels(
 
 \item{use_pca}{Logical. Use PCA on predictors. Default FALSE.}
 
-\item{seed}{Integer. Seed for the parallel RNG streams (\code{BiocParallel}). Default 5280.}
+\item{seed}{Integer. Seed for the parallel RNG streams (\code{BiocParallel}).}
 }
 \value{
 NULL (invisible). Called for side effects (model training and result saving).
@@ -124,7 +124,8 @@ For example: \code{"LOO_cross_test_ML_year_performance.tsv"}
 \note{
 This function requires the following packages:
 \itemize{
-\item \pkg{BiocParallel} - for parallel processing backend
+\item \pkg{future} - for parallel processing backend
+\item \pkg{future.apply} - for parallel lapply
 \item \pkg{readr} - for reading/writing TSV files
 \item \pkg{dplyr}, \pkg{purrr}, \pkg{stringr}, \pkg{tibble} - for data manipulation
 }

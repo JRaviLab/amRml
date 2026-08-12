@@ -35,8 +35,7 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{model}{\link[rlang:chr]{chr} Logistic regression ("LR"), random forest ("RF"), or
-boosted tree ("BT")}
+\item{model}{\link[rlang:chr]{chr} Logistic regression ("LR")}
 
 \item{split}{\link[pillar:num]{num} Vector of length 2 indicating the proportion of data to
 be designated as training and validation, respectively. Note: if \code{test_data}

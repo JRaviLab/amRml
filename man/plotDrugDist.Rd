@@ -17,5 +17,5 @@ Reads metadata and generates a stacked bar plot showing counts of resistant
 and susceptible phenotypes per antibiotic.
 }
 \examples{
-plotDrugDist(metadata_path = system.file("extdata", package = "amRml"))
+plotDrugDist(metadata_path = system.file("extdata", "Shigella_flexneri", package = "amRml"))
 }

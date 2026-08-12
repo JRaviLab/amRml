@@ -42,6 +42,6 @@ performance <- tibble::tibble(
 plotCrossDrug(
   cross_test_performance_path = cross_drug,
   drug_performance_path = performance,
-  metadata_path = system.file("extdata", package = "amRml")
+  metadata_path = system.file("extdata", "Shigella_flexneri", package = "amRml")
 )
 }
