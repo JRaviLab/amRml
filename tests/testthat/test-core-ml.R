@@ -176,3 +176,48 @@ test_that(".viGlmnet reproduces vip::vi() for binomial glmnet fits", {
   expected <- expected[names(expected) != "(Intercept)"]
   expect_equal(vi$Importance, sort(abs(unname(expected)), decreasing = TRUE))
 })
+
+test_that(".viGlmnet labels exactly-zero coefficients NA, not \"NEG\"", {
+  # Mock .viGlmnet()'s two external calls so a zero coefficient is
+  # guaranteed, rather than depending on a real fit happening to produce
+  # one. positive/negative/zero coefficients, plus an intercept that must
+  # be dropped.
+  local_mocked_bindings(
+    extract_fit_engine = function(fit) list(lambda = c(0.5, 0.1, 0.01)),
+    .package = "parsnip"
+  )
+  local_mocked_bindings(
+    coef = function(object, s, ...) {
+      matrix(
+        c(1, 2, -3, 0),
+        dimnames = list(
+          c("(Intercept)", "pos_feat", "neg_feat", "zero_feat"), NULL
+        )
+      )
+    },
+    .package = "stats"
+  )
+
+  vi <- .viGlmnet(fit = "placeholder")
+
+  expect_equal(unname(vi$Sign[vi$Variable == "pos_feat"]), "POS")
+  expect_equal(unname(vi$Sign[vi$Variable == "neg_feat"]), "NEG")
+  expect_true(is.na(vi$Sign[vi$Variable == "zero_feat"]))
+})
+
+test_that("extractTopFeats includes the last feature at prop_vi_top_feats = c(0, 1)", {
+  skip_if_missing_deps()
+  fx <- make_pipeline_fixture()
+  mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 0) |>
+    parsnip::set_engine("glmnet")
+  fit <- buildWflow(mod, buildRecipe(fx)) |> parsnip::fit(data = fx)
+
+  # The default prop_vi_top_feats = c(0, 1) is documented to return all
+  # features; the strict "<" upper-bound comparison used to drop the least
+  # important one, since its cumulative importance exactly equals the total.
+  all_feats <- .viGlmnet(fit)
+  top <- extractTopFeats(fit, prop_vi_top_feats = c(0, 1), n_top_feats = NA)
+
+  expect_equal(nrow(top), nrow(all_feats))
+  expect_setequal(top$Variable, all_feats$Variable)
+})

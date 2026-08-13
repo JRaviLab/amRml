@@ -46,8 +46,6 @@
 #' @importFrom workflows add_model
 #' @importFrom workflows add_recipe
 #' @importFrom workflows workflow
-#' @importFrom workflowsets extract_fit_parsnip
-#' @importFrom workflowsets extract_spec_parsnip
 #' @importFrom yardstick bal_accuracy
 #' @importFrom yardstick conf_mat
 #' @importFrom yardstick f_meas
@@ -249,10 +247,9 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' )
 #' @export
 buildTuningGrid <- function(
-  model = "LR",
-  penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5 / 5
-) {
+    model = "LR",
+    penalty_vec = 10^seq(-4, -1, length.out = 10),
+    mix_vec = 0:5 / 5) {
   .checkArgModel(model)
 
   if (model == "LR") {
@@ -770,7 +767,7 @@ calculateEvalMets <- function(test_data_plus_predictions) {
   tibble::tibble(
     Variable = names(coefs),
     Importance = abs(unname(coefs)),
-    Sign = ifelse(coefs > 0, "POS", "NEG")
+    Sign = ifelse(coefs > 0, "POS", ifelse(coefs < 0, "NEG", NA_character_))
   ) |>
     dplyr::arrange(dplyr::desc(Importance))
 }
@@ -796,9 +793,8 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 #' extractTopFeats(demo_fit, n_top_feats = 10)
 #' @export
 extractTopFeats <- function(
-  fit, prop_vi_top_feats = c(0, 1),
-  n_top_feats = NA
-) {
+    fit, prop_vi_top_feats = c(0, 1),
+    n_top_feats = NA) {
   .checkArgWflow(fit)
 
   if (!is.na(n_top_feats)) {
@@ -860,7 +856,7 @@ extractTopFeats <- function(
 
     top_feats_and_VIs <- feats_arranged |>
       dplyr::mutate(cum_imp = cumsum(Importance)) |>
-      dplyr::filter(cum_imp < cum_vi_upper & cum_imp > cum_vi_lower)
+      dplyr::filter(cum_imp <= cum_vi_upper & cum_imp > cum_vi_lower)
   }
 
   top_feat_tibble <- tibble::tibble(
