@@ -60,9 +60,33 @@ all_perf |>
 #' @examples
 #' scoreFeaturesWithinSeed(all_top_features.parquet)
 #'
-scoreFeaturesWithinSeed <- function(all_top_features_parquet, core_contribution_threshold = 0.75, exclude_feature_types = "struct") {
-
+scoreFeaturesWithinSeed <- function(all_top_features_parquet, 
+  core_contribution_threshold = 0.75, 
+  exclude_feature_types = "struct",
+filter_model = TRUE, 
+  all_performance_parquet = NULL, 
+  MCC_threshold = NULL, 
+  compare_to_shuffled = TRUE) 
+  {
+  
   stopifnot(file.exists(all_top_features_parquet))
+
+   if(filter_model) {
+     stopifnot(file.exists(all_performance_parquet))
+     
+    filtered_model <- filterOptimalModel(
+      normalizedPath(all_performance_parquet),
+    MCC_threshold = MCC_threshold, 
+    compare_to_shuffled = compare_to_shuffled
+    )
+    
+    feature_summary <- feature_summary |> 
+      dplyr::semi_join(
+        filtered_model, by = dplyr::join_by(species, drug_label, drug_or_class, feature_type, feature_subtype, seed)
+      )
+   }
+
+
   scored_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
     dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types) |>
     dplyr::select(
@@ -195,7 +219,8 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
 #' Every drug/class may not have variables from all feature types.
 #'
 #' @export
-topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeaturesAcrossSeeds(scored_features),
+topFeaturesPerDrugOrClass <- function( 
+  feature_summary = summariseFeaturesAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
                                         cv_threshold = 1,
                                         cumulative_contribution_threshold = 0.75,
@@ -204,10 +229,10 @@ topFeaturesPerDrugOrClass <- function(feature_summary = summariseFeaturesAcrossS
                                         both_subtypes = FALSE,
                                         compare_median_to_sd_rank_score = FALSE 
                                         ) {
-
+  
 top_features <- feature_summary |>
   dplyr::filter(
-    if (!is.null(seed_ratio)) seed_ratio == seed_ratio_threshold else TRUE,
+    if (!is.null(seed_ratio_threshold)) seed_ratio == seed_ratio_threshold else TRUE,
     rank_score_cv <= cv_threshold,
     in_core,
     sign_consistent,
