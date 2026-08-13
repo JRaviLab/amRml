@@ -46,6 +46,10 @@ all_perf |>
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
 #' @param core_contribution_threshold The cumulative-contribution cutoff (default 0.75, i.e. 75%) used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.
 #' @param exclude_feature_types Feature types to drop before any scoring happens (default \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.
+#' @param filter_model Logical whether to filter the optimal model based on MCC and comparison to shuffled data (default is TRUE). If TRUE function will call \code{filterOptimalModel()} 
+#' @param all_performance_parquet The path to the all performance parquet file (required if \code{filter_model = TRUE})
+#' @param MCC_threshold The minimum MCC threshold for filtering the optimal model (default is NULL)
+#' @param compare_to_shuffled Logical whether to compare the model to shuffled data (default is TRUE)
 #'
 #' @returns a tibble of scored top features with their contribution, cumulative contribution, core membership, rank, and rank score within each seed.
 #' within a seed
@@ -63,8 +67,8 @@ all_perf |>
 scoreFeaturesWithinSeed <- function(all_top_features_parquet, 
   core_contribution_threshold = 0.75, 
   exclude_feature_types = "struct",
-filter_model = TRUE, 
-  all_performance_parquet = NULL, 
+  filter_model = TRUE, 
+  all_performance_parquet, 
   MCC_threshold = NULL, 
   compare_to_shuffled = TRUE) 
   {
@@ -73,22 +77,25 @@ filter_model = TRUE,
 
    if(filter_model) {
      stopifnot(file.exists(all_performance_parquet))
-     
+
     filtered_model <- filterOptimalModel(
-      normalizedPath(all_performance_parquet),
+      normalizePath(all_performance_parquet),
     MCC_threshold = MCC_threshold, 
     compare_to_shuffled = compare_to_shuffled
     )
     
-    feature_summary <- feature_summary |> 
+    all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
+    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types) |>
       dplyr::semi_join(
-        filtered_model, by = dplyr::join_by(species, drug_label, drug_or_class, feature_type, feature_subtype, seed)
+        filtered_model, by = dplyr::join_by(species, drug_label, drug_or_class, 
+          feature_type, feature_subtype, seed)
       )
    }
 
-
-  scored_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
-    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types) |>
+all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
+    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types)
+  
+  scored_top_features <- all_top_features |>
     dplyr::select(
       species, drug_label, drug_or_class, seed,
       feature_type, feature_subtype, variable=Variable,
@@ -152,7 +159,7 @@ filter_model = TRUE,
 #' @export
 #' @examples
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
-summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSeed(all_top_features_parquet)) {
+summariseFeaturesAcrossSeeds <- function(scored_features) {
   
   # find max number of seeds
   max_seeds <- scored_features |>
@@ -220,7 +227,14 @@ summariseFeaturesAcrossSeeds <- function(scored_features = scoreFeaturesWithinSe
 #'
 #' @export
 topFeaturesPerDrugOrClass <- function( 
-  feature_summary = summariseFeaturesAcrossSeeds(scored_features),
+  all_top_features_parquet, 
+  core_contribution_threshold = 0.75, 
+  exclude_feature_types = "struct",
+  filter_model = TRUE, 
+  all_performance_parquet, 
+  MCC_threshold = NULL, 
+  compare_to_shuffled = TRUE,
+  # feature_summary = summariseFeaturesAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
                                         cv_threshold = 1,
                                         cumulative_contribution_threshold = 0.75,
@@ -228,8 +242,21 @@ topFeaturesPerDrugOrClass <- function(
                                         seed_ratio_threshold = NULL,
                                         both_subtypes = FALSE,
                                         compare_median_to_sd_rank_score = FALSE 
-                                        ) {
+                                        ) 
+                                        {
   
+  scored_features <- scoreFeaturesWithinSeed(
+  all_top_features_parquet, 
+  core_contribution_threshold = 0.75, 
+  exclude_feature_types = "struct",
+  filter_model = TRUE, 
+  all_performance_parquet, 
+  MCC_threshold = NULL, 
+  compare_to_shuffled = TRUE
+  )
+
+  feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
+
 top_features <- feature_summary |>
   dplyr::filter(
     if (!is.null(seed_ratio_threshold)) seed_ratio == seed_ratio_threshold else TRUE,
