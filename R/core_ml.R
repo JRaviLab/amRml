@@ -249,10 +249,9 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' )
 #' @export
 buildTuningGrid <- function(
-  model = "LR",
-  penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5 / 5
-) {
+    model = "LR",
+    penalty_vec = 10^seq(-4, -1, length.out = 10),
+    mix_vec = 0:5 / 5) {
   .checkArgModel(model)
 
   if (model == "LR") {
@@ -602,12 +601,12 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     nrow(test_data_plus_predictions)
 
   if (prior > 0.3 && prior < 0.7) {
-    message(
+    warning(
       "Classes are roughly balanced. ",
       "Calculation of log2(AUPRC/prior) may be inappropriate."
     )
   } else if (prior >= 0.7) {
-    message(
+    warning(
       "Classes are imbalanced for this model. ",
       "The use of the log2(AUPRC/prior) metric may be more informative in this imbalanced model."
     )
@@ -796,9 +795,8 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 #' extractTopFeats(demo_fit, n_top_feats = 10)
 #' @export
 extractTopFeats <- function(
-  fit, prop_vi_top_feats = c(0, 1),
-  n_top_feats = NA
-) {
+    fit, prop_vi_top_feats = c(0, 1),
+    n_top_feats = NA) {
   .checkArgWflow(fit)
 
   if (!is.na(n_top_feats)) {

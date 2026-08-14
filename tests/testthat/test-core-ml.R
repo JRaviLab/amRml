@@ -176,3 +176,34 @@ test_that(".viGlmnet reproduces vip::vi() for binomial glmnet fits", {
   expected <- expected[names(expected) != "(Intercept)"]
   expect_equal(vi$Importance, sort(abs(unname(expected)), decreasing = TRUE))
 })
+
+make_log2apop_fixture <- function(n_resistant, n_susceptible, seed = 1) {
+  set.seed(seed)
+  phenotype <- factor(
+    c(rep("Resistant", n_resistant), rep("Susceptible", n_susceptible)),
+    levels = c("Resistant", "Susceptible")
+  )
+  pred_resistant <- ifelse(
+    phenotype == "Resistant",
+    stats::runif(length(phenotype), 0.6, 0.95),
+    stats::runif(length(phenotype), 0.05, 0.4)
+  )
+  tibble::tibble(
+    genome_drug.resistant_phenotype = phenotype,
+    .pred_class = factor(
+      ifelse(pred_resistant > 0.5, "Resistant", "Susceptible"),
+      levels = c("Resistant", "Susceptible")
+    ),
+    .pred_Resistant = pred_resistant
+  )
+}
+
+test_that(".calculateLog2APOP warns (not just messages) on roughly balanced classes", {
+  fx <- make_log2apop_fixture(n_resistant = 5, n_susceptible = 5)
+  expect_warning(amRml:::.calculateLog2APOP(fx), "roughly balanced")
+})
+
+test_that(".calculateLog2APOP warns (not just messages) on imbalanced classes", {
+  fx <- make_log2apop_fixture(n_resistant = 9, n_susceptible = 1)
+  expect_warning(amRml:::.calculateLog2APOP(fx), "imbalanced")
+})
