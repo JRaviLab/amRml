@@ -327,7 +327,7 @@ runMLPipeline <- function(
     prop_vi_top_feats = prop_vi_top_feats
   )
 
-  # Account for the case where `vip::vi()` assigned a variable importance of
+  # Account for the case where a feature was assigned a variable importance of
   # zero, thereby not including the full `n_top_feats` requested. Do this only
   # if `n_top_feats` was specified instead of `prop_vi_top_feats`. Features will
   # be randomly assigned as top hits. This is important for downstream
