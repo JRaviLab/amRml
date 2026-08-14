@@ -7,7 +7,7 @@
 #'
 #' @returns a tibble of optimal models
 #'
-#' @export
+#' @keywords internal
 #' @examples
 filterOptimalModel <- function(all_performance_parquet, 
   MCC_threshold = NULL, 
@@ -60,7 +60,7 @@ all_perf |>
 #' rank score is calculated as (n_features - rank) / (n_features - 1), where n_features is the total number of features within the same seed.
 #' rank score is ranged between 0 and 1, with higher values indicating higher importance.
 #'
-#' @export
+#' @keywords internal
 #' @examples
 #' scoreFeaturesWithinSeed(all_top_features.parquet)
 #'
@@ -72,28 +72,41 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
   MCC_threshold = NULL, 
   compare_to_shuffled = TRUE) 
   {
-  
+  # check for the all_perf.parquet and all_top_features.parquet files
   stopifnot(file.exists(all_top_features_parquet))
+  stopifnot(file.exists(all_performance_parquet))
 
-   if(filter_model) {
-     stopifnot(file.exists(all_performance_parquet))
+  all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
+  dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types)
 
-    filtered_model <- filterOptimalModel(
-      normalizePath(all_performance_parquet),
-    MCC_threshold = MCC_threshold, 
+if (filter_model) {
+  filtered_model <- filterOptimalModel(
+    normalizePath(all_performance_parquet),
+    MCC_threshold = MCC_threshold,
     compare_to_shuffled = compare_to_shuffled
-    )
-    
-    all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
-    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types) |>
-      dplyr::semi_join(
-        filtered_model, by = dplyr::join_by(species, drug_label, drug_or_class, 
-          feature_type, feature_subtype, seed)
-      )
-   }
+  )
 
-all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
-    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types)
+  all_top_features <- all_top_features |>
+    dplyr::semi_join(
+      filtered_model,
+      by = dplyr::join_by(
+        species, drug_label, drug_or_class,
+        feature_type, feature_subtype, seed
+      )
+    )
+}
+
+  # Since the models are elastic net and have mix of models from lasso to ridge
+  # lasso shrinks the feature space to fewer selected variables and
+  # ridge retains variables (keeps correlated variables together). 
+  # calculate the selection score to give advantage to lasso model variables.
+all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
+  dplyr::filter(!shuffled) |>
+  dplyr::select(species, drug_label, drug_or_class, seed, 
+    feature_type, feature_subtype, fit_penalty, fit_mixture, 
+    mcc, n_feat, n_feats_returned) |> 
+  dplyr::mutate(feat_return_ratio = n_feats_returned / n_feat,
+  sparsity_score = 1 - feat_return_ratio)
   
   scored_top_features <- all_top_features |>
     dplyr::select(
@@ -112,6 +125,8 @@ all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet))
         TRUE ~ variable
       )
     )|>
+    dplyr::left_join(all_perf, by = dplyr::join_by(species, drug_label, drug_or_class, seed,
+      feature_type, feature_subtype)) |>
     dplyr::group_by(
       species,
       drug_label,
@@ -122,6 +137,7 @@ all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet))
     ) |>
     dplyr::mutate(
       contribution = importance / sum(importance, na.rm = TRUE),
+      adjusted_contribution = contribution * sparsity_score,
       rank = rank(dplyr::desc(contribution), ties.method = "average"),
       n_features = dplyr::n(),
       rank_score = dplyr::if_else(
@@ -156,7 +172,7 @@ all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet))
 #' rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank_score varies across seeds, computed on the normalized rank_score rather than raw rank so it is comparable across groups with different numbers of features),
 #' sign consistency (TRUE if the sign is same across seeds), and sign (the sign of the feature; POS, NEG or MIXED).
 #'
-#' @export
+#' @keywords internal
 #' @examples
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 summariseFeaturesAcrossSeeds <- function(scored_features) {
@@ -255,7 +271,7 @@ topFeaturesPerDrugOrClass <- function(
   compare_to_shuffled = TRUE
   )
 
-  feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
+feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
 
 top_features <- feature_summary |>
   dplyr::filter(
