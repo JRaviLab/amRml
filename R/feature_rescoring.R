@@ -50,6 +50,7 @@ all_perf |>
 #' @param all_performance_parquet The path to the all performance parquet file (required if \code{filter_model = TRUE})
 #' @param MCC_threshold The minimum MCC threshold for filtering the optimal model (default is NULL)
 #' @param compare_to_shuffled Logical whether to compare the model to shuffled data (default is TRUE)
+#' @param add_lasso_advtg Logical whether to add a sparsity score to give advantage to models with less returned features compared to the total number of features (default is TRUE)
 #'
 #' @returns a tibble of scored top features with their contribution, cumulative contribution, core membership, rank, and rank score within each seed.
 #' within a seed
@@ -70,7 +71,8 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
   filter_model = TRUE, 
   all_performance_parquet, 
   MCC_threshold = NULL, 
-  compare_to_shuffled = TRUE) 
+  compare_to_shuffled = TRUE, 
+add_lasso_advtg = TRUE) 
   {
   # check for the all_perf.parquet and all_top_features.parquet files
   stopifnot(file.exists(all_top_features_parquet))
@@ -106,8 +108,9 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
     feature_type, feature_subtype, fit_penalty, fit_mixture, 
     mcc, n_feat, n_feats_returned) |> 
   dplyr::mutate(feat_return_ratio = n_feats_returned / n_feat,
-  sparsity_score = 1 - feat_return_ratio)
+  if(add_lasso_advtg) (sparsity_score = 1 - feat_return_ratio) else (sparsity_score = 1))
   
+  # add different layers of scoring to the features within each seed 
   scored_top_features <- all_top_features |>
     dplyr::select(
       species, drug_label, drug_or_class, seed,
@@ -137,18 +140,20 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
     ) |>
     dplyr::mutate(
       contribution = importance / sum(importance, na.rm = TRUE),
-      adjusted_contribution = contribution * sparsity_score,
-      rank = rank(dplyr::desc(contribution), ties.method = "average"),
+      adjusted_contribution = contribution * sparsity_score
+    ) |>
+    dplyr::arrange(dplyr::desc(adjusted_contribution), .by_group = TRUE) |>
+    dplyr::mutate(
+      rank = rank(dplyr::desc(adjusted_contribution), ties.method = "average"),
       n_features = dplyr::n(),
       rank_score = dplyr::if_else(
         n_features > 1,
         (n_features - rank) / (n_features - 1),
         1
-      )
+      ),
+      running_contrib = cumsum(adjusted_contribution)
     ) |>
-    dplyr::arrange(dplyr::desc(contribution), .by_group = TRUE) |>
-    dplyr::mutate(running_contrib = cumsum(contribution)) |>
-    dplyr::group_by(contribution, .add = TRUE) |>
+    dplyr::group_by(adjusted_contribution, .add = TRUE) |>
     dplyr::mutate(
       cum_contrib = max(running_contrib),
       in_core = cum_contrib <= core_contribution_threshold
@@ -198,7 +203,7 @@ summariseFeaturesAcrossSeeds <- function(scored_features) {
     # mean_cum_contrib = mean(cum_contrib, na.rm = TRUE),
     mean_rank_score = mean(rank_score, na.rm = TRUE),
     median_rank = median(rank, na.rm = TRUE),
-    median_contribution = median(contribution, na.rm = TRUE),
+    median_contribution = median(adjusted_contribution, na.rm = TRUE),
     median_cum_contrib = median(cum_contrib, na.rm = TRUE),
     median_rank_score = median(rank_score, na.rm = TRUE),
     best_rank = min(rank, na.rm = TRUE),
@@ -250,6 +255,7 @@ topFeaturesPerDrugOrClass <- function(
   all_performance_parquet, 
   MCC_threshold = NULL, 
   compare_to_shuffled = TRUE,
+  add_lasso_advtg = TRUE,
   # feature_summary = summariseFeaturesAcrossSeeds(scored_features),
                                         rank_score_quantile = 0.95,
                                         cv_threshold = 1,
@@ -263,12 +269,13 @@ topFeaturesPerDrugOrClass <- function(
   
   scored_features <- scoreFeaturesWithinSeed(
   all_top_features_parquet, 
-  core_contribution_threshold = 0.75, 
-  exclude_feature_types = "struct",
-  filter_model = TRUE, 
+  core_contribution_threshold = core_contribution_threshold, 
+  exclude_feature_types = exclude_feature_types,
+  filter_model = filter_model, 
   all_performance_parquet, 
-  MCC_threshold = NULL, 
-  compare_to_shuffled = TRUE
+  MCC_threshold = MCC_threshold, 
+  compare_to_shuffled = compare_to_shuffled,
+  add_lasso_advtg = add_lasso_advtg
   )
 
 feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
