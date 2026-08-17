@@ -2,27 +2,34 @@
 % Please edit documentation in R/feature_rescoring.R
 \name{summariseFeaturesAcrossSeeds}
 \alias{summariseFeaturesAcrossSeeds}
-\title{Summarize a variable across seeds}
+\title{Summarize a feature's scoring across seeds}
 \usage{
-summariseFeaturesAcrossSeeds(
-  scored_features = scoreFeaturesWithinSeed(all_top_features_parquet)
-)
+summariseFeaturesAcrossSeeds(scored_features)
 }
 \arguments{
 \item{scored_features}{The tibble of scored top features with their contribution, rank, and rank score within each seed generated from \code{scoreFeaturesWithinSeed()}}
 }
 \value{
-a tibble of summarized features across seeds, including the number of seeds,
-mean and median rank,
-mean and median contribution,
-mean and median rank score (scaled between 0 and 1 with higher values indicating higher importance),
-best rank,
-rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank_score varies across seeds, computed on the normalized rank_score rather than raw rank so it is comparable across groups with different numbers of features),
-sign consistency (TRUE if the sign is same across seeds), and sign (the sign of the feature; POS, NEG or MIXED).
+a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_subtype/variable, with:
+\itemize{
+\item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
+\item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
+\item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
+\item \code{median_contribution}: median of \code{adjusted_contribution} across seeds. (\code{mean_contribution} is not currently computed.)
+\item \code{median_cum_contrib}: median of \code{cum_contrib} across seeds.
+\item \code{best_rank}: the best (lowest) rank seen across seeds.
+\item \code{rank_consistent}: TRUE if the feature's rank is identical in every seed.
+\item \code{rank_score_sd}, \code{rank_score_cv}: standard deviation and coefficient of variation of \code{rank_score} across seeds, i.e. how much the normalized rank_score varies — computed on \code{rank_score} rather than raw rank so it is comparable across groups with different numbers of features.
+\item \code{in_core_consistent}, \code{in_core}: whether the feature's \code{in_core} flag is identical across every seed; \code{in_core} is that shared value if consistent, else \code{FALSE}.
+\item \code{sign_consistent}, \code{sign}: whether the feature's \code{sign} is identical across every seed; \code{sign} is that shared value if consistent, else \code{"MIXED"}.
+}
 }
 \description{
-Summarize a variable across seeds
+Answers "which molecular features are consistently important?" by
+collapsing the per-seed rows from \code{scoreFeaturesWithinSeed()} down to one
+row per feature.
 }
 \examples{
 summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 }
+\keyword{internal}

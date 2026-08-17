@@ -2,7 +2,7 @@
 % Please edit documentation in R/feature_rescoring.R
 \name{findUniqueClusters}
 \alias{findUniqueClusters}
-\title{find the clusters that are unique to a single drug/class}
+\title{Find the clusters that are unique to a single drug/class}
 \usage{
 findUniqueClusters(
   top_clusters = summariseClusters(top_features, cluster_feature_parquet),
@@ -13,16 +13,15 @@ findUniqueClusters(
 \arguments{
 \item{top_clusters}{The tibble of summarized clusters generated from \code{summariseClusters()}}
 
-\item{label}{The label to filter clusters by, either "drug" or "drug_class"}
+\item{label}{The \code{drug_label} value to filter clusters by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})}
 
 \item{protein_names_parquet}{The path to the Parquet file containing the annotations to protein cluster names}
 }
 \value{
-a tibble of clusters unique to a single drug/class, including drug or class, cluster,
-cluster name (from protein name annotations), and cluster mean rank score, sorted by cluster mean rank score in descending order.
+a tibble with one row per cluster unique to a single drug/class, with \code{drug_or_class}, \code{cluster}, \code{cluster_name} (from the protein name annotations), and \code{cluster_mean_rank_score}, sorted by \code{cluster_mean_rank_score} descending.
 }
 \description{
-find the clusters that are unique to a single drug/class
+Find the clusters that are unique to a single drug/class
 }
 \examples{
 findUniqueClusters(summariseClusters(top_features, cluster_feature_parquet), label = "drug", protein_names_parquet)

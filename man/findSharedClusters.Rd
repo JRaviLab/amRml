@@ -13,12 +13,12 @@ findSharedClusters(
 \arguments{
 \item{top_clusters}{The tibble of summarized clusters generated from \code{summariseClusters()}}
 
-\item{label}{The label to filter clusters by, either "drug" or "drug_class"}
+\item{label}{The \code{drug_label} value to filter clusters by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})}
 
-\item{min_drugs_or_classes}{The minimum number of distinct drugs or classes required for a cluster to be considered shared}
+\item{min_drugs_or_classes}{The minimum number of distinct drugs or classes required for a cluster to be considered shared (default is \code{2})}
 }
 \value{
-a tibble of shared clusters, including cluster, number of distinct drugs or classes, and a comma-separated string of the distinct drugs or classes.
+a tibble with one row per shared \code{cluster}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the cluster appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
 }
 \description{
 Find clusters that appear across multiple drugs/classes

@@ -2,34 +2,71 @@
 % Please edit documentation in R/feature_rescoring.R
 \name{topFeaturesPerDrugOrClass}
 \alias{topFeaturesPerDrugOrClass}
-\title{Build a per-drug top-feature table with cutoffs
-This returns the top features for each drug/class.}
+\title{Build a per-drug top-feature table with cutoffs}
 \usage{
 topFeaturesPerDrugOrClass(
-  feature_summary = summariseFeaturesAcrossSeeds(scored_features),
+  all_top_features_parquet,
+  core_contribution_threshold = 0.75,
+  exclude_feature_types = "struct",
+  filter_model = TRUE,
+  all_performance_parquet,
+  MCC_threshold = NULL,
+  compare_to_shuffled = TRUE,
+  add_lasso_advtg = TRUE,
   rank_score_quantile = 0.95,
-  threshold_sd_rank = 1
+  cv_threshold = 1,
+  cumulative_contribution_threshold = 0.75,
+  seed_ratio_threshold = NULL,
+  both_subtypes = FALSE,
+  compare_median_to_sd_rank_score = FALSE
 )
 }
 \arguments{
-\item{feature_summary}{The tibble of summarized features across seeds generated from \code{summariseFeaturesAcrossSeeds()}}
+\item{all_top_features_parquet}{The path to the Parquet file containing all top features with their importance scores.}
 
-\item{rank_score_quantile}{The quantile threshold for filtering features based on their mean rank scores}
+\item{core_contribution_threshold}{The cumulative-contribution cutoff, in [0, 1] (default is \code{0.75}, i.e. 75\%), used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.}
 
-\item{threshold_sd_rank}{The threshold for filtering features based on the standard deviation of ranks across seeds}
+\item{exclude_feature_types}{Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.}
+
+\item{filter_model}{Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}, so if \code{all_top_features_parquet} contains multiple fits per group, all of that group's rows survive as soon as any one fit passes.}
+
+\item{all_performance_parquet}{The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.}
+
+\item{MCC_threshold}{The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)}
+
+\item{compare_to_shuffled}{Logical indicating whether to compare the model to shuffled data, passed through to \code{filterOptimalModel()} (default is \code{TRUE})}
+
+\item{add_lasso_advtg}{Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{TRUE})}
+
+\item{rank_score_quantile}{A value in [0, 1] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}. The quantile is computed once over every row of \code{feature_summary} — globally across all species/drugs/drug classes/feature types/subtypes, not per group — and is not restricted to rows that already pass the other conditions listed below: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original, ungrouped data, so this threshold does not narrow as other conditions are applied}
+
+\item{cv_threshold}{The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean}
+
+\item{cumulative_contribution_threshold}{The cumulative-contribution cutoff, in [0, 1] (default is \code{0.75}, i.e. 75\%). Keep only features with \code{median_cum_contrib <= cumulative_contribution_threshold}}
+
+\item{seed_ratio_threshold}{If not \code{NULL} (the default), keep only features whose \code{seed_ratio} exactly equals this value}
+
+\item{both_subtypes}{Logical indicating whether to additionally restrict to features that survive the filters above in both the binary and counts \code{feature_subtype} (default is \code{FALSE})}
+
+\item{compare_median_to_sd_rank_score}{Logical indicating whether to additionally require \code{median_rank_score > rank_score_sd} (default is \code{FALSE})}
 }
 \value{
-a tibble of top features for each drug/class,
-filtered based on the specified rank score quantile and standard deviation threshold.
-The resulting filtered table includes species, drug label, drug or class, feature type, feature subtype, variable,
-mean rank score, mean rank, best rank, median rank, mean contribution, median contribution, number of seeds,
-rank standard deviation, sign consistency, and sign.
-The features are filtered to include only those with a negative sign, low rank standard deviation,
-and are grouped by drug label and drug or class, retaining only the features with the
-maximum number of seeds and mean rank scores above the specified quantile threshold.
+a tibble of top features for each drug/class: the \code{summariseFeaturesAcrossSeeds()} output (species, drug label, drug or class, feature type, feature subtype, variable, seed_ratio, mean/median rank score, median rank, median contribution, median cumulative contribution, best rank, rank/sign/in_core consistency flags, sign), filtered in two \code{dplyr::filter()} passes.
+The first pass keeps rows where all of the following hold, evaluated together against the full, ungrouped \code{feature_summary} (see \code{rank_score_quantile} for what that means for the last condition):
+\itemize{
+\item \code{seed_ratio == seed_ratio_threshold}, only applied when \code{seed_ratio_threshold} is not \code{NULL},
+\item \code{rank_score_cv <= cv_threshold},
+\item \code{in_core} is TRUE,
+\item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
+\item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
+\item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}.
+}
+Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.
+A second \code{dplyr::filter()} pass then optionally keeps only rows where \code{subtype_csv == "binary,counts"} (when \code{both_subtypes = TRUE}) and/or \code{median_rank_score > rank_score_sd} (when \code{compare_median_to_sd_rank_score = TRUE}).
 Every drug/class may not have variables from all feature types.
 }
 \description{
-Build a per-drug top-feature table with cutoffs
-This returns the top features for each drug/class.
+Runs \code{scoreFeaturesWithinSeed()} and \code{summariseFeaturesAcrossSeeds()} on
+\code{all_top_features_parquet}, then filters the resulting per-feature summary
+down to the top features for each drug/class.
 }

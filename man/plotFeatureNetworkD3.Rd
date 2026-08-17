@@ -7,11 +7,11 @@
 plotFeatureNetworkD3(feature_network, height = 800, width = "100\%")
 }
 \arguments{
-\item{feature_network}{Output of \code{identifyTopFeatures()}.}
+\item{feature_network}{Output of \code{buildFeatureNetwork()}.}
 
-\item{height}{Widget height in pixels.}
+\item{height}{Widget height in pixels (default is \code{800}).}
 
-\item{width}{Widget width.}
+\item{width}{Widget width (default is \code{"100\%"}).}
 }
 \value{
 A \code{networkD3} widget.
