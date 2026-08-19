@@ -1,5 +1,5 @@
 
-#' Filter the optimal model based on MCC threshold and comparison to shuffled data
+#' Filter the optimal model based on MCC threshold and comparison to shuffled performance
 #'
 #' @param all_performance_parquet The path to the all performance parquet file 
 #' @param MCC_threshold Numeric The minimum MCC to filter the optimal model (default NULL, no filtering)
@@ -9,6 +9,7 @@
 #'
 #' @keywords internal
 #' @examples
+#' filterOptimalModel(all_performance_parquet = "inst/extdata/all_perf.parquet")
 filterOptimalModel <- function(all_performance_parquet, 
   MCC_threshold = NULL, 
   compare_to_shuffled = TRUE) 
@@ -63,7 +64,8 @@ all_perf |>
 #'
 #' @keywords internal
 #' @examples
-#' scoreFeaturesWithinSeed(all_top_features.parquet)
+#' scoreFeaturesWithinSeed(all_top_features_parquet = "inst/extdata/all_top_features.parquet", 
+#' all_performance_parquet = "inst/extdata/all_perf.parquet")
 #'
 scoreFeaturesWithinSeed <- function(all_top_features_parquet, 
   core_contribution_threshold = 0.75, 
