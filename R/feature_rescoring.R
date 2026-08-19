@@ -1,11 +1,11 @@
 
-#' Filter the optimal model based on MCC threshold and comparison to shuffled performance
+#' Filter model fits to those passing quality thresholds
 #'
-#' @param all_performance_parquet The path to the all performance parquet file 
-#' @param MCC_threshold Numeric The minimum MCC to filter the optimal model (default NULL, no filtering)
-#' @param compare_to_shuffled Logical whether to compare the MCC of the model with and without shuffled data (default is TRUE) 
+#' @param all_performance_parquet The path to the 'all performance parquet' file
+#' @param MCC_threshold The minimum non-shuffled MCC required to keep a model fit (default is \code{NULL}, no filtering)
+#' @param compare_to_shuffled Logical indicating whether to require the non-shuffled MCC to exceed (outperform) the shuffled-label MCC for the same fit (default is \code{TRUE}). A fit with no shuffled counterpart (\code{shuffled_MCC} is \code{NA} after pivoting) always passes this check regardless.
 #'
-#' @returns a tibble of optimal models
+#' @returns a tibble of model fits (one row per species, drug_label, drug_or_class, seed, feature_type, feature_subtype, model, fit_penalty, fit_mixture) that pass the requested quality thresholds, with \code{nonshuffled_MCC}, \code{shuffled_MCC}, and \code{MCC_diff} columns added. This does not pick a single "best" fit per group; it filters out fits that fail the MCC/shuffled-comparison criteria, so multiple passing fits per group can remain.
 #'
 #' @keywords internal
 #' @examples
@@ -45,22 +45,26 @@ all_perf |>
 #' Score features within each seed
 #'
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
-#' @param core_contribution_threshold The cumulative-contribution cutoff (default 0.75, i.e. 75%) used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.
-#' @param exclude_feature_types Feature types to drop before any scoring happens (default \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.
-#' @param filter_model Logical whether to filter the optimal model based on MCC and comparison to shuffled data (default is TRUE). If TRUE function will call \code{filterOptimalModel()} 
-#' @param all_performance_parquet The path to the all performance parquet file (required if \code{filter_model = TRUE})
-#' @param MCC_threshold The minimum MCC threshold for filtering the optimal model (default is NULL)
-#' @param compare_to_shuffled Logical whether to compare the model to shuffled data (default is TRUE)
-#' @param add_lasso_advtg Logical whether to add a sparsity score to give advantage to models with less returned features compared to the total number of features (default is TRUE)
+#' @param core_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%), used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.
+#' @param exclude_feature_types Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.
+#' @param filter_model Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}, so if \code{all_top_features_parquet} contains multiple fits per group, all of that group's rows survive as soon as any one fit passes.
+#' @param all_performance_parquet The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.
+#' @param MCC_threshold The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)
+#' @param compare_to_shuffled Logical indicating whether to compare the model to shuffled data, passed through to \code{filterOptimalModel()} (default is \code{TRUE})
+#' @param add_lasso_advtg Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{TRUE})
 #'
-#' @returns a tibble of scored top features with their contribution, cumulative contribution, core membership, rank, and rank score within each seed.
-#' within a seed
-#' contribution is calculated as the importance of a feature divided by the sum of importance scores for all features.
-#' cum_contrib is the cumulative contribution when features are sorted in descending order of contribution; features tied on contribution are assigned the same cum_contrib, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
-#' in_core is TRUE when cum_contrib is at or below core_contribution_threshold; a tied block that pushes the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
-#' Rank is assigned based on the descending order of contribution, with tied contributions receiving the average of the ranks they span, and
-#' rank score is calculated as (n_features - rank) / (n_features - 1), where n_features is the total number of features within the same seed.
-#' rank score is ranged between 0 and 1, with higher values indicating higher importance.
+#' @returns a tibble of scored top features, one row per feature within each species/drug_label/drug_or_class/feature_type/feature_subtype/seed group, with the following columns added:
+#' \itemize{
+#'   \item \code{contribution}: the feature's importance divided by the sum of importance across all features in the group.
+#'   \item \code{feat_return_ratio}: \code{n_feats_returned / n_feat} for the fit that produced this group (from \code{all_performance_parquet}).
+#'   \item \code{sparsity_score}: \code{1 - feat_return_ratio} when \code{add_lasso_advtg = TRUE} (fits returning fewer features relative to the candidate space score closer to 1), else 1 for every row.
+#'   \item \code{adjusted_contribution}: \code{contribution * sparsity_score}. This, not raw \code{contribution}, is what every downstream column below is actually computed from.
+#'   \item \code{rank}: descending rank of \code{adjusted_contribution} within the group; ties receive the average of the ranks they span.
+#'   \item \code{n_features}: the number of rows (features) in the group.
+#'   \item \code{rank_score}: \code{(n_features - rank) / (n_features - 1)}; ranges 0-1 with higher values indicating higher importance (a single-feature group scores 1).
+#'   \item \code{cum_contrib}: the cumulative sum of \code{adjusted_contribution} in descending order; features tied on \code{adjusted_contribution} share the same \code{cum_contrib}, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
+#'   \item \code{in_core}: TRUE when \code{cum_contrib <= core_contribution_threshold}; a tied block that would push the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
+#' }
 #'
 #' @keywords internal
 #' @examples
@@ -100,10 +104,10 @@ if (filter_model) {
     )
 }
 
-  # Since the models are elastic net and have mix of models from lasso to ridge
-  # lasso shrinks the feature space to fewer selected variables and
-  # ridge retains variables (keeps correlated variables together). 
-  # calculate the selection score to give advantage to lasso model variables.
+  # The models are elastic net, fit with a mix of penalties from lasso to ridge.
+  # Lasso shrinks the feature space to fewer selected variables, while
+  # ridge retains variables (keeps correlated variables together).
+  # Calculate the sparsity score to give an advantage to lasso-like fits.
 all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
   dplyr::filter(!shuffled) |>
   dplyr::select(species, drug_label, drug_or_class, seed, 
@@ -166,18 +170,27 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
   return(scored_top_features)
 }
 
-#' Summarize a variable across seeds
-#    "which molecular features are consistent?"
+#' Summarize a feature's scoring across seeds
+#'
+#' Answers "which molecular features are consistently important?" by
+#' collapsing the per-seed rows from `scoreFeaturesWithinSeed()` down to one
+#' row per feature.
 #'
 #' @param scored_features The tibble of scored top features with their contribution, rank, and rank score within each seed generated from `scoreFeaturesWithinSeed()`
 #'
-#' @returns a tibble of summarized features across seeds, including the number of seeds,
-#' mean and median rank,
-#' mean and median contribution,
-#' mean and median rank score (scaled between 0 and 1 with higher values indicating higher importance),
-#' best rank,
-#' rank consistency (TRUE if the rank is same across seeds), rank standard deviation (how much the rank_score varies across seeds, computed on the normalized rank_score rather than raw rank so it is comparable across groups with different numbers of features),
-#' sign consistency (TRUE if the sign is same across seeds), and sign (the sign of the feature; POS, NEG or MIXED).
+#' @returns a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_subtype/variable, with:
+#' \itemize{
+#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
+#'   \item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
+#'   \item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
+#'   \item \code{median_contribution}: median of \code{adjusted_contribution} across seeds. (\code{mean_contribution} is not currently computed.)
+#'   \item \code{median_cum_contrib}: median of \code{cum_contrib} across seeds.
+#'   \item \code{best_rank}: the best (lowest) rank seen across seeds.
+#'   \item \code{rank_consistent}: TRUE if the feature's rank is identical in every seed.
+#'   \item \code{rank_score_sd}, \code{rank_score_cv}: standard deviation and coefficient of variation of \code{rank_score} across seeds, i.e. how much the normalized rank_score varies — computed on \code{rank_score} rather than raw rank so it is comparable across groups with different numbers of features.
+#'   \item \code{in_core_consistent}, \code{in_core}: whether the feature's \code{in_core} flag is identical across every seed; \code{in_core} is that shared value if consistent, else \code{FALSE}.
+#'   \item \code{sign_consistent}, \code{sign}: whether the feature's \code{sign} is identical across every seed; \code{sign} is that shared value if consistent, else \code{"MIXED"}.
+#' }
 #'
 #' @keywords internal
 #' @examples
@@ -211,7 +224,7 @@ summariseFeaturesAcrossSeeds <- function(scored_features) {
     best_rank = min(rank, na.rm = TRUE),
     rank_consistent = dplyr::n_distinct(rank) == 1,
     rank_score_sd = sd(rank_score, na.rm = TRUE),
-    # coefficient of variation (I was trying to see how much closer is SD to mean)
+    # coefficient of variation: how large rank_score_sd is relative to mean_rank_score
     rank_score_cv = dplyr::if_else(
       mean_rank_score != 0,
       rank_score_sd / mean_rank_score,
@@ -228,24 +241,31 @@ summariseFeaturesAcrossSeeds <- function(scored_features) {
 }
 
 #' Build a per-drug top-feature table with cutoffs
-#' This returns the top features for each drug/class.
 #'
-#' @param feature_summary The tibble of summarized features across seeds generated from `summariseFeaturesAcrossSeeds()`
-#' @param rank_score_quantile The quantile threshold for filtering features based on their median rank scores
-#' @param cv_threshold The threshold for filtering features based on the coefficient of variation of rank scores
-#' @param cumulative_contribution_threshold The threshold for filtering features based on the median cumulative contribution
-#' @param seed_ratio_threshold The threshold for filtering features based on the proportion of seeds in which the feature appears 
-#' @param both_subtypes Logical indicating whether to filter features to keep the ones that appears in both binary and count subtypes 
-#' @param compare_median_to_sd_rank_score Logical indicating whether to filter features to keep the ones that have higher median rank score than standard deviation
-#' 
-#' @returns a tibble of top features for each drug/class,
-#' filtered based on the specified rank score quantile and standard deviation threshold.
-#' The resulting filtered table includes species, drug label, drug or class, feature type, feature subtype, variable,
-#' mean rank score, mean rank, best rank, median rank, mean contribution, median contribution, number of seeds,
-#' rank standard deviation, sign consistency, and sign.
-#' The features are filtered to include only those with a negative sign, low rank standard deviation,
-#' and are grouped by drug label and drug or class, retaining only the features with the
-#' maximum number of seeds and mean rank scores above the specified quantile threshold.
+#' Runs `scoreFeaturesWithinSeed()` and `summariseFeaturesAcrossSeeds()` on
+#' `all_top_features_parquet`, then filters the resulting per-feature summary
+#' down to the top features for each drug/class.
+#'
+#' @inheritParams scoreFeaturesWithinSeed
+#' @param rank_score_quantile A value in \[0, 1\] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}. The quantile is computed once over every row of \code{feature_summary} — globally across all species/drugs/drug classes/feature types/subtypes, not per group — and is not restricted to rows that already pass the other conditions listed below: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original, ungrouped data, so this threshold does not narrow as other conditions are applied
+#' @param cv_threshold The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean
+#' @param cumulative_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%). Keep only features with \code{median_cum_contrib <= cumulative_contribution_threshold}
+#' @param seed_ratio_threshold If not \code{NULL} (the default), keep only features whose \code{seed_ratio} exactly equals this value
+#' @param both_subtypes Logical indicating whether to additionally restrict to features that survive the filters above in both the binary and counts \code{feature_subtype} (default is \code{FALSE})
+#' @param compare_median_to_sd_rank_score Logical indicating whether to additionally require \code{median_rank_score > rank_score_sd} (default is \code{FALSE})
+#'
+#' @returns a tibble of top features for each drug/class: the `summariseFeaturesAcrossSeeds()` output (species, drug label, drug or class, feature type, feature subtype, variable, seed_ratio, mean/median rank score, median rank, median contribution, median cumulative contribution, best rank, rank/sign/in_core consistency flags, sign), filtered in two \code{dplyr::filter()} passes.
+#' The first pass keeps rows where all of the following hold, evaluated together against the full, ungrouped \code{feature_summary} (see \code{rank_score_quantile} for what that means for the last condition):
+#' \itemize{
+#'   \item \code{seed_ratio == seed_ratio_threshold}, only applied when \code{seed_ratio_threshold} is not \code{NULL},
+#'   \item \code{rank_score_cv <= cv_threshold},
+#'   \item \code{in_core} is TRUE,
+#'   \item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
+#'   \item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
+#'   \item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}.
+#' }
+#' Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.
+#' A second \code{dplyr::filter()} pass then optionally keeps only rows where \code{subtype_csv == "binary,counts"} (when \code{both_subtypes = TRUE}) and/or \code{median_rank_score > rank_score_sd} (when \code{compare_median_to_sd_rank_score = TRUE}).
 #' Every drug/class may not have variables from all feature types.
 #'
 #' @export
@@ -308,11 +328,18 @@ dplyr::filter(
 #' @param top_features The tibble of top features for each drug/class generated from `topFeaturesPerDrugOrClass()`
 #' @param cluster_feature_parquet The path to the Parquet file containing the mapping of features to protein clusters
 #'
-#' @returns a tibble of summarized clusters, including species, drug label, drug or class, cluster, frequency (number of features in the cluster),
-#' number of distinct variables, number of distinct feature types, feature types as a comma-separated string,
-#' cluster mean rank score (mean of median_rank_score, down-weighted by 1/n_clusters for features that map to multiple clusters so promiscuous domains/COGs don't inflate every cluster they touch),
-#' cluster median rank score (median of the same down-weighted score), cluster max rank score (max of the unweighted median_rank_score, i.e. the single strongest feature backing this cluster regardless of its fan-out to other clusters), cluster rank score standard deviation, and cluster best rank.
-#' median_rank_score is used throughout (rather than mean_rank_score) for consistency with the seed-noise-robust selection made in `topFeaturesPerDrugOrClass()`.
+#' @returns a tibble with one row per species/drug_label/drug_or_class/cluster, with:
+#' \itemize{
+#'   \item \code{frequency}: the number of top-feature rows mapped to this cluster.
+#'   \item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{variable} values mapped to this cluster.
+#'   \item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type} values mapped to this cluster.
+#'   \item \code{cluster_mean_rank_score}, \code{cluster_median_rank_score}: mean/median of \code{median_rank_score}, down-weighted by \code{1 / n_clusters} for features that map to multiple clusters so promiscuous domains/COGs don't inflate every cluster they touch.
+#'   \item \code{cluster_max_rank_score}: the max of the unweighted \code{median_rank_score}, i.e. the single strongest feature backing this cluster regardless of its fan-out to other clusters.
+#'   \item \code{cluster_rank_score_sd}: standard deviation of the same down-weighted score used for \code{cluster_mean_rank_score}/\code{cluster_median_rank_score}.
+#'   \item \code{cluster_best_rank}: the best (lowest) \code{best_rank} among the features mapped to this cluster.
+#' }
+#' \code{median_rank_score} is used throughout (rather than \code{mean_rank_score}) for consistency with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+#' \code{top_features} rows whose \code{variable} has no match in \code{cluster_feature_parquet} are not dropped: they collapse into one \code{cluster = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real clusters must filter this out explicitly (as \code{findSharedClusters()} and \code{findUniqueClusters()} do).
 #'
 #' @export
 summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_summary),
@@ -359,10 +386,10 @@ summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_s
 #' Find clusters that appear across multiple drugs/classes
 #'
 #' @param top_clusters The tibble of summarized clusters generated from `summariseClusters()`
-#' @param label The label to filter clusters by, either "drug" or "drug_class"
-#' @param  min_drugs_or_classes The minimum number of distinct drugs or classes required for a cluster to be considered shared
+#' @param label The \code{drug_label} value to filter clusters by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
+#' @param min_drugs_or_classes The minimum number of distinct drugs or classes required for a cluster to be considered shared (default is \code{2})
 #'
-#' @returns a tibble of shared clusters, including cluster, number of distinct drugs or classes, and a comma-separated string of the distinct drugs or classes.
+#' @returns a tibble with one row per shared \code{cluster}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the cluster appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
 #'
 #' @export
 findSharedClusters <- function(top_clusters = summariseClusters(top_features, cluster_feature_parquet),
@@ -384,14 +411,13 @@ findSharedClusters <- function(top_clusters = summariseClusters(top_features, cl
   return(shared_clusters)
 }
 
-#' find the clusters that are unique to a single drug/class
+#' Find the clusters that are unique to a single drug/class
 #'
 #' @param top_clusters The tibble of summarized clusters generated from `summariseClusters()`
-#' @param label The label to filter clusters by, either "drug" or "drug_class"
+#' @param label The \code{drug_label} value to filter clusters by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
 #' @param protein_names_parquet The path to the Parquet file containing the annotations to protein cluster names
 #'
-#' @returns a tibble of clusters unique to a single drug/class, including drug or class, cluster,
-#' cluster name (from protein name annotations), and cluster mean rank score, sorted by cluster mean rank score in descending order.
+#' @returns a tibble with one row per cluster unique to a single drug/class, with \code{drug_or_class}, \code{cluster}, \code{cluster_name} (from the protein name annotations), and \code{cluster_mean_rank_score}, sorted by \code{cluster_mean_rank_score} descending.
 #'
 #' @export
 #' @examples
@@ -425,13 +451,13 @@ dplyr::rename(drug_or_class = drug_or_class_csv) |>
 
 #' Build a feature network from selected top features and top clusters
 #'
-#' @param top_features Output of topFeaturesPerDrugOrClass().
-#' @param top_clusters Output of summariseClusters().
+#' @param top_features Output of \code{topFeaturesPerDrugOrClass()}.
+#' @param top_clusters Output of \code{summariseClusters()}.
 #' @param cluster_feature_parquet Path to the Parquet file mapping variables to clusters.
 #' @param protein_names_parquet Path to the Parquet file with cluster name annotations.
 #'
-#' @return A list with feature_table, cluster_table, nodes, edges, and graph.
-#' Node/edge weights are built from median_rank_score (features) and cluster_mean_rank_score (clusters, itself median-based per `summariseClusters()`), consistent with the seed-noise-robust selection made in `topFeaturesPerDrugOrClass()`.
+#' @returns A list with \code{feature_table}, \code{cluster_table}, \code{nodes}, \code{edges}, and \code{graph}.
+#' Node/edge weights are built from \code{median_rank_score} (features) and \code{cluster_mean_rank_score} (clusters, itself median-based per \code{summariseClusters()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
 #' @export
 buildFeatureNetwork <- function(top_features,
                                top_clusters,
@@ -639,9 +665,9 @@ buildFeatureNetwork <- function(top_features,
 }
 #' Plot the feature network with networkD3
 #'
-#' @param feature_network Output of \code{identifyTopFeatures()}.
-#' @param height Widget height in pixels.
-#' @param width Widget width.
+#' @param feature_network Output of \code{buildFeatureNetwork()}.
+#' @param height Widget height in pixels (default is \code{800}).
+#' @param width Widget width (default is \code{"100\%"}).
 #'
 #' @returns A \code{networkD3} widget.
 #' @export

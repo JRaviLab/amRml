@@ -15,11 +15,18 @@ summariseClusters(
 \item{cluster_feature_parquet}{The path to the Parquet file containing the mapping of features to protein clusters}
 }
 \value{
-a tibble of summarized clusters, including species, drug label, drug or class, cluster, frequency (number of features in the cluster),
-number of distinct variables, number of distinct feature types, feature types as a comma-separated string,
-cluster mean rank score (mean of median_rank_score, down-weighted by 1/n_clusters for features that map to multiple clusters so promiscuous domains/COGs don't inflate every cluster they touch),
-cluster median rank score (median of the same down-weighted score), cluster max rank score (max of the unweighted median_rank_score, i.e. the single strongest feature backing this cluster regardless of its fan-out to other clusters), cluster rank score standard deviation, and cluster best rank.
-median_rank_score is used throughout (rather than mean_rank_score) for consistency with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+a tibble with one row per species/drug_label/drug_or_class/cluster, with:
+\itemize{
+\item \code{frequency}: the number of top-feature rows mapped to this cluster.
+\item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{variable} values mapped to this cluster.
+\item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type} values mapped to this cluster.
+\item \code{cluster_mean_rank_score}, \code{cluster_median_rank_score}: mean/median of \code{median_rank_score}, down-weighted by \code{1 / n_clusters} for features that map to multiple clusters so promiscuous domains/COGs don't inflate every cluster they touch.
+\item \code{cluster_max_rank_score}: the max of the unweighted \code{median_rank_score}, i.e. the single strongest feature backing this cluster regardless of its fan-out to other clusters.
+\item \code{cluster_rank_score_sd}: standard deviation of the same down-weighted score used for \code{cluster_mean_rank_score}/\code{cluster_median_rank_score}.
+\item \code{cluster_best_rank}: the best (lowest) \code{best_rank} among the features mapped to this cluster.
+}
+\code{median_rank_score} is used throughout (rather than \code{mean_rank_score}) for consistency with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+\code{top_features} rows whose \code{variable} has no match in \code{cluster_feature_parquet} are not dropped: they collapse into one \code{cluster = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real clusters must filter this out explicitly (as \code{findSharedClusters()} and \code{findUniqueClusters()} do).
 }
 \description{
 Aggregate mapped features to protein clusters

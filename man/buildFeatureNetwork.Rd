@@ -12,17 +12,17 @@ buildFeatureNetwork(
 )
 }
 \arguments{
-\item{top_features}{Output of topFeaturesPerDrugOrClass().}
+\item{top_features}{Output of \code{topFeaturesPerDrugOrClass()}.}
 
-\item{top_clusters}{Output of summariseClusters().}
+\item{top_clusters}{Output of \code{summariseClusters()}.}
 
 \item{cluster_feature_parquet}{Path to the Parquet file mapping variables to clusters.}
 
 \item{protein_names_parquet}{Path to the Parquet file with cluster name annotations.}
 }
 \value{
-A list with feature_table, cluster_table, nodes, edges, and graph.
-Node/edge weights are built from median_rank_score (features) and cluster_mean_rank_score (clusters, itself median-based per \code{summariseClusters()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+A list with \code{feature_table}, \code{cluster_table}, \code{nodes}, \code{edges}, and \code{graph}.
+Node/edge weights are built from \code{median_rank_score} (features) and \code{cluster_mean_rank_score} (clusters, itself median-based per \code{summariseClusters()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
 }
 \description{
 Build a feature network from selected top features and top clusters

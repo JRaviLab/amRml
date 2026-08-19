@@ -7,25 +7,44 @@
 scoreFeaturesWithinSeed(
   all_top_features_parquet,
   core_contribution_threshold = 0.75,
-  exclude_feature_types = "struct"
+  exclude_feature_types = "struct",
+  filter_model = TRUE,
+  all_performance_parquet,
+  MCC_threshold = NULL,
+  compare_to_shuffled = TRUE,
+  add_lasso_advtg = TRUE
 )
 }
 \arguments{
 \item{all_top_features_parquet}{The path to the Parquet file containing all top features with their importance scores.}
 
-\item{core_contribution_threshold}{The cumulative-contribution cutoff (default 0.75, i.e. 75\%) used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.}
+\item{core_contribution_threshold}{The cumulative-contribution cutoff, in [0, 1] (default is \code{0.75}, i.e. 75\%), used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.}
 
-\item{exclude_feature_types}{Feature types to drop before any scoring happens (default \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.}
+\item{exclude_feature_types}{Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.}
+
+\item{filter_model}{Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}, so if \code{all_top_features_parquet} contains multiple fits per group, all of that group's rows survive as soon as any one fit passes.}
+
+\item{all_performance_parquet}{The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.}
+
+\item{MCC_threshold}{The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)}
+
+\item{compare_to_shuffled}{Logical indicating whether to compare the model to shuffled data, passed through to \code{filterOptimalModel()} (default is \code{TRUE})}
+
+\item{add_lasso_advtg}{Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{TRUE})}
 }
 \value{
-a tibble of scored top features with their contribution, cumulative contribution, core membership, rank, and rank score within each seed.
-within a seed
-contribution is calculated as the importance of a feature divided by the sum of importance scores for all features.
-cum_contrib is the cumulative contribution when features are sorted in descending order of contribution; features tied on contribution are assigned the same cum_contrib, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
-in_core is TRUE when cum_contrib is at or below core_contribution_threshold; a tied block that pushes the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
-Rank is assigned based on the descending order of contribution, with tied contributions receiving the average of the ranks they span, and
-rank score is calculated as (n_features - rank) / (n_features - 1), where n_features is the total number of features within the same seed.
-rank score is ranged between 0 and 1, with higher values indicating higher importance.
+a tibble of scored top features, one row per feature within each species/drug_label/drug_or_class/feature_type/feature_subtype/seed group, with the following columns added:
+\itemize{
+\item \code{contribution}: the feature's importance divided by the sum of importance across all features in the group.
+\item \code{feat_return_ratio}: \code{n_feats_returned / n_feat} for the fit that produced this group (from \code{all_performance_parquet}).
+\item \code{sparsity_score}: \code{1 - feat_return_ratio} when \code{add_lasso_advtg = TRUE} (fits returning fewer features relative to the candidate space score closer to 1), else 1 for every row.
+\item \code{adjusted_contribution}: \code{contribution * sparsity_score}. This, not raw \code{contribution}, is what every downstream column below is actually computed from.
+\item \code{rank}: descending rank of \code{adjusted_contribution} within the group; ties receive the average of the ranks they span.
+\item \code{n_features}: the number of rows (features) in the group.
+\item \code{rank_score}: \code{(n_features - rank) / (n_features - 1)}; ranges 0-1 with higher values indicating higher importance (a single-feature group scores 1).
+\item \code{cum_contrib}: the cumulative sum of \code{adjusted_contribution} in descending order; features tied on \code{adjusted_contribution} share the same \code{cum_contrib}, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
+\item \code{in_core}: TRUE when \code{cum_contrib <= core_contribution_threshold}; a tied block that would push the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
+}
 }
 \description{
 Score features within each seed
@@ -34,3 +53,4 @@ Score features within each seed
 scoreFeaturesWithinSeed(all_top_features.parquet)
 
 }
+\keyword{internal}
