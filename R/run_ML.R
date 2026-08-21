@@ -1286,7 +1286,62 @@ runModelingPipeline <- function(parquet_dir,
     message("Using parquet directory:\n  ", parquet_dir)
   }
 
+    # Find the latest manifest
+  manifest_path <- .manifest_find_latest(parquet_dir)
+
+  if (is.null(manifest_path)) {
+   stop(
+      "No provenance manifest found for: ",
+      duckdb_path,
+      "\nRun prepareGenomes() and runDataProcessing() from amRdata package first or 
+      provide a dataset with an existing manifest."
+    )
+    
+  }
+
+  manifest <- .manifest_resume(
+    manifest_path = manifest_path,
+    base_dir = dirname(dirname(parquet_dir)),
+    hash_files = FALSE
+  )
+
+  run_failed <- TRUE
+
+  on.exit(
+    if (run_failed) {
+      .manifest_finish(
+        manifest,
+        status = "failed",
+        error = "runModelingPipeline() exited before successful completion."
+      )
+    },
+    add = TRUE
+  )
+
+  # Record the start of this run
+  manifest <- .manifest_event(
+    manifest,
+    message = "Started modeling run.",
+    details = list(
+      parquet_dir = parquet_dir,
+      output_path = out_dir
+    )
+  )
+
   if (verbose) message("\n[1/4] Generating ML feature matrices.")
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "matrix_generation",
+    status = "running",
+    parameters = list(
+    n_fold = n_fold,
+    split = split,
+    min_n = min_n
+    ),
+    inputs =  parquet_dir
+    )
+  
   generateMLInputs(
     parquet_dir = parquet_dir,
     out_path = out_root,
@@ -1296,7 +1351,38 @@ runModelingPipeline <- function(parquet_dir,
     verbosity = if (verbose) "minimal" else "debug"
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+name = "matrix_generation",
+     status = "success",
+    parameters = list(
+    n_fold = n_fold,
+    split = split,
+    min_n = min_n
+    ),
+    inputs =  parquet_dir
+    )
+
   if (verbose) message("\n[2/4] Running standard ML models.")
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_standard_models",
+    status = "running",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   runMLmodels(
     path = out_root,
     stratify_by = NULL,
@@ -1311,7 +1397,44 @@ runModelingPipeline <- function(parquet_dir,
     use_saved_split = use_saved_split
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_standard_models",
+    status = "success",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   if (verbose) message("\n[3/4] Running stratified (year) ML models.")
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_year_models",
+    status = "running",
+    parameters = list(
+    stratify_by = "year",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   runMLmodels(
     path = out_root,
     stratify_by = "year",
@@ -1326,7 +1449,44 @@ runModelingPipeline <- function(parquet_dir,
     use_saved_split = use_saved_split
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_year_models",
+    status = "success",
+    parameters = list(
+    stratify_by = "year",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   if (verbose) message("\n[3/4] Running stratified (country) ML models.")
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_country_models",
+    status = "running",
+    parameters = list(
+    stratify_by = "country",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   runMLmodels(
     path = out_root,
     stratify_by = "country",
@@ -1341,7 +1501,41 @@ runModelingPipeline <- function(parquet_dir,
     use_saved_split = use_saved_split
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_country_models",
+    status = "success",
+    parameters = list(
+    stratify_by = "country",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   if (verbose) message("\n[4/4] Running MDR ML models.")
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_MDR_models",
+    status = "running",
+    parameters = list(
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   runMDRmodels(
     path = out_root,
     threads = threads,
@@ -1352,6 +1546,22 @@ runModelingPipeline <- function(parquet_dir,
     verbose = verbose,
     use_saved_split = use_saved_split
   )
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_MDR_models",
+    status = "success",
+    parameters = list(
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   # All done!
   if (verbose) {
     message("\n=== AMR-ML Pipeline Complete ===")
@@ -1363,6 +1573,13 @@ runModelingPipeline <- function(parquet_dir,
     message("  ML_performance/, ML_models/, ML_prediction/, ML_top_features/")
   }
 
+   run_failed <- FALSE
+
+  .manifest_finish(
+    manifest,
+    status = "success"
+  )
+  
   invisible(out_root)
 }
 
