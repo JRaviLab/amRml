@@ -1238,7 +1238,7 @@ if (nrow(files) == 0) {
 }
 
 
-#' Run the entire AMR ML pipeline from a parquet-backed DuckDB
+#' Run the entire AMR ML pipeline from a parquets
 #'
 #' This function provides a complete end-to-end AMR machine learning workflow.
 #' Given a DuckDB file produced by `runDataProcessing()`, it:
@@ -1279,7 +1279,7 @@ runModelingPipeline <- function(parquet_dir,
     )
   }
 
-  out_root <- dirname(parquet_dir)
+  out_root <- parquet_dir
 
   if (verbose) {
     message("\n=== amRml: Full pipeline runner ===")
@@ -1367,6 +1367,31 @@ runModelingPipeline <- function(parquet_dir,
 }
 
       
+#' Run the entire AMR ML pipeline from a parquets
+#'
+#' This function provides a complete end-to-end AMR machine learning workflow.
+#' Given a DuckDB file produced by `runDataProcessing()`, it:
+#'   1. Generates all ML feature matrices (drug, class, year, country, MDR, LOO)
+#'   2. Creates all ML directory structures
+#'   3. Prepares ML input lists for every mode
+#'   4. Runs logistic regression ML models (standard + stratified + cross-test + MDR)
+#'   5. Saves performance metrics, fitted models, predictions, and top feature rankings
+#'
+#' @param parquet_dir Path to a species-named directory (e.g. `Shigella_flexneri/`) of
+#'   metadata and feature parquets, as produced by data_processing.R
+#' @param threads Number of parallel workers. Default: 16
+#' @param n_seeds Number of  random seeds to run for each model (default: 3)
+#' @param n_fold Cross-validation folds (default: 5). Use 0 or NULL for classical splits.
+#' @param split Training/validation split (default: c(1,0) for CV mode)
+#' @param min_n Minimum samples per drug class for MDR matrices (default: 25)
+#' @param prop_vi_top_feats Proportion of variable importance for top features (default: c(0,1))
+#' @param pca_threshold PCA variance threshold (not used unless `use_pca = TRUE`)
+#' @param verbose Print progress updates? Default: TRUE
+#' @param use_saved_split Whether to inherit split/seed/n_fold from ml_parameters.json
+#'
+#' @return Invisibly returns the output directory used for ML results.
+#'
+#' @export
 runModelingPipelineIntense <- function(parquet_dir,
                                        threads = 8,
                                        n_seeds = 3,
@@ -1387,7 +1412,7 @@ runModelingPipelineIntense <- function(parquet_dir,
     )
   }
 
-  out_root <- dirname(parquet_dir)
+  out_root <- parquet_dir
 
   # -------------------------------
   # Helper for safe execution
