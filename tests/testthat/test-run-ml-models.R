@@ -17,42 +17,97 @@ test_that("runMLmodels() exits cleanly instead of crashing on no files", {
   expect_null(result)
 })
 
-test_that("createMLinputList() rejects LOO w/o year/country (no cross-test)", {
+# `stratify_by = NULL` means "no stratification" when LOO is FALSE, and "leave
+# one drug out" when LOO is TRUE. There is no stratify_by = "drug", so the drug
+# case has to be spelled NULL. Every caller has to know that rule, and the ones
+# that got it wrong are what the tests below cover.
+
+test_that("createMLResultDir() maps every LOO/stratify_by pair to a real dir", {
+  tmp <- withr::local_tempdir()
+  matrix_dir <- function(loo, strat) {
+    basename(createMLResultDir(
+      tmp,
+      stratify_by = strat, LOO = loo, cross_test = FALSE, MDR = FALSE
+    )$matrix_path)
+  }
+
+  expect_equal(matrix_dir(FALSE, NULL), "matrix")
+  expect_equal(matrix_dir(FALSE, "year"), "matrix_year")
+  expect_equal(matrix_dir(FALSE, "country"), "matrix_country")
+  expect_equal(matrix_dir(TRUE, NULL), "LOO_matrix_drug")
+  expect_equal(matrix_dir(TRUE, "year"), "LOO_matrix_year")
+  expect_equal(matrix_dir(TRUE, "country"), "LOO_matrix_country")
+})
+
+test_that("createMLResultDir() keeps LOO result dirs unsuffixed", {
+  # Only matrix_path takes "_drug". Drug LOO results are documented as
+  # LOO_ML_performance/ and LOO_ML_top_features/, unlike their year/country
+  # siblings, so they must not become LOO_ML_drug_*.
+  tmp <- withr::local_tempdir()
+  paths <- createMLResultDir(
+    tmp,
+    stratify_by = NULL, LOO = TRUE, cross_test = FALSE, MDR = FALSE
+  )
+  expect_equal(basename(paths$ML_performance), "LOO_ML_performance")
+  expect_equal(basename(paths$ML_top_features), "LOO_ML_top_features")
+})
+
+test_that("createMLinputList() accepts leave-one-drug-out and finds its files", {
+  # This used to hard-error: the LOO check demanded stratify_by be "year" or
+  # "country", which rejected the drug case outright.
+  tmp <- withr::local_tempdir()
+  paths <- createMLResultDir(
+    tmp,
+    stratify_by = NULL, LOO = TRUE, cross_test = FALSE, MDR = FALSE
+  )
+  for (drug in c("AMP", "CIP")) {
+    file.create(file.path(
+      paths$matrix_path,
+      sprintf("Sfl_drug_leaveout_%s_gene_binary_sparse.parquet", drug)
+    ))
+  }
+
+  out <- createMLinputList(
+    tmp,
+    stratify_by = NULL, LOO = TRUE, cross_test = FALSE, MDR = FALSE
+  )
+
+  expect_equal(nrow(out), 2)
+  # One model per left-out drug, named from the file so the two do not collide.
+  expect_setequal(
+    out$output_prefix,
+    c("Sfl_drug_leaveout_AMP_gene_binary", "Sfl_drug_leaveout_CIP_gene_binary")
+  )
+  expect_true(all(grepl("LOO_matrix_drug", out$matrix_path)))
+})
+
+test_that("createMLinputList() still rejects a bad stratify_by under LOO", {
+  # NULL is valid (leave-one-drug-out), but a typo must still be caught.
   tmp <- withr::local_tempdir()
   expect_error(
-    createMLinputList(tmp, LOO = TRUE, cross_test = FALSE, stratify_by = NULL),
-    "stratify_by must be"
+    createMLinputList(tmp, LOO = TRUE, cross_test = FALSE, stratify_by = "bananas"),
+    "stratify_by"
   )
 })
 
-test_that("createMLinputList() allows LOO+cross-test with stratify_by = NULL", {
-  # LOO + cross_test with stratify_by = NULL is a distinct mode
-  # (leave-one-drug-out cross-testing, "Case A" in the cross_test && LOO
-  # branch) and is intentionally exempt from the year/country requirement
-  # above.
+test_that("leave-one-drug-out cross testing fails loudly, not silently", {
+  # This mode needs a test set generateMLInputs() does not produce yet, so it
+  # must error rather than quietly return zero rows.
   tmp <- withr::local_tempdir()
   paths <- createMLResultDir(
     tmp,
     stratify_by = NULL, LOO = TRUE, cross_test = TRUE, MDR = FALSE
   )
-
-  # A single matrix filename that satisfies both the general filename parser
-  # and the LOO-specific parser used inside Case A. File content is
-  # irrelevant - createMLinputList() only inspects filenames.
   file.create(file.path(
     paths$matrix_path,
-    "Csp_drug_leaveout_leaveout_genes_binary_sparse.parquet"
+    "Sfl_drug_leaveout_AMP_gene_binary_sparse.parquet"
   ))
 
-  out <- createMLinputList(
-    tmp,
-    stratify_by = NULL, LOO = TRUE, cross_test = TRUE, MDR = FALSE
+  expect_error(
+    createMLinputList(
+      tmp,
+      stratify_by = NULL, LOO = TRUE, cross_test = TRUE, MDR = FALSE
+    ),
+    "not supported yet"
   )
-
-  # Before the return() fix, Case A built the right result but never
-  # returned it, so execution fell through into the stratify_by != NULL
-  # branch, which self-joins the single file against itself and always
-  # filters it out (ref_file != test_file), silently returning 0 rows.
-  expect_equal(nrow(out), 1)
-  expect_true(grepl("_drug_leaveout_", out$output_prefix))
 })
