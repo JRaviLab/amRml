@@ -389,11 +389,11 @@
 }
 
 # To distinguish multiple manifests in the same bug directory
-.manifest_find_latest <- function(duckdb_path) {
-  manifest_dir <- dirname(normalizePath(
-    duckdb_path,
+.manifest_find_latest_ml <- function(parquet_dir) {
+  manifest_dir <- normalizePath(
+    parquet_dir,
     mustWork = FALSE
-  ))
+  )
 
   manifests <- list.files(
     manifest_dir,

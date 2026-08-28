@@ -1287,12 +1287,12 @@ runModelingPipeline <- function(parquet_dir,
   }
 
     # Find the latest manifest
-  manifest_path <- .manifest_find_latest(parquet_dir)
+  manifest_path <- .manifest_find_latest_ml(parquet_dir)
 
   if (is.null(manifest_path)) {
    stop(
       "No provenance manifest found for: ",
-      duckdb_path,
+      parquet_dir,
       "\nRun prepareGenomes() and runDataProcessing() from amRdata package first or 
       provide a dataset with an existing manifest."
     )
@@ -1324,7 +1324,7 @@ runModelingPipeline <- function(parquet_dir,
     message = "Started modeling run.",
     details = list(
       parquet_dir = parquet_dir,
-      output_path = out_dir
+      output_path = out_root
     )
   )
 
@@ -1579,7 +1579,7 @@ name = "matrix_generation",
     manifest,
     status = "success"
   )
-  
+
   invisible(out_root)
 }
 
