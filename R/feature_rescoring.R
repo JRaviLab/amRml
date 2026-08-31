@@ -17,6 +17,10 @@ filterOptimalModel <- function(all_performance_parquet,
   stopifnot(file.exists(all_performance_parquet))
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) 
   
+  if (!all(c(TRUE, FALSE) %in% unique(all_perf$shuffled))) {
+  stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingIntense() ")
+}
+  
 all_perf |>
   dplyr::select(
     species, drug_label, drug_or_class,
