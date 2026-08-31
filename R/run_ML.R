@@ -1429,16 +1429,16 @@ runModelingPipelineIntense <- function(parquet_dir,
   # -------------------------------
   # [1] Generate inputs
   # -------------------------------
- # safe_run(
-#    "[1] Generating ML feature matrices",
-#    generateMLInputs,
- #   parquet_dir = parquet_dir,
- #   out_path = out_root,
- #   n_fold = n_fold,
- #   split = split,
- #   min_n = min_n,
- #   verbosity = if (verbose) "minimal" else "debug"
- # )
+  safe_run(
+    "[1] Generating ML feature matrices",
+    generateMLInputs,
+    parquet_dir = parquet_dir,
+    out_path = out_root,
+    n_fold = n_fold,
+    split = split,
+    min_n = min_n,
+    verbosity = if (verbose) "minimal" else "debug"
+  )
 
   # -------------------------------
   # Seed loop

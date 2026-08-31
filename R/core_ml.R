@@ -599,12 +599,12 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     nrow(test_data_plus_predictions)
 
   if (prior > 0.3 && prior < 0.7) {
-    message(
+    warning(
       "Classes are roughly balanced. ",
       "Calculation of log2(AUPRC/prior) may be inappropriate."
     )
   } else if (prior >= 0.7) {
-    message(
+    warning(
       "Classes are imbalanced for this model. ",
       "The use of the log2(AUPRC/prior) metric may be more informative in this imbalanced model."
     )
@@ -750,8 +750,9 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 #' Variable importance for a binomial glmnet fit
 #'
 #' Internal replacement for `vip::vi()`, dropped as a dependency after it left
-#' CRAN. Returns `|coefficient|` as `Importance` and its direction as `Sign`,
-#' sorted by decreasing importance.
+#' CRAN. Returns `|coefficient|` as `Importance` and its direction as `Sign`
+#' ("POS", "NEG", or NA for an exactly-zero coefficient), sorted by
+#' decreasing importance. `vip::vi()` labelled zero coefficients "NEG".
 #'
 #' Importance is taken at glmnet's minimum lambda, not the tuned `penalty`.
 #' That is what `vip::vi()` did.

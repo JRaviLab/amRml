@@ -157,7 +157,7 @@ test_that("extractTopFeats handles multi-class fits with per-class columns", {
   expect_gt(nrow(top), 0)
 })
 
-test_that(".viGlmnet reproduces vip::vi() for binomial glmnet fits", {
+test_that(".viGlmnet matches vip::vi() importances and ordering", {
   skip_if_missing_deps()
   fx <- make_pipeline_fixture()
   mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 0) |>
@@ -166,7 +166,8 @@ test_that(".viGlmnet reproduces vip::vi() for binomial glmnet fits", {
 
   vi <- .viGlmnet(fit)
   expect_setequal(colnames(vi), c("Variable", "Importance", "Sign"))
-  expect_true(all(vi$Sign %in% c("POS", "NEG")))
+  # NA is valid: an exactly-zero coefficient is neither POS nor NEG.
+  expect_true(all(vi$Sign %in% c("POS", "NEG") | is.na(vi$Sign)))
   # Downstream slicing relies on the decreasing sort `vip::vi()` provided.
   expect_equal(vi$Importance, sort(vi$Importance, decreasing = TRUE))
 
@@ -176,6 +177,7 @@ test_that(".viGlmnet reproduces vip::vi() for binomial glmnet fits", {
   expected <- expected[names(expected) != "(Intercept)"]
   expect_equal(vi$Importance, sort(abs(unname(expected)), decreasing = TRUE))
 })
+
 
 test_that(".viGlmnet labels exactly-zero coefficients NA, not \"NEG\"", {
   # Mock .viGlmnet()'s two external calls so a zero coefficient is
@@ -220,4 +222,35 @@ test_that("extractTopFeats includes the last feature at prop_vi_top_feats = c(0,
 
   expect_equal(nrow(top), nrow(all_feats))
   expect_setequal(top$Variable, all_feats$Variable)
+})
+make_log2apop_fixture <- function(n_resistant, n_susceptible, seed = 1) {
+  set.seed(seed)
+  phenotype <- factor(
+    c(rep("Resistant", n_resistant), rep("Susceptible", n_susceptible)),
+    levels = c("Resistant", "Susceptible")
+  )
+  pred_resistant <- ifelse(
+    phenotype == "Resistant",
+    stats::runif(length(phenotype), 0.6, 0.95),
+    stats::runif(length(phenotype), 0.05, 0.4)
+  )
+  tibble::tibble(
+    genome_drug.resistant_phenotype = phenotype,
+    .pred_class = factor(
+      ifelse(pred_resistant > 0.5, "Resistant", "Susceptible"),
+      levels = c("Resistant", "Susceptible")
+    ),
+    .pred_Resistant = pred_resistant
+  )
+}
+
+test_that(".calculateLog2APOP warns (not just messages) on roughly balanced classes", {
+  fx <- make_log2apop_fixture(n_resistant = 5, n_susceptible = 5)
+  expect_warning(amRml:::.calculateLog2APOP(fx), "roughly balanced")
+})
+
+test_that(".calculateLog2APOP warns (not just messages) on imbalanced classes", {
+  fx <- make_log2apop_fixture(n_resistant = 9, n_susceptible = 1)
+  expect_warning(amRml:::.calculateLog2APOP(fx), "imbalanced")
+
 })
