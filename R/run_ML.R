@@ -1018,7 +1018,7 @@ runMLmodels <- function(path,
   # ---- performance files ----
   perf_files <- list.files(
     path = unique(files$out_perf),
-    pattern = "_performance\\.tsv$",
+    pattern = "_performance\\.parquet$",
     full.names = FALSE
   )
 
@@ -1045,7 +1045,7 @@ runMLmodels <- function(path,
   perf_base <- sub("^cross_test_", "", perf_base)
 
   # ---- keep only this seed ----
-  seed_pattern <- paste0("_", seed, "_performance\\.tsv$")
+  seed_pattern <- paste0("_", seed, "_performance\\.parquet$")
   perf_base <- perf_base[grepl(seed_pattern, perf_base)]
 
   if (length(perf_base) == 0) {
