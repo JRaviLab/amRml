@@ -123,7 +123,7 @@ parse_ml_filename <- function(filename) {
 #' Reads all `_top_features.tsv` files, parses metadata from filenames,
 #' combines them into a single table, and writes a Parquet file.
 #'
-#' @param path Base directory containing ML results
+#' @param top_feat_dir_path The directory containing ML top features files
 #' @param out_parquet Output file name
 #' @param compression Compression method (default: "zstd")
 #' @param verbose Logical; print progress
@@ -137,7 +137,7 @@ parse_ml_filename <- function(filename) {
 #'
 #' @export
 buildTopFeatsPq <- function(
-  path,
+  top_feat_dir_path,
   # stratify_by = NULL,
   # LOO = FALSE,
   # MDR = FALSE,
@@ -146,10 +146,10 @@ buildTopFeatsPq <- function(
   compression = "zstd",
   verbose = TRUE
 ) {
-  # if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
-  #   stop("`path` must be a non-empty character scalar.")
-  # }
-  # path <- normalizePath(path)
+  if (!is.character(top_feat_dir_path) || length(top_feat_dir_path) != 1 || is.na(top_feat_dir_path) || nchar(top_feat_dir_path) == 0) {
+    stop("`path` must be a non-empty character scalar.")
+  }
+  top_feat_dir_path <- normalizePath(top_feat_dir_path)
 
   # if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
   #   stop("`stratify_by` must be NULL, 'year', or 'country'.")
@@ -164,20 +164,27 @@ buildTopFeatsPq <- function(
   # -----------------------
   # Resolve directories (ensures existence)
   # -----------------------
-  paths <- createMLResultDir(path,
-    stratify_by = NULL,
-  LOO = FALSE,
-  MDR = FALSE,
-  cross_test = FALSE
-  )
-  top_dir <- paths$ML_top_features
+  # paths <- createMLResultDir(path,
+  #   stratify_by = NULL,
+  # LOO = FALSE,
+  # MDR = FALSE,
+  # cross_test = FALSE
+  # )
+  # top_dir <- paths$ML_top_features
 
   files <- list.files(
-    top_dir,
-    pattern = "_top_features\\.tsv$",
-    full.names = TRUE,
-    recursive = TRUE
+  top_feat_dir_path,
+  pattern = "_top_features\\.tsv$",
+  full.names = TRUE,
+  recursive = TRUE
+)
+
+if (length(files) == 0) {
+  stop(
+    "No files matching '_top_features.tsv' were found in: ",
+    normalizePath(top_feat_dir_path, mustWork = FALSE)
   )
+}
 
   if (!length(files)) {
     return(tibble::tibble())
@@ -199,7 +206,7 @@ buildTopFeatsPq <- function(
     dplyr::bind_cols(meta_tbl[rep(1, nrow(df)), ], df)
   })
 
-  out_path <- file.path(top_dir, basename(out_parquet))
+  out_path <- file.path(top_feat_dir_path, basename(out_parquet))
   arrow::write_parquet(out, out_path, compression = compression)
 
   if (verbose) message("Wrote ", out_path)
@@ -211,7 +218,6 @@ buildTopFeatsPq <- function(
 #' Reads all `_performance.tsv` files, parses metadata from filenames,
 #' combines them into a single table, and writes a Parquet output.
 #'
-#' @inheritParams buildTopFeatsPq
 #'
 #' @return A tibble with metadata columns + performance metrics
 #'
@@ -222,7 +228,7 @@ buildTopFeatsPq <- function(
 #'
 #' @export
 buildPerfPq <- function(
-  path,
+  perf_dir_path,
   # stratify_by = NULL,
   # LOO = FALSE,
   # MDR = FALSE,
@@ -231,10 +237,10 @@ buildPerfPq <- function(
   compression = "zstd",
   verbose = TRUE
 ) {
-  if (!is.character(path) || length(path) != 1 || is.na(path) || nchar(path) == 0) {
+  if (!is.character(perf_dir_path) || length(perf_dir_path) != 1 || is.na(perf_dir_path) || nchar(perf_dir_path) == 0) {
     stop("`path` must be a non-empty character scalar.")
   }
-  path <- normalizePath(path)
+  perf_dir_path <- normalizePath(perf_dir_path)
 
   # if (!is.null(stratify_by) && !stratify_by %in% c("year", "country")) {
   #   stop("`stratify_by` must be NULL, 'year', or 'country'.")
@@ -249,19 +255,26 @@ buildPerfPq <- function(
   # -----------------------
   # Resolve directories from your function (ensures they exist)
   # -----------------------
-  paths <- createMLResultDir(path,
-    stratify_by = NULL, LOO = FALSE,
-    cross_test = FALSE, MDR = FALSE
-  )
-  perf_dir <- paths$ML_performance
+  # paths <- createMLResultDir(path,
+  #   stratify_by = NULL, LOO = FALSE,
+  #   cross_test = FALSE, MDR = FALSE
+  # )
+  # perf_dir <- paths$ML_performance
 
   files <- list.files(
-    perf_dir,
+    perf_dir_path,
     pattern = "_performance\\.tsv$",
     full.names = TRUE,
     recursive = TRUE
   )
 
+if (length(files) == 0) {
+  stop(
+    "No files matching '_performance.tsv' were found in: ",
+    normalizePath(perf_dir_path, mustWork = FALSE)
+  )
+}
+  
   if (!length(files)) {
     return(tibble::tibble())
   }
@@ -281,7 +294,7 @@ buildPerfPq <- function(
     dplyr::bind_cols(meta_tbl[rep(1, nrow(df)), ], df)
   })
 
-  out_path <- file.path(perf_dir, basename(out_parquet))
+  out_path <- file.path(perf_dir_path, basename(out_parquet))
   arrow::write_parquet(out, out_path, compression = compression)
 
   if (verbose) message("Wrote ", out_path)
