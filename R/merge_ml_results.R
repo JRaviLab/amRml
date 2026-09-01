@@ -231,7 +231,7 @@ buildPerfPq <- function(
   verbose = TRUE
 ) {
   if (!is.character(perf_dir_path) || length(perf_dir_path) != 1 || is.na(perf_dir_path) || nchar(perf_dir_path) == 0) {
-    stop("`path` must be a non-empty character scalar.")
+    stop("`perf_dir_path` must be a non-empty character scalar.")
   }
   perf_dir_path <- normalizePath(perf_dir_path)
 

@@ -1009,7 +1009,8 @@ runMLmodels <- function(path,
     
 .findNonRanPrefixes <- function(files,
                                 seed,
-                                shuffle_labels = FALSE) {
+                                shuffle_labels = FALSE) 
+                                {
 
   # ---- matrix prefixes ----
   matrix_prefixes <- unique(
