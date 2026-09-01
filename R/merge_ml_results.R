@@ -21,7 +21,7 @@
 #'
 #' @examples
 #' parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.tsv")
-#' parse_ml_filename("Csp_drug_year_AMX_2010-2015_genes_binary_year_42_performance.tsv")
+#' parse_ml_filename("Csp_drug_class_AMG_genes_binary_42_performance.tsv")
 #'
 #' @export
 parse_ml_filename <- function(filename) {
@@ -34,8 +34,8 @@ parse_ml_filename <- function(filename) {
     species = NA_character_,
     drug_label = NA_character_,
     drug_or_class = NA_character_,
-    strat_label = NA_character_,
-    strat_value = NA_character_,
+    # strat_label = NA_character_,
+    # strat_value = NA_character_,
     feature_type = NA_character_,
     feature_subtype = NA_character_,
     seed = NA_integer_
@@ -75,26 +75,28 @@ parse_ml_filename <- function(filename) {
     stop("ERROR: expected 'drug' token after species")
   }
 
-  # ---------------------------
-  # 4. Stratified? (the strat label, if present, comes before the
-  # drug/drug_class value, e.g. "..._drug_year_AMX_2010-2015_...")
-  # ---------------------------
-  if (i <= length(xs) && xs[i] %in% c("year", "country")) {
-    out$strat_label <- xs[i]
-    i <- i + 1
-  }
+  # # ---------------------------
+  # # 4. Stratified? (the strat label, if present, comes before the
+  # # drug/drug_class value, e.g. "..._drug_year_AMX_2010-2015_...")
+  # # ---------------------------
+  # if (i <= length(xs) && xs[i] %in% c("year", "country")) {
+  #   out$strat_label <- xs[i]
+  #   i <- i + 1
+  # }
 
+  # out$drug_or_class <- xs[i]
+  # i <- i + 1
+
+  # if (!is.na(out$strat_label)) {
+  #   out$strat_value <- xs[i]
+  #   i <- i + 1
+  # }
+
+  # ---------------------------
+  # 4. Feature type + subtype
+  # ---------------------------
   out$drug_or_class <- xs[i]
   i <- i + 1
-
-  if (!is.na(out$strat_label)) {
-    out$strat_value <- xs[i]
-    i <- i + 1
-  }
-
-  # ---------------------------
-  # 5. Feature type + subtype
-  # ---------------------------
   out$feature_type <- xs[i]
   i <- i + 1
   out$feature_subtype <- xs[i]
@@ -103,13 +105,13 @@ parse_ml_filename <- function(filename) {
   # ---------------------------
   # 6. Trailing strat label (mirror)
   # ---------------------------
-  if (!is.na(out$strat_label)) {
-    stopifnot(xs[i] == out$strat_label)
-    i <- i + 1
-  }
+  # if (!is.na(out$strat_label)) {
+  #   stopifnot(xs[i] == out$strat_label)
+  #   i <- i + 1
+  # }
 
   # ---------------------------
-  # 7. Seed
+  # 6. Seed
   # ---------------------------
   out$seed <- as.integer(xs[i])
 
