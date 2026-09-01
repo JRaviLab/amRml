@@ -1111,15 +1111,15 @@ if (nrow(files) == 0) {
   )
 
   # Stratification suffix
-  strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
-    ""
-  } else {
-    switch(stratify_by,
-      "country" = "_country",
-      "year"    = "_year",
-      stop("`stratify_by` must be NULL, 'year', or 'country'.")
-    )
-  }
+  # strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
+  #   ""
+  # } else {
+  #   switch(stratify_by,
+  #     "country" = "_country",
+  #     "year"    = "_year",
+  #     stop("`stratify_by` must be NULL, 'year', or 'country'.")
+  #   )
+  # }
 
   # Auto naming for shuffled and PCA
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
@@ -1199,8 +1199,8 @@ if (nrow(files) == 0) {
       }
 
         seed_tag <- paste0("_", seed)
-      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + _year/_country
-      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, strat_suffix, seed_tag)
+      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + seed
+      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, seed_tag)
 
       if (!is.null(res$performance_tibble)) {
         readr::write_tsv(
