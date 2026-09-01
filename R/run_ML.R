@@ -824,9 +824,10 @@ runMDRmodels <- function(path,
         saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
       if (!is.null(res$pred)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$pred,
-          file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
+          file.path(files$out_pred[i], paste0(base, "_prediction.parquet")),
+          compression = "zstd"
         )
       }
 
@@ -1208,14 +1209,16 @@ if (nrow(files) == 0) {
       if (!is.null(res$performance_tibble)) {
         arrow::write_parquet(
           res$performance_tibble,
-          file.path(files$out_perf[i], paste0(base, "_performance.parquet"))
+          file.path(files$out_perf[i], paste0(base, "_performance.parquet")),
+          compression = "zstd"
         )
       }
       
       if (!is.null(res$top_feat_tibble)) {
         arrow::write_parquet(
           res$top_feat_tibble,
-          file.path(files$out_top[i], paste0(base, "_top_features.parquet"))
+          file.path(files$out_top[i], paste0(base, "_top_features.parquet")),
+          compression = "zstd"
         )
       }
 
@@ -1223,9 +1226,10 @@ if (nrow(files) == 0) {
         saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
       if (!is.null(res$pred)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$pred,
-          file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
+          file.path(files$out_pred[i], paste0(base, "_prediction.parquet")),
+          compression = "zstd"
         )
       }
 

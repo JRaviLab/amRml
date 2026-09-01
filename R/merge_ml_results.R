@@ -20,13 +20,13 @@
 #' }
 #'
 #' @examples
-#' parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.tsv")
-#' parse_ml_filename("Csp_drug_class_AMG_genes_binary_42_performance.tsv")
+#' parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.parquet")
+#' parse_ml_filename("Csp_drug_class_AMG_genes_binary_42_performance.parquet")
 #'
 #' @export
 parse_ml_filename <- function(filename) {
   # Strip known suffix
-  base <- sub("_(top_features|performance)\\.tsv$", "", filename)
+  base <- sub("_(top_features|performance)\\.parquet$", "", filename)
   xs <- strsplit(base, "_", fixed = TRUE)[[1]]
 
   out <- list(
@@ -120,7 +120,7 @@ parse_ml_filename <- function(filename) {
 
 #' Build Parquet file of top ML features
 #'
-#' Reads all `_top_features.tsv` files, parses metadata from filenames,
+#' Reads all `_top_features.parquet` files, parses metadata from filenames,
 #' combines them into a single table, and writes a Parquet file.
 #'
 #' @param top_feat_dir_path The directory containing ML top features files
@@ -174,14 +174,14 @@ buildTopFeatsPq <- function(
 
   files <- list.files(
   top_feat_dir_path,
-  pattern = "_top_features\\.tsv$",
+  pattern = "_top_features\\.parquet$",
   full.names = TRUE,
   recursive = TRUE
 )
 
 if (length(files) == 0) {
   stop(
-    "No files matching '_top_features.tsv' were found in: ",
+    "No files matching '_top_features.parquet' were found in: ",
     normalizePath(top_feat_dir_path, mustWork = FALSE)
   )
 }
@@ -191,20 +191,13 @@ if (length(files) == 0) {
   }
 
   out <- purrr::map_dfr(files, function(f) {
-    meta <- parse_ml_filename(basename(f))
-    df <- readr::read_tsv(f,
-      col_types = readr::cols(
-        Variable   = readr::col_character(),
-        Importance = readr::col_double(),
-        Sign       = readr::col_character()
-      ),
-      show_col_types = FALSE,
-      na = c("NA", "", "NaN")
-    )
+  meta <- parse_ml_filename(basename(f))
 
-    meta_tbl <- tibble::as_tibble(meta)
-    dplyr::bind_cols(meta_tbl[rep(1, nrow(df)), ], df)
-  })
+  df <- arrow::read_parquet(f)
+
+  meta_tbl <- tibble::as_tibble(meta)
+  dplyr::bind_cols(meta_tbl[rep(1, nrow(df)), ], df)
+})
 
   out_path <- file.path(top_feat_dir_path, basename(out_parquet))
   arrow::write_parquet(out, out_path, compression = compression)
@@ -215,7 +208,7 @@ if (length(files) == 0) {
 
 #' Build Parquet file of ML performance results
 #'
-#' Reads all `_performance.tsv` files, parses metadata from filenames,
+#' Reads all `_performance.parquet` files, parses metadata from filenames,
 #' combines them into a single table, and writes a Parquet output.
 #'
 #'
@@ -263,14 +256,14 @@ buildPerfPq <- function(
 
   files <- list.files(
     perf_dir_path,
-    pattern = "_performance\\.tsv$",
+    pattern = "_performance\\.parquet$",
     full.names = TRUE,
     recursive = TRUE
   )
 
 if (length(files) == 0) {
   stop(
-    "No files matching '_performance.tsv' were found in: ",
+    "No files matching '_performance.parquet' were found in: ",
     normalizePath(perf_dir_path, mustWork = FALSE)
   )
 }
@@ -281,7 +274,7 @@ if (length(files) == 0) {
 
   out <- purrr::map_dfr(files, function(f) {
     meta <- parse_ml_filename(basename(f))
-    df <- readr::read_tsv(f, show_col_types = FALSE)
+    df <- arrow::read_parquet(f)
 
     # ---- SAFETY FIX ----
     # If TSV already has seed, drop parsed seed
@@ -318,12 +311,12 @@ if (length(files) == 0) {
 buildPerfPqYearCountry <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -338,7 +331,7 @@ buildPerfPqYearCountry <- function(
         "strat_label2",
         "seed_from_name"
       ),
-      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_performance\\.tsv$",
+      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_performance\\.parquet$",
       remove = FALSE
     ) |>
     dplyr::select(-c("strat_label2", "seed_from_name"))
@@ -365,12 +358,12 @@ buildPerfPqYearCountry <- function(
 buildPerfPqCrossDrug <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -396,12 +389,12 @@ buildPerfPqCrossDrug <- function(
 buildPerfPqCrossYear <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -427,12 +420,12 @@ buildPerfPqCrossYear <- function(
 buildPerfPqCrossCountry <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -459,12 +452,12 @@ buildPerfPqCrossCountry <- function(
 buildPerfPqLOODrug <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -494,12 +487,12 @@ buildPerfPqLOODrug <- function(
 buildTopFeatsPqYearCountry <- function(
   top_feat_dir_path
 ) {
-  files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |>
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(
         Importance = as.numeric(Importance),
         filename = basename(.x)
@@ -517,7 +510,7 @@ buildTopFeatsPqYearCountry <- function(
         "strat_label2",
         "seed_from_name"
       ),
-      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_top_features\\.tsv$",
+      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_top_features\\.parquet$",
       remove = FALSE
     ) |>
     dplyr::select(-c("strat_label2"))
@@ -545,12 +538,12 @@ buildTopFeatsPqYearCountry <- function(
 buildTopFeatsPqLOODrug <- function(
   top_feat_dir_path
 ) {
-  files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -577,12 +570,12 @@ buildTopFeatsPqLOODrug <- function(
 buildTopFeatsPqMDR <- function(
     top_feat_dir_path) {
   
-  files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
   
   # Read and combine
   merged_df <- files|>
     purrr::set_names() |>   # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
                      dplyr::mutate(filename = basename(.x))) |>
      tidyr::extract(
       filename,
@@ -611,12 +604,12 @@ buildTopFeatsPqMDR <- function(
 buildPerfPqMDR <- function(
     perf_dir_path) {
   
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
   
   # Read and combine
   merged_df <- files|>
     purrr::set_names() |>   # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
                      dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -645,12 +638,12 @@ buildPerfPqMDR <- function(
 buildPredPqMDR <- function(
     pred_dir_path) {
   
-  files <- list.files(pred_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(pred_dir_path, pattern = "\\.parquet$", full.names = TRUE)
   
   # Read and combine
   merged_df <- files|>
     purrr::set_names() |>   # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
                   dplyr::select(1:resistant_classes)|>
                      dplyr::mutate(filename = basename(.x)) ) |>
    tidyr::extract(
@@ -678,12 +671,12 @@ buildPredPqMDR <- function(
 buildPerfPqLOOCountry <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -709,12 +702,12 @@ buildPerfPqLOOCountry <- function(
 buildPerfPqLOOYear <- function(
   perf_dir_path
 ) {
-  files <- list.files(perf_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -742,12 +735,12 @@ buildPerfPqLOOYear <- function(
 buildTopFeatsPqLOOCountry <- function(
   top_feat_dir_path
 ) {
-  files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
@@ -775,12 +768,12 @@ buildTopFeatsPqLOOCountry <- function(
 buildTopFeatsPqLOOYear <- function(
   top_feat_dir_path
 ) {
-  files <- list.files(top_feat_dir_path, pattern = "\\.tsv$", full.names = TRUE)
+  files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
 
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
-    purrr::map_dfr(~ readr::read_tsv(.x, show_col_types = FALSE) |>
+    purrr::map_dfr(~ arrow::read_parquet(.x) |>
       dplyr::mutate(filename = basename(.x))) |>
     tidyr::extract(
       filename,
