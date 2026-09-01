@@ -328,19 +328,20 @@ buildPerfPqYearCountry <- function(
         "strat_value",
         "feature_type",
         "feature_subtype",
-        "strat_label2",
+        # "strat_label2",
         "seed_from_name"
       ),
-      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_performance\\.parquet$",
+      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_performance\\.parquet$",
       remove = FALSE
     ) |>
-    dplyr::select(-c("strat_label2", "seed_from_name"))
+    dplyr::select(-c("seed_from_name"))
 
   strat_label <- merged_df |>
     dplyr::distinct(strat_label) |>
     dplyr::pull()
 
   arrow::write_parquet(merged_df, file.path(perf_dir_path, paste0(strat_label, "_perf.parquet")))
+  merged_df
 }
 
 #' Build Parquet file from cross drug testing ML performances
@@ -507,13 +508,13 @@ buildTopFeatsPqYearCountry <- function(
         "strat_value",
         "feature_type",
         "feature_subtype",
-        "strat_label2",
+        # "strat_label2",
         "seed_from_name"
       ),
-      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_top_features\\.parquet$",
+      regex = "^([^_]+)_((?:[^_]+(?:_[^_]+)?))_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_top_features\\.parquet$",
       remove = FALSE
-    ) |>
-    dplyr::select(-c("strat_label2"))
+    ) 
+    
 
   strat_label <- merged_df |>
     dplyr::distinct(strat_label) |>

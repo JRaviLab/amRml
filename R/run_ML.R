@@ -1054,7 +1054,7 @@ runMLmodels <- function(path,
   }
 
   # ---- strip stratification BEFORE seed ----
-  perf_base <- sub("_(country|year)_([0-9]+)_performance\\.parquet$", 
+  perf_base <- sub("_([0-9]+)_performance\\.parquet$", 
                    "_\\2_performance.parquet", 
                    perf_base)
 
