@@ -1,8 +1,13 @@
 #' Parse ML result filename into structured metadata
 #'
 #' Extracts metadata fields encoded in machine learning result filenames.
-#' Supports shuffled runs, drug vs drug_class, optional stratification,
-#' feature types, and seed information.
+#' Supports shuffled runs, drug vs drug_class, feature types, and seed
+#' information.
+#'
+#' This helper handles only unstratified result filenames. Year/country
+#' stratified filenames carry extra tokens and are aggregated by
+#' [buildPerfPqYearCountry()] instead; passing one here raises an error
+#' rather than returning silently wrong metadata.
 #'
 #' @param filename Character. Filename (not full path) to parse.
 #'
@@ -32,8 +37,6 @@ parse_ml_filename <- function(filename) {
     species = NA_character_,
     drug_label = NA_character_,
     drug_or_class = NA_character_,
-    # strat_label = NA_character_,
-    # strat_value = NA_character_,
     feature_type = NA_character_,
     feature_subtype = NA_character_,
     seed = NA_integer_
@@ -73,43 +76,38 @@ parse_ml_filename <- function(filename) {
     stop("ERROR: expected 'drug' token after species")
   }
 
-  # # ---------------------------
-  # # 4. Stratified? (the strat label, if present, comes before the
-  # # drug/drug_class value, e.g. "..._drug_year_AMX_2010-2015_...")
-  # # ---------------------------
-  # if (i <= length(xs) && xs[i] %in% c("year", "country")) {
-  #   out$strat_label <- xs[i]
-  #   i <- i + 1
-  # }
-
-  # out$drug_or_class <- xs[i]
-  # i <- i + 1
-
-  # if (!is.na(out$strat_label)) {
-  #   out$strat_value <- xs[i]
-  #   i <- i + 1
-  # }
+  # ---------------------------
+  # 4. Reject stratified filenames
+  #
+  # In stratified filenames the strat label ("year"/"country") sits right
+  # after "drug"/"drug_class", e.g. "..._drug_year_AMX_2010-2015_...".
+  # Those carry extra tokens this parser does not account for, so bail out
+  # with a clear message instead of silently mislabelling drug and seed.
+  # ---------------------------
+  if (i <= length(xs) && xs[i] %in% c("year", "country")) {
+    stop(
+      "parse_ml_filename() does not support the '", xs[i],
+      "' stratified filename '", filename,
+      "'; use buildPerfPqYearCountry() for stratified results."
+    )
+  }
 
   # ---------------------------
-  # 4. Feature type + subtype
+  # 5. Drug or class value
   # ---------------------------
   out$drug_or_class <- xs[i]
   i <- i + 1
+
+  # ---------------------------
+  # 6. Feature type + subtype
+  # ---------------------------
   out$feature_type <- xs[i]
   i <- i + 1
   out$feature_subtype <- xs[i]
   i <- i + 1
 
   # ---------------------------
-  # 6. Trailing strat label (mirror)
-  # ---------------------------
-  # if (!is.na(out$strat_label)) {
-  #   stopifnot(xs[i] == out$strat_label)
-  #   i <- i + 1
-  # }
-
-  # ---------------------------
-  # 6. Seed
+  # 7. Seed
   # ---------------------------
   out$seed <- as.integer(xs[i])
 
