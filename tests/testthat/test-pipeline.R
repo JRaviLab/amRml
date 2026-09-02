@@ -10,7 +10,6 @@ skip_pipeline_if_missing <- function() {
   skip_if_not_installed("tune")
   skip_if_not_installed("workflows")
   skip_if_not_installed("yardstick")
-  skip_if_not_installed("vip")
 }
 
 minimal_grid_args <- list(

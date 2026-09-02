@@ -43,7 +43,6 @@
 #' @importFrom tune finalize_workflow
 #' @importFrom tune select_best
 #' @importFrom tune tune_grid
-#' @importFrom vip vi
 #' @importFrom workflows add_model
 #' @importFrom workflows add_recipe
 #' @importFrom workflows workflow
@@ -250,10 +249,9 @@ buildWflow <- function(parsnip_mod, recipe) {
 #' )
 #' @export
 buildTuningGrid <- function(
-  model = "LR",
-  penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5 / 5
-) {
+    model = "LR",
+    penalty_vec = 10^seq(-4, -1, length.out = 10),
+    mix_vec = 0:5 / 5) {
   .checkArgModel(model)
 
   if (model == "LR") {
@@ -603,12 +601,12 @@ getConfusionMatrix <- function(test_data_plus_predictions) {
     nrow(test_data_plus_predictions)
 
   if (prior > 0.3 && prior < 0.7) {
-    message(
+    warning(
       "Classes are roughly balanced. ",
       "Calculation of log2(AUPRC/prior) may be inappropriate."
     )
   } else if (prior >= 0.7) {
-    message(
+    warning(
       "Classes are imbalanced for this model. ",
       "The use of the log2(AUPRC/prior) metric may be more informative in this imbalanced model."
     )
@@ -751,6 +749,31 @@ calculateEvalMets <- function(test_data_plus_predictions) {
   return(c(f1, auprc, bal_acc, mcc, nmcc, log2_apop))
 }
 
+#' Variable importance for a binomial glmnet fit
+#'
+#' Internal replacement for `vip::vi()`, dropped as a dependency after it left
+#' CRAN. Returns `|coefficient|` as `Importance` and its direction as `Sign`,
+#' sorted by decreasing importance.
+#'
+#' Importance is taken at glmnet's minimum lambda, not the tuned `penalty`.
+#' That is what `vip::vi()` did.
+#'
+#' @param fit A fitted workflow backed by a binomial glmnet engine.
+#' @return A tibble with `Variable`, `Importance`, and `Sign` columns.
+#' @keywords internal
+.viGlmnet <- function(fit) {
+  glmnet_fit <- parsnip::extract_fit_engine(fit)
+  coefs <- stats::coef(glmnet_fit, s = min(glmnet_fit$lambda))[, 1, drop = TRUE]
+  coefs <- coefs[names(coefs) != "(Intercept)"]
+
+  tibble::tibble(
+    Variable = names(coefs),
+    Importance = abs(unname(coefs)),
+    Sign = ifelse(coefs > 0, "POS", "NEG")
+  ) |>
+    dplyr::arrange(dplyr::desc(Importance))
+}
+
 #' extractTopFeats()
 #'
 #' Returns the top features that an ML model found to be important for
@@ -772,9 +795,8 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 #' extractTopFeats(demo_fit, n_top_feats = 10)
 #' @export
 extractTopFeats <- function(
-  fit, prop_vi_top_feats = c(0, 1),
-  n_top_feats = NA
-) {
+    fit, prop_vi_top_feats = c(0, 1),
+    n_top_feats = NA) {
   .checkArgWflow(fit)
 
   if (!is.na(n_top_feats)) {
@@ -793,30 +815,8 @@ extractTopFeats <- function(
     stop("Please specify either `n_top_feats` or `prop_vi_top_feats`.")
   }
 
-  feats_arranged <- fit |>
-    workflowsets::extract_fit_parsnip() |>
-    vip::vi() |>
-    dplyr::arrange(dplyr::desc(Importance))
-
-  if (!is.na(n_top_feats)) {
-    top_feats_and_VIs <- feats_arranged |> dplyr::slice(seq_len(n_top_feats))
-  } else if (any(!is.na(prop_vi_top_feats))) {
-    cum_vi_lower <- prop_vi_top_feats[1] * sum(feats_arranged$Importance)
-    cum_vi_upper <- prop_vi_top_feats[2] * sum(feats_arranged$Importance)
-
-    top_feats_and_VIs <- feats_arranged |>
-      dplyr::mutate(cum_imp = cumsum(Importance)) |>
-      dplyr::filter(cum_imp < cum_vi_upper & cum_imp > cum_vi_lower)
-  }
-
-  top_feat_tibble <- tibble::tibble(
-    Variable = dplyr::pull(top_feats_and_VIs, Variable),
-    Importance = dplyr::pull(top_feats_and_VIs, Importance),
-    Sign = dplyr::pull(top_feats_and_VIs, Sign)
-  )
-
-  # Take a different approach if using multi-class (the previous code would give
-  # a less meaningful result).
+  # Multi-class: glmnet returns one coefficient matrix per class, so there is no
+  # single ranking to slice. Handled before `.viGlmnet()`, which expects one.
   if (is(fit$fit$actions$model$spec, "multinom_reg")) {
     warning(
       "Extracting top features from a multi-class model. ",
@@ -844,7 +844,28 @@ extractTopFeats <- function(
         values_fill = 0 # Fill missing values with 0.
       ) |>
       dplyr::filter(dplyr::if_any(-Variable, ~ . != 0))
+
+    return(top_feat_tibble)
   }
+
+  feats_arranged <- .viGlmnet(fit)
+
+  if (!is.na(n_top_feats)) {
+    top_feats_and_VIs <- feats_arranged |> dplyr::slice(seq_len(n_top_feats))
+  } else if (any(!is.na(prop_vi_top_feats))) {
+    cum_vi_lower <- prop_vi_top_feats[1] * sum(feats_arranged$Importance)
+    cum_vi_upper <- prop_vi_top_feats[2] * sum(feats_arranged$Importance)
+
+    top_feats_and_VIs <- feats_arranged |>
+      dplyr::mutate(cum_imp = cumsum(Importance)) |>
+      dplyr::filter(cum_imp < cum_vi_upper & cum_imp > cum_vi_lower)
+  }
+
+  top_feat_tibble <- tibble::tibble(
+    Variable = dplyr::pull(top_feats_and_VIs, Variable),
+    Importance = dplyr::pull(top_feats_and_VIs, Importance),
+    Sign = dplyr::pull(top_feats_and_VIs, Sign)
+  )
 
   return(top_feat_tibble)
 }

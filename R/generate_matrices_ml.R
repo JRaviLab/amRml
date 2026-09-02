@@ -447,8 +447,8 @@ log(
 
   con0 <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
  on.exit({
-  if (DBI::dbIsValid(con)) {
-    DBI::dbDisconnect(con, shutdown = TRUE)
+  if (DBI::dbIsValid(con0)) {
+    DBI::dbDisconnect(con0, shutdown = TRUE)
   }
 }, add = TRUE)
   
@@ -938,8 +938,8 @@ log(
 
   con0 <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit({
-  if (DBI::dbIsValid(con)) {
-    DBI::dbDisconnect(con, shutdown = TRUE)
+  if (DBI::dbIsValid(con0)) {
+    DBI::dbDisconnect(con0, shutdown = TRUE)
   }
 }, add = TRUE)
   .register_parquet_views(con0, parquet_dir)
