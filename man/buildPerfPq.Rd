@@ -11,6 +11,15 @@ buildPerfPq(
   verbose = TRUE
 )
 }
+\arguments{
+\item{perf_dir_path}{The directory containing ML performance files}
+
+\item{out_parquet}{Output file name}
+
+\item{compression}{Compression method (default: "zstd")}
+
+\item{verbose}{Logical; print progress}
+}
 \value{
 A tibble with metadata columns + performance metrics
 }

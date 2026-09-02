@@ -207,6 +207,10 @@ if (length(files) == 0) {
 #' Reads all `_performance.parquet` files, parses metadata from filenames,
 #' combines them into a single table, and writes a Parquet output.
 #'
+#' @param perf_dir_path The directory containing ML performance files
+#' @param out_parquet Output file name
+#' @param compression Compression method (default: "zstd")
+#' @param verbose Logical; print progress
 #'
 #' @return A tibble with metadata columns + performance metrics
 #'
