@@ -119,7 +119,7 @@ Files are saved with prefixes and suffixes indicating the configuration:
 \item Stratification: Suffixed with \code{"_country"} or \code{"_year"}
 }
 
-For example: \code{"LOO_cross_test_ML_year_performance.tsv"}
+For example: \code{"LOO_cross_test_ML_year_performance.parquet"}
 }
 \note{
 This function requires the following packages:

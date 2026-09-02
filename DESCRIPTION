@@ -89,4 +89,4 @@ biocViews:
     Visualization
 URL: https://github.com/JRaviLab/amRml
 BugReports: https://github.com/JRaviLab/amRml/issues
-Config/roxygen2/version: 8.0.0
+Config/roxygen2/version: 8.1.0

@@ -12,8 +12,6 @@
 #'   \item{species}{Species name}
 #'   \item{drug_label}{"drug" or "drug_class"}
 #'   \item{drug_or_class}{Drug name or class}
-#'   \item{strat_label}{Stratification type (year/country) or NA}
-#'   \item{strat_value}{Stratification value or NA}
 #'   \item{feature_type}{Feature category}
 #'   \item{feature_subtype}{binary/counts}
 #'   \item{seed}{Integer seed}
@@ -132,7 +130,7 @@ parse_ml_filename <- function(filename) {
 #'
 #' @examples
 #' \dontrun{
-#' buildTopFeatsPq("data/Campylobacter")
+#' buildTopFeatsPq("data/Campylobacter/ML_top_features/")
 #' }
 #'
 #' @export
@@ -216,7 +214,7 @@ if (length(files) == 0) {
 #'
 #' @examples
 #' \dontrun{
-#' buildPerfPq("data/Campylobacter")
+#' buildPerfPq("data/Campylobacter/ML_performance/")
 #' }
 #'
 #' @export

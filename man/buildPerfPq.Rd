@@ -5,31 +5,22 @@
 \title{Build Parquet file of ML performance results}
 \usage{
 buildPerfPq(
-  path,
+  perf_dir_path,
   out_parquet = "all_perf.parquet",
   compression = "zstd",
   verbose = TRUE
 )
 }
-\arguments{
-\item{path}{Base directory containing ML results}
-
-\item{out_parquet}{Output file name}
-
-\item{compression}{Compression method (default: "zstd")}
-
-\item{verbose}{Logical; print progress}
-}
 \value{
 A tibble with metadata columns + performance metrics
 }
 \description{
-Reads all \verb{_performance.tsv} files, parses metadata from filenames,
+Reads all \verb{_performance.parquet} files, parses metadata from filenames,
 combines them into a single table, and writes a Parquet output.
 }
 \examples{
 \dontrun{
-buildPerfPq("data/Campylobacter")
+buildPerfPq("data/Campylobacter/ML_performance/")
 }
 
 }

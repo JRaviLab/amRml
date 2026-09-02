@@ -68,116 +68,154 @@ import(ggrepel)
 import(purrr)
 import(stringr)
 import(tibble)
-importFrom(DBI,dbConnect)
-importFrom(DBI,dbDisconnect)
-importFrom(DBI,dbExecute)
-importFrom(DBI,dbGetQuery)
-importFrom(DBI,dbWriteTable)
-importFrom(arrow,read_parquet)
-importFrom(arrow,write_parquet)
-importFrom(dplyr,all_of)
-importFrom(dplyr,arrange)
-importFrom(dplyr,bind_rows)
-importFrom(dplyr,case_when)
-importFrom(dplyr,count)
-importFrom(dplyr,desc)
-importFrom(dplyr,distinct)
-importFrom(dplyr,filter)
-importFrom(dplyr,group_by)
-importFrom(dplyr,if_any)
-importFrom(dplyr,matches)
-importFrom(dplyr,mutate)
-importFrom(dplyr,n_distinct)
-importFrom(dplyr,pull)
-importFrom(dplyr,relocate)
-importFrom(dplyr,rename)
-importFrom(dplyr,row_number)
-importFrom(dplyr,rowwise)
-importFrom(dplyr,select)
-importFrom(dplyr,slice)
-importFrom(dplyr,summarise)
-importFrom(dplyr,ungroup)
+importFrom(DBI,
+  dbConnect,
+  dbDisconnect,
+  dbExecute,
+  dbGetQuery,
+  dbWriteTable
+)
+importFrom(arrow,
+  read_parquet,
+  write_parquet
+)
+importFrom(dplyr,
+  all_of,
+  arrange,
+  bind_rows,
+  case_when,
+  count,
+  desc,
+  distinct,
+  filter,
+  group_by,
+  if_any,
+  matches,
+  mutate,
+  n_distinct,
+  pull,
+  relocate,
+  rename,
+  row_number,
+  rowwise,
+  select,
+  slice,
+  summarise,
+  ungroup
+)
 importFrom(duckdb,duckdb)
-importFrom(ggplot2,aes)
-importFrom(ggplot2,element_blank)
-importFrom(ggplot2,element_line)
-importFrom(ggplot2,element_text)
-importFrom(ggplot2,geom_line)
-importFrom(ggplot2,geom_path)
-importFrom(ggplot2,geom_point)
-importFrom(ggplot2,ggplot)
-importFrom(ggplot2,labs)
-importFrom(ggplot2,theme)
-importFrom(ggplot2,xlab)
-importFrom(ggplot2,ylim)
+importFrom(ggplot2,
+  aes,
+  element_blank,
+  element_line,
+  element_text,
+  geom_line,
+  geom_path,
+  geom_point,
+  ggplot,
+  labs,
+  theme,
+  xlab,
+  ylim
+)
 importFrom(glmnet,glmnet)
 importFrom(glue,glue)
 importFrom(grDevices,colorRampPalette)
 importFrom(graphics,barplot)
 importFrom(hardhat,tune)
-importFrom(jsonlite,fromJSON)
-importFrom(jsonlite,write_json)
+importFrom(jsonlite,
+  fromJSON,
+  write_json
+)
 importFrom(methods,is)
-importFrom(parsnip,augment)
-importFrom(parsnip,boost_tree)
-importFrom(parsnip,extract_fit_engine)
-importFrom(parsnip,fit)
-importFrom(parsnip,logistic_reg)
-importFrom(parsnip,multinom_reg)
-importFrom(parsnip,rand_forest)
-importFrom(parsnip,set_engine)
-importFrom(parsnip,set_mode)
-importFrom(purrr,imap_dfr)
-importFrom(purrr,map)
-importFrom(purrr,map_int)
-importFrom(purrr,pmap_chr)
-importFrom(purrr,walk)
+importFrom(parsnip,
+  augment,
+  boost_tree,
+  extract_fit_engine,
+  fit,
+  logistic_reg,
+  multinom_reg,
+  rand_forest,
+  set_engine,
+  set_mode
+)
+importFrom(purrr,
+  imap_dfr,
+  map,
+  map_int,
+  pmap_chr,
+  walk
+)
 importFrom(readr,write_lines)
-importFrom(recipes,all_predictors)
-importFrom(recipes,recipe)
-importFrom(recipes,step_normalize)
-importFrom(recipes,step_pca)
-importFrom(recipes,step_zv)
-importFrom(recipes,update_role)
-importFrom(rlang,":=")
-importFrom(rlang,eval_tidy)
-importFrom(rlang,sym)
-importFrom(rsample,initial_split)
-importFrom(rsample,initial_validation_split)
-importFrom(rsample,testing)
-importFrom(rsample,training)
-importFrom(rsample,validation_set)
-importFrom(rsample,vfold_cv)
-importFrom(stats,coef)
-importFrom(stats,fisher.test)
-importFrom(stats,median)
-importFrom(stats,reformulate)
-importFrom(stats,reorder)
-importFrom(stats,sd)
-importFrom(stringr,str_remove)
-importFrom(stringr,str_split)
-importFrom(tibble,add_column)
-importFrom(tibble,is_tibble)
-importFrom(tibble,tibble)
-importFrom(tidyr,drop_na)
-importFrom(tidyr,pivot_longer)
-importFrom(tidyr,pivot_wider)
-importFrom(tune,control_grid)
-importFrom(tune,extract_fit_parsnip)
-importFrom(tune,finalize_workflow)
-importFrom(tune,select_best)
-importFrom(tune,tune_grid)
-importFrom(vip,vi)
-importFrom(vip,vip)
-importFrom(workflows,add_model)
-importFrom(workflows,add_recipe)
-importFrom(workflows,workflow)
-importFrom(workflowsets,extract_fit_parsnip)
-importFrom(workflowsets,extract_spec_parsnip)
-importFrom(yardstick,bal_accuracy)
-importFrom(yardstick,conf_mat)
-importFrom(yardstick,f_meas)
-importFrom(yardstick,mcc)
-importFrom(yardstick,metric_set)
-importFrom(yardstick,pr_auc)
-importFrom(yardstick,pr_curve)
+importFrom(recipes,
+  all_predictors,
+  recipe,
+  step_normalize,
+  step_pca,
+  step_zv,
+  update_role
+)
+importFrom(rlang,
+  ":=",
+  eval_tidy,
+  sym
+)
+importFrom(rsample,
+  initial_split,
+  initial_validation_split,
+  testing,
+  training,
+  validation_set,
+  vfold_cv
+)
+importFrom(stats,
+  coef,
+  fisher.test,
+  median,
+  reformulate,
+  reorder,
+  sd
+)
+importFrom(stringr,
+  str_remove,
+  str_split
+)
+importFrom(tibble,
+  add_column,
+  is_tibble,
+  tibble
+)
+importFrom(tidyr,
+  drop_na,
+  pivot_longer,
+  pivot_wider
+)
+importFrom(tune,
+  control_grid,
+  extract_fit_parsnip,
+  finalize_workflow,
+  select_best,
+  tune_grid
+)
+importFrom(vip,
+  vi,
+  vip
+)
+importFrom(workflows,
+  add_model,
+  add_recipe,
+  workflow
+)
+importFrom(workflowsets,
+  extract_fit_parsnip,
+  extract_spec_parsnip
+)
+importFrom(yardstick,
+  bal_accuracy,
+  conf_mat,
+  f_meas,
+  mcc,
+  metric_set,
+  pr_auc,
+  pr_curve
+)
