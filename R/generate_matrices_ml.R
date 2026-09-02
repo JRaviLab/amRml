@@ -746,7 +746,11 @@ log(
 
   # Validate intended stratification strategy
   if (!is.null(stratify_by) && !(stratify_by %in% c("year", "country"))) {
-    stop("`stratify_by` must be 'year', 'country', or NULL.")
+    stop(
+      "`stratify_by` must be 'year', 'country', or NULL here. ",
+      "Leave-one-drug-out matrices are built by .parquet2LOODrugMatrix(), ",
+      "which groups by drug from matrix/ and takes no `stratify_by`."
+    )
   }
   if (is.null(stratify_by)) {
     log("info", "No stratification provided (stratify_by = NULL). Leave-one-out is undefined. Exiting.")

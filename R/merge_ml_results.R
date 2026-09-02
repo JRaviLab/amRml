@@ -431,7 +431,7 @@ buildPerfPqCrossCountry <- function(
 #' @examples
 #' \dontrun{
 #' # LOO drug
-#' buildPerfPqLOODrug(perf_dir_path = "data/Campylobacter/LOO_ML_performance/")
+#' buildPerfPqLOODrug(perf_dir_path = "data/Campylobacter/LOO_ML_drug_performance/")
 #' }
 #'
 #' @export
@@ -517,7 +517,7 @@ buildTopFeatsPqYearCountry <- function(
 #' @examples
 #' \dontrun{
 #' # LOO drug
-#' buildTopFeatsPqLOODrug(top_feat_dir_path = "data/Campylobacter/LOO_ML_top_features/")
+#' buildTopFeatsPqLOODrug(top_feat_dir_path = "data/Campylobacter/LOO_ML_drug_top_features/")
 #' }
 #'
 #' @export

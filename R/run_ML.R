@@ -32,10 +32,11 @@
 #' including matrices, performance metrics, feature importance, models, and predictions.
 #'
 #' @param path Character scalar. Base directory path where subdirectories will be created.
-#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"},
-#'   \code{"year"}, or \code{NULL}. Default is \code{NULL} (no stratification).
+#' @param stratify_by Character scalar or NULL. Stratum to hold out:
+#'   \code{"country"}, \code{"year"}, or \code{"drug"}. \code{NULL} means no
+#'   stratification and is only valid when \code{LOO} is \code{FALSE}.
 #' @param LOO Logical. Whether to create directories for Leave-One-Out analysis.
-#'   Default is \code{FALSE}. Only valid when \code{stratify_by} is not \code{NULL}.
+#'   Default is \code{FALSE}. Requires a \code{stratify_by} stratum.
 #' @param cross_test Logical. Whether to create directories for cross-testing.
 #'   Default is \code{FALSE}.
 #' @param MDR Logical. Whether to create directories for Multi-Drug Resistance (MDR) analysis.
@@ -78,7 +79,7 @@ createMLResultDir <- function(path,
   path <- normalizePath(path)
 
   if (!is.null(stratify_by) && length(stratify_by) != 1) {
-    stop("`stratify_by` must be NULL or a single value: 'country' or 'year'.")
+    stop("`stratify_by` must be NULL or a single value: 'country', 'year', or 'drug'.")
   }
 
   # MDR mode: mutually exclusive with LOO/cross_test/stratification
@@ -101,28 +102,22 @@ createMLResultDir <- function(path,
     )
     half_prefix <- ifelse(isTRUE(LOO), "LOO_", "")
 
-    # Determine suffix
+    # Determine suffix. "drug" is leave-one-drug-out, which only makes sense
+    # under LOO; the check in createMLinputList() enforces that.
     suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
       ""
     } else {
       switch(stratify_by,
         "country" = "_country",
         "year"    = "_year",
-        stop("`stratify_by` must be NULL, 'country', or 'year'.")
+        "drug"    = "_drug",
+        stop("`stratify_by` must be NULL, 'country', 'year', or 'drug'.")
       )
     }
 
-    # There is no stratify_by = "drug", so leave-one-drug-out arrives as NULL
-    # and `suffix` is "", making the path "LOO_matrix", which nothing writes.
-    # Those matrices live in LOO_matrix_drug/. Result directories keep the
-    # plain `suffix`, giving LOO_ML_performance/ not LOO_ML_drug_performance/.
-    # TODO: retire this by adding "drug" to the switch above, which also makes
-    # LOO with stratify_by = NULL an error again.
-    matrix_suffix <- if (isTRUE(LOO) && identical(suffix, "")) "_drug" else suffix
-
     # Build paths
     paths <- list(
-      matrix_path     = file.path(path, paste0(half_prefix, "matrix", matrix_suffix)),
+      matrix_path     = file.path(path, paste0(half_prefix, "matrix", suffix)),
       ML_performance  = file.path(path, paste0(full_prefix, "ML", suffix, "_performance")),
       ML_top_features = file.path(path, paste0(full_prefix, "ML", suffix, "_top_features")),
       ML_models       = file.path(path, paste0(full_prefix, "ML", suffix, "_models")),
@@ -163,9 +158,11 @@ createMLResultDir <- function(path,
 #' standard, cross-test, Leave-One-Out (LOO), and Multi-Drug Resistance (MDR).
 #'
 #' @param path Character scalar. Base directory path containing matrix subdirectories.
-#' @param stratify_by Character scalar or NULL. Stratification method: \code{"country"},
-#'   \code{"year"}, or \code{NULL}.
-#' @param LOO Logical. Whether to perform Leave-One-Out analysis. Requires \code{stratify_by}.
+#' @param stratify_by Character scalar or NULL. Stratum to hold out:
+#'   \code{"country"}, \code{"year"}, or \code{"drug"}. \code{NULL} means no
+#'   stratification and is only valid when \code{LOO} is \code{FALSE}.
+#' @param LOO Logical. Whether to perform Leave-One-Out analysis. Requires a
+#'   \code{stratify_by} stratum ("year", "country", or "drug").
 #' @param MDR Logical. Whether to perform Multi-Drug Resistance analysis.
 #' @param cross_test Logical. Whether to perform cross-testing between groups.
 #'
@@ -209,14 +206,14 @@ createMLinputList <- function(path,
 
   path <- normalizePath(path)
 
-  # LOO has three kinds: by year, by country, and by drug. Only the first two
-  # have a stratify_by value, so leave-one-drug-out arrives as NULL. Validate
-  # the value when one is given rather than requiring one.
-  if (isTRUE(LOO) && !is.null(stratify_by) &&
-    !(stratify_by %in% c("year", "country"))) {
+  # LOO has three kinds: by year, by country, and by drug. Each names the
+  # stratum it holds out, so NULL is not a valid LOO mode: every LOO matrix
+  # directory carries a suffix, and "LOO_matrix" is a directory nothing writes.
+  if (isTRUE(LOO) &&
+    (is.null(stratify_by) || !(stratify_by %in% c("year", "country", "drug")))) {
     stop(
-      "For Leave-One-Out (LOO) models, `stratify_by` must be NULL ",
-      "(leave-one-drug-out), 'year', or 'country'."
+      "For Leave-One-Out (LOO) models, `stratify_by` must be ",
+      "'year', 'country', or 'drug'."
     )
   }
 
@@ -517,7 +514,7 @@ createMLinputList <- function(path,
       # Cross-test + LOO modeling
       # ============================
     } else if (cross_test && LOO) {
-        if(is.null(stratify_by)) {
+        if (identical(stratify_by, "drug")) {
         # Leave-one-drug-out cross testing. NOT SUPPORTED YET: it needs its own
         # test set, the LOO equivalent of cross_drug_test/, which
         # generateMLInputs() does not produce. Without it the pairing below has
@@ -535,8 +532,6 @@ createMLinputList <- function(path,
         #     the LOO matrices are the test set, but they hold training data
         #     (see "## Training drugs" in .parquet2LOODrugMatrix()), which is
         #     what ref_file already reads them as.
-        #  3. This branch should key off stratify_by == "drug" once that is a
-        #     real value, rather than treating NULL as "must mean drug".
         stop(
           "Leave-one-drug-out cross testing is not supported yet: ",
           "generateMLInputs() does not produce a cross-drug test set for the ",
@@ -1029,10 +1024,10 @@ runMLmodels <- function(path,
                        seed = 123) {
   if (!is.null(stratify_by)) {
     if (!is.character(stratify_by) || length(stratify_by) != 1L) {
-      stop("`stratify_by` must be NULL or a single string: 'year' or 'country'.")
+      stop("`stratify_by` must be NULL or a single string: 'year', 'country', or 'drug'.")
     }
-    if (!stratify_by %in% c("year", "country")) {
-      stop("`stratify_by` must be NULL, 'year', or 'country'.")
+    if (!stratify_by %in% c("year", "country", "drug")) {
+      stop("`stratify_by` must be NULL, 'year', 'country', or 'drug'.")
     }
   }
 
@@ -1162,7 +1157,8 @@ if (nrow(files) == 0) {
     switch(stratify_by,
       "country" = "_country",
       "year"    = "_year",
-      stop("`stratify_by` must be NULL, 'year', or 'country'.")
+      "drug"    = "_drug",
+      stop("`stratify_by` must be NULL, 'country', 'year', or 'drug'.")
     )
   }
 
