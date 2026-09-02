@@ -782,3 +782,152 @@ buildTopFeatsPqLOOYear <- function(
 
   arrow::write_parquet(merged_df, file.path(top_feat_dir_path, "LOO_year_top_features.parquet"))
 }
+
+
+#' Merge all ML result files into consolidated parquet files
+#'
+#' Automatically detects supported ML result directories and
+#' builds merged parquet summaries for each.
+#'
+#' @param path Base analysis directory.
+#'
+#' @return Invisibly returns NULL.
+#'
+#' @examples
+#' \dontrun{
+#' mergeMLresults("data/Campylobacter")
+#' }
+#'
+#' @export
+mergeMLresults <- function(path) {
+
+  path <- normalizePath(path)
+
+  # -----------------------
+  # Standard ML
+  # -----------------------
+  if (dir.exists(file.path(path, "ML_performance"))) {
+    buildPerfPq(
+      perf_dir_path = file.path(path, "ML_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "ML_top_features"))) {
+    buildTopFeatsPq(
+      top_feat_dir_path = file.path(path, "ML_top_features")
+    )
+  }
+
+  # -----------------------
+  # Year stratified
+  # -----------------------
+  if (dir.exists(file.path(path, "ML_year_performance"))) {
+    buildPerfPqYearCountry(
+      perf_dir_path = file.path(path, "ML_year_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "ML_year_top_features"))) {
+    buildTopFeatsPqYearCountry(
+      top_feat_dir_path = file.path(path, "ML_year_top_features")
+    )
+  }
+
+  # -----------------------
+  # Country stratified
+  # -----------------------
+  if (dir.exists(file.path(path, "ML_country_performance"))) {
+    buildPerfPqYearCountry(
+      perf_dir_path = file.path(path, "ML_country_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "ML_country_top_features"))) {
+    buildTopFeatsPqYearCountry(
+      top_feat_dir_path = file.path(path, "ML_country_top_features")
+    )
+  }
+
+  # -----------------------
+  # Cross-testing
+  # -----------------------
+  if (dir.exists(file.path(path, "cross_test_ML_performance"))) {
+    buildPerfPqCrossDrug(
+      perf_dir_path = file.path(path, "cross_test_ML_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "cross_test_ML_year_performance"))) {
+    buildPerfPqCrossYear(
+      perf_dir_path = file.path(path, "cross_test_ML_year_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "cross_test_ML_country_performance"))) {
+    buildPerfPqCrossCountry(
+      perf_dir_path = file.path(path, "cross_test_ML_country_performance")
+    )
+  }
+
+  # -----------------------
+  # LOO
+  # -----------------------
+  if (dir.exists(file.path(path, "LOO_ML_performance"))) {
+    buildPerfPqLOODrug(
+      perf_dir_path = file.path(path, "LOO_ML_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "LOO_ML_top_features"))) {
+    buildTopFeatsPqLOODrug(
+      top_feat_dir_path = file.path(path, "LOO_ML_top_features")
+    )
+  }
+
+  if (dir.exists(file.path(path, "LOO_ML_country_performance"))) {
+    buildPerfPqLOOCountry(
+      perf_dir_path = file.path(path, "LOO_ML_country_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "LOO_ML_country_top_features"))) {
+    buildTopFeatsPqLOOCountry(
+      top_feat_dir_path = file.path(path, "LOO_ML_country_top_features")
+    )
+  }
+
+  if (dir.exists(file.path(path, "LOO_ML_year_performance"))) {
+    buildPerfPqLOOYear(
+      perf_dir_path = file.path(path, "LOO_ML_year_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "LOO_ML_year_top_features"))) {
+    buildTopFeatsPqLOOYear(
+      top_feat_dir_path = file.path(path, "LOO_ML_year_top_features")
+    )
+  }
+
+  # -----------------------
+  # MDR
+  # -----------------------
+  if (dir.exists(file.path(path, "MDR_ML_performance"))) {
+    buildPerfPqMDR(
+      perf_dir_path = file.path(path, "MDR_ML_performance")
+    )
+  }
+
+  if (dir.exists(file.path(path, "MDR_ML_top_features"))) {
+    buildTopFeatsPqMDR(
+      top_feat_dir_path = file.path(path, "MDR_ML_top_features")
+    )
+  }
+
+  if (dir.exists(file.path(path, "MDR_ML_pred"))) {
+    buildPredPqMDR(
+      pred_dir_path = file.path(path, "MDR_ML_pred")
+    )
+  }
+
+  invisible(NULL)
+}
