@@ -23,8 +23,14 @@ A named list with elements:
 }
 \description{
 Extracts metadata fields encoded in machine learning result filenames.
-Supports shuffled runs, drug vs drug_class, optional stratification,
-feature types, and seed information.
+Supports shuffled runs, drug vs drug_class, feature types, and seed
+information.
+}
+\details{
+This helper handles only unstratified result filenames. Year/country
+stratified filenames carry extra tokens and are aggregated by
+\code{\link[=buildPerfPqYearCountry]{buildPerfPqYearCountry()}} instead; passing one here raises an error
+rather than returning silently wrong metadata.
 }
 \examples{
 parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.parquet")

@@ -18,7 +18,6 @@
 #' @importFrom ggplot2 ylim
 #' @importFrom graphics barplot
 #' @importFrom tune extract_fit_parsnip
-#' @importFrom vip vip
 #' @importFrom yardstick pr_curve
 NULL
 

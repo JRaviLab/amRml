@@ -198,10 +198,6 @@ importFrom(tune,
   select_best,
   tune_grid
 )
-importFrom(vip,
-  vi,
-  vip
-)
 importFrom(workflows,
   add_model,
   add_recipe,

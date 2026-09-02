@@ -87,7 +87,7 @@ runMLPipeline <- function(
   ml_input_tibble, model = "LR", split = c(0.6, 0.2),
   n_fold = 2, prop_vi_top_feats = c(0, 1), n_top_feats = NA, use_pca = FALSE,
   pca_threshold = 0.95, penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5 / 5, min_n_vec = c(2, 6, 12), tree_vec = c(100, 500, 1000),
+  mix_vec = 0, min_n_vec = c(2, 6, 12), tree_vec = c(100, 500, 1000),
   select_best_metric = "mcc", seed = 123, shuffle_labels = FALSE,
   test_data = NA, return_tune_res = FALSE, return_fit = FALSE,
   return_pred = FALSE, verbose = TRUE
@@ -327,7 +327,7 @@ runMLPipeline <- function(
     prop_vi_top_feats = prop_vi_top_feats
   )
 
-  # Account for the case where `vip::vi()` assigned a variable importance of
+  # Account for the case where a feature was assigned a variable importance of
   # zero, thereby not including the full `n_top_feats` requested. Do this only
   # if `n_top_feats` was specified instead of `prop_vi_top_feats`. Features will
   # be randomly assigned as top hits. This is important for downstream
@@ -410,7 +410,7 @@ runMLPipeline <- function(
     performance_tibble <- performance_tibble |>
       tibble::add_column(fit_penalty, .before = "mcc") |>
       tibble::add_column(fit_mixture, .before = "mcc")
-  
+
 
   if (external_test_data) {
     performance_tibble <- performance_tibble |>
