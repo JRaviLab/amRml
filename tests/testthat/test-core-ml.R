@@ -157,36 +157,40 @@ test_that("extractTopFeats handles multi-class fits with per-class columns", {
   expect_gt(nrow(top), 0)
 })
 
-test_that(".viGlmnet matches vip::vi() importances and ordering", {
+test_that(".viGlmnet reports coefficients from the tuned model", {
   skip_if_missing_deps()
   fx <- make_pipeline_fixture()
-  mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 0) |>
+  # LASSO, so some coefficients are driven to exactly zero.
+  mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 1) |>
     parsnip::set_engine("glmnet")
   fit <- buildWflow(mod, buildRecipe(fx)) |> parsnip::fit(data = fx)
 
   vi <- .viGlmnet(fit)
   expect_setequal(colnames(vi), c("Variable", "Importance", "Sign"))
-  # NA is valid: an exactly-zero coefficient is neither POS nor NEG.
-  expect_true(all(vi$Sign %in% c("POS", "NEG") | is.na(vi$Sign)))
-  # Downstream slicing relies on the decreasing sort `vip::vi()` provided.
+  expect_true(all(vi$Sign %in% c("POS", "NEG")))
+  # Downstream slicing relies on the decreasing sort.
   expect_equal(vi$Importance, sort(vi$Importance, decreasing = TRUE))
 
-  # Importance is |coefficient| at the minimum lambda, not the tuned penalty.
+  # Importance is |coefficient| at the tuned penalty, with zeros dropped.
   gf <- parsnip::extract_fit_engine(fit)
-  expected <- stats::coef(gf, s = min(gf$lambda))[, 1, drop = TRUE]
+  tuned <- as.numeric(.getFitHps(fit)["penalty"])
+  expected <- stats::coef(gf, s = tuned)[, 1, drop = TRUE]
   expected <- expected[names(expected) != "(Intercept)"]
+  expected <- expected[expected != 0]
   expect_equal(vi$Importance, sort(abs(unname(expected)), decreasing = TRUE))
+  expect_lt(nrow(vi), length(coef(gf, s = tuned)) - 1)
 })
 
 
-test_that(".viGlmnet labels exactly-zero coefficients NA, not \"NEG\"", {
-  # Mock .viGlmnet()'s two external calls so a zero coefficient is
-  # guaranteed, rather than depending on a real fit happening to produce
-  # one. positive/negative/zero coefficients, plus an intercept that must
-  # be dropped.
+test_that(".viGlmnet drops zeroed-out features", {
+  # Mock the three external calls so a zero coefficient is guaranteed, rather
+  # than depending on a real fit happening to produce one.
   local_mocked_bindings(
     extract_fit_engine = function(fit) list(lambda = c(0.5, 0.1, 0.01)),
     .package = "parsnip"
+  )
+  local_mocked_bindings(
+    .getFitHps = function(fit) c(penalty = 0.01, mixture = 1)
   )
   local_mocked_bindings(
     coef = function(object, s, ...) {
@@ -202,9 +206,10 @@ test_that(".viGlmnet labels exactly-zero coefficients NA, not \"NEG\"", {
 
   vi <- .viGlmnet(fit = "placeholder")
 
+  expect_setequal(vi$Variable, c("pos_feat", "neg_feat"))
   expect_equal(unname(vi$Sign[vi$Variable == "pos_feat"]), "POS")
   expect_equal(unname(vi$Sign[vi$Variable == "neg_feat"]), "NEG")
-  expect_true(is.na(vi$Sign[vi$Variable == "zero_feat"]))
+  expect_false("zero_feat" %in% vi$Variable)
 })
 
 test_that("extractTopFeats includes the last feature at prop_vi_top_feats = c(0, 1)", {

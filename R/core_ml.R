@@ -749,26 +749,24 @@ calculateEvalMets <- function(test_data_plus_predictions) {
 
 #' Variable importance for a binomial glmnet fit
 #'
-#' Internal replacement for `vip::vi()`, dropped as a dependency after it left
-#' CRAN. Returns `|coefficient|` as `Importance` and its direction as `Sign`
-#' ("POS", "NEG", or NA for an exactly-zero coefficient), sorted by
-#' decreasing importance. `vip::vi()` labelled zero coefficients "NEG".
-#'
-#' Importance is taken at glmnet's minimum lambda, not the tuned `penalty`.
-#' That is what `vip::vi()` did.
+#' Internal replacement for `vip::vi()`. Reads coefficients at the tuned
+#' `penalty` and returns `|coefficient|` as `Importance` with its direction as
+#' `Sign`, sorted by decreasing importance. Zeroed-out features are dropped.
 #'
 #' @param fit A fitted workflow backed by a binomial glmnet engine.
 #' @return A tibble with `Variable`, `Importance`, and `Sign` columns.
 #' @keywords internal
 .viGlmnet <- function(fit) {
   glmnet_fit <- parsnip::extract_fit_engine(fit)
-  coefs <- stats::coef(glmnet_fit, s = min(glmnet_fit$lambda))[, 1, drop = TRUE]
+  fit_penalty <- .getFitHps(fit)["penalty"] |> as.numeric()
+  coefs <- stats::coef(glmnet_fit, s = fit_penalty)[, 1, drop = TRUE]
   coefs <- coefs[names(coefs) != "(Intercept)"]
+  coefs <- coefs[coefs != 0]
 
   tibble::tibble(
     Variable = names(coefs),
     Importance = abs(unname(coefs)),
-    Sign = ifelse(coefs > 0, "POS", ifelse(coefs < 0, "NEG", NA_character_))
+    Sign = ifelse(coefs > 0, "POS", "NEG")
   ) |>
     dplyr::arrange(dplyr::desc(Importance))
 }
