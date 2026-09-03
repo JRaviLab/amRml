@@ -806,24 +806,28 @@ runMDRmodels <- function(path,
       base <- paste0(shuffle_tag, output_prefix, pca_tag, seed_tag)
 
       if (!is.null(res$performance_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$performance_tibble,
-          file.path(files$out_perf[i], paste0(base, "_performance.tsv"))
+          file.path(files$out_perf[i], paste0(base, "_performance.parquet")),
+          compression = "zstd"
         )
       }
       if (!is.null(res$top_feat_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$top_feat_tibble,
-          file.path(files$out_top[i], paste0(base, "_top_features.tsv"))
+          file.path(files$out_top[i], paste0(base, "_top_features.parquet")),
+          compression = "zstd"
         )
       }
+
       if (!is.null(res$fit)) {
         saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
       if (!is.null(res$pred)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$pred,
-          file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
+          file.path(files$out_pred[i], paste0(base, "_prediction.parquet")),
+          compression = "zstd"
         )
       }
 
@@ -916,7 +920,7 @@ runMDRmodels <- function(path,
 #'   \item Stratification: Suffixed with \code{"_country"} or \code{"_year"}
 #' }
 #'
-#' For example: \code{"LOO_cross_test_ML_year_performance.tsv"}
+#' For example: \code{"LOO_cross_test_ML_year_performance.parquet"}
 #'
 #' @note
 #' This function requires the following packages:
@@ -1005,7 +1009,8 @@ runMLmodels <- function(path,
     
 .findNonRanPrefixes <- function(files,
                                 seed,
-                                shuffle_labels = FALSE) {
+                                shuffle_labels = FALSE) 
+                                {
 
   # ---- matrix prefixes ----
   matrix_prefixes <- unique(
@@ -1015,7 +1020,7 @@ runMLmodels <- function(path,
   # ---- performance files ----
   perf_files <- list.files(
     path = unique(files$out_perf),
-    pattern = "_performance\\.tsv$",
+    pattern = "_performance\\.parquet$",
     full.names = FALSE
   )
 
@@ -1042,7 +1047,7 @@ runMLmodels <- function(path,
   perf_base <- sub("^cross_test_", "", perf_base)
 
   # ---- keep only this seed ----
-  seed_pattern <- paste0("_", seed, "_performance\\.tsv$")
+  seed_pattern <- paste0("_", seed, "_performance\\.parquet$")
   perf_base <- perf_base[grepl(seed_pattern, perf_base)]
 
   if (length(perf_base) == 0) {
@@ -1050,8 +1055,8 @@ runMLmodels <- function(path,
   }
 
   # ---- strip stratification BEFORE seed ----
-  perf_base <- sub("_(country|year)_([0-9]+)_performance\\.tsv$", 
-                   "_\\2_performance.tsv", 
+  perf_base <- sub("_([0-9]+)_performance\\.parquet$", 
+                   "_\\2_performance.parquet", 
                    perf_base)
 
   # ---- final prefixes that ran ----
@@ -1111,15 +1116,15 @@ if (nrow(files) == 0) {
   )
 
   # Stratification suffix
-  strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
-    ""
-  } else {
-    switch(stratify_by,
-      "country" = "_country",
-      "year"    = "_year",
-      stop("`stratify_by` must be NULL, 'year', or 'country'.")
-    )
-  }
+  # strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
+  #   ""
+  # } else {
+  #   switch(stratify_by,
+  #     "country" = "_country",
+  #     "year"    = "_year",
+  #     stop("`stratify_by` must be NULL, 'year', or 'country'.")
+  #   )
+  # }
 
   # Auto naming for shuffled and PCA
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
@@ -1199,28 +1204,33 @@ if (nrow(files) == 0) {
       }
 
         seed_tag <- paste0("_", seed)
-      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + _year/_country
-      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, strat_suffix, seed_tag)
+      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + seed
+      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, seed_tag)
 
       if (!is.null(res$performance_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$performance_tibble,
-          file.path(files$out_perf[i], paste0(base, "_performance.tsv"))
+          file.path(files$out_perf[i], paste0(base, "_performance.parquet")),
+          compression = "zstd"
         )
       }
+      
       if (!is.null(res$top_feat_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$top_feat_tibble,
-          file.path(files$out_top[i], paste0(base, "_top_features.tsv"))
+          file.path(files$out_top[i], paste0(base, "_top_features.parquet")),
+          compression = "zstd"
         )
       }
+
       if (!is.null(res$fit)) {
         saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
       if (!is.null(res$pred)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$pred,
-          file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
+          file.path(files$out_pred[i], paste0(base, "_prediction.parquet")),
+          compression = "zstd"
         )
       }
 
