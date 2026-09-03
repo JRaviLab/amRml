@@ -17,10 +17,12 @@ test_that("runMLmodels() exits cleanly instead of crashing on no files", {
   expect_null(result)
 })
 
-# `stratify_by = NULL` means "no stratification" when LOO is FALSE, and "leave
-# one drug out" when LOO is TRUE. There is no stratify_by = "drug", so the drug
-# case has to be spelled NULL. Every caller has to know that rule, and the ones
-# that got it wrong are what the tests below cover.
+# LOO comes in three kinds, and each names the stratum it holds out:
+#   stratify_by = "year"     -> LOO_matrix_year/
+#   stratify_by = "country"  -> LOO_matrix_country/
+#   stratify_by = "drug"     -> LOO_matrix_drug/
+# NULL is not a LOO mode: it means "no stratification", which is only valid
+# when LOO is FALSE.
 
 test_that("createMLResultDir() maps every LOO/stratify_by pair to a real dir", {
   tmp <- withr::local_tempdir()
@@ -34,31 +36,40 @@ test_that("createMLResultDir() maps every LOO/stratify_by pair to a real dir", {
   expect_equal(matrix_dir(FALSE, NULL), "matrix")
   expect_equal(matrix_dir(FALSE, "year"), "matrix_year")
   expect_equal(matrix_dir(FALSE, "country"), "matrix_country")
-  expect_equal(matrix_dir(TRUE, NULL), "LOO_matrix_drug")
+  expect_equal(matrix_dir(TRUE, "drug"), "LOO_matrix_drug")
   expect_equal(matrix_dir(TRUE, "year"), "LOO_matrix_year")
   expect_equal(matrix_dir(TRUE, "country"), "LOO_matrix_country")
 })
 
-test_that("createMLResultDir() keeps LOO result dirs unsuffixed", {
-  # Only matrix_path takes "_drug". Drug LOO results are documented as
-  # LOO_ML_performance/ and LOO_ML_top_features/, unlike their year/country
-  # siblings, so they must not become LOO_ML_drug_*.
+test_that("createMLResultDir() suffixes drug LOO result dirs like its siblings", {
+  # Every stratum suffixes both the matrix path and the result dirs, so drug
+  # follows year/country rather than being a special case.
   tmp <- withr::local_tempdir()
   paths <- createMLResultDir(
     tmp,
-    stratify_by = NULL, LOO = TRUE, cross_test = FALSE, MDR = FALSE
+    stratify_by = "drug", LOO = TRUE, cross_test = FALSE, MDR = FALSE
   )
-  expect_equal(basename(paths$ML_performance), "LOO_ML_performance")
-  expect_equal(basename(paths$ML_top_features), "LOO_ML_top_features")
+  expect_equal(basename(paths$ML_performance), "LOO_ML_drug_performance")
+  expect_equal(basename(paths$ML_top_features), "LOO_ML_drug_top_features")
+})
+
+test_that("createMLinputList() rejects LOO without a stratum", {
+  # NULL means "no stratification", which cannot be a leave-one-out mode:
+  # every LOO matrix directory carries a suffix.
+  tmp <- withr::local_tempdir()
+  expect_error(
+    createMLinputList(tmp, LOO = TRUE, cross_test = FALSE, stratify_by = NULL),
+    "must be 'year', 'country', or 'drug'"
+  )
 })
 
 test_that("createMLinputList() accepts leave-one-drug-out and finds its files", {
   # This used to hard-error: the LOO check demanded stratify_by be "year" or
-  # "country", which rejected the drug case outright.
+  # "country", so there was no way to ask for the drug case at all.
   tmp <- withr::local_tempdir()
   paths <- createMLResultDir(
     tmp,
-    stratify_by = NULL, LOO = TRUE, cross_test = FALSE, MDR = FALSE
+    stratify_by = "drug", LOO = TRUE, cross_test = FALSE, MDR = FALSE
   )
   for (drug in c("AMP", "CIP")) {
     file.create(file.path(
@@ -69,7 +80,7 @@ test_that("createMLinputList() accepts leave-one-drug-out and finds its files", 
 
   out <- createMLinputList(
     tmp,
-    stratify_by = NULL, LOO = TRUE, cross_test = FALSE, MDR = FALSE
+    stratify_by = "drug", LOO = TRUE, cross_test = FALSE, MDR = FALSE
   )
 
   expect_equal(nrow(out), 2)
@@ -82,7 +93,7 @@ test_that("createMLinputList() accepts leave-one-drug-out and finds its files", 
 })
 
 test_that("createMLinputList() still rejects a bad stratify_by under LOO", {
-  # NULL is valid (leave-one-drug-out), but a typo must still be caught.
+  # A typo must still be caught, not silently treated as a stratum.
   tmp <- withr::local_tempdir()
   expect_error(
     createMLinputList(tmp, LOO = TRUE, cross_test = FALSE, stratify_by = "bananas"),
@@ -96,7 +107,7 @@ test_that("leave-one-drug-out cross testing fails loudly, not silently", {
   tmp <- withr::local_tempdir()
   paths <- createMLResultDir(
     tmp,
-    stratify_by = NULL, LOO = TRUE, cross_test = TRUE, MDR = FALSE
+    stratify_by = "drug", LOO = TRUE, cross_test = TRUE, MDR = FALSE
   )
   file.create(file.path(
     paths$matrix_path,
@@ -106,7 +117,7 @@ test_that("leave-one-drug-out cross testing fails loudly, not silently", {
   expect_error(
     createMLinputList(
       tmp,
-      stratify_by = NULL, LOO = TRUE, cross_test = TRUE, MDR = FALSE
+      stratify_by = "drug", LOO = TRUE, cross_test = TRUE, MDR = FALSE
     ),
     "not supported yet"
   )
