@@ -157,26 +157,75 @@ test_that("extractTopFeats handles multi-class fits with per-class columns", {
   expect_gt(nrow(top), 0)
 })
 
-test_that(".viGlmnet reproduces vip::vi() for binomial glmnet fits", {
+test_that(".viGlmnet reports coefficients from the tuned model", {
   skip_if_missing_deps()
   fx <- make_pipeline_fixture()
-  mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 0) |>
+  # LASSO, so some coefficients are driven to exactly zero.
+  mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 1) |>
     parsnip::set_engine("glmnet")
   fit <- buildWflow(mod, buildRecipe(fx)) |> parsnip::fit(data = fx)
 
   vi <- .viGlmnet(fit)
   expect_setequal(colnames(vi), c("Variable", "Importance", "Sign"))
   expect_true(all(vi$Sign %in% c("POS", "NEG")))
-  # Downstream slicing relies on the decreasing sort `vip::vi()` provided.
+  # Downstream slicing relies on the decreasing sort.
   expect_equal(vi$Importance, sort(vi$Importance, decreasing = TRUE))
 
-  # Importance is |coefficient| at the minimum lambda, not the tuned penalty.
   gf <- parsnip::extract_fit_engine(fit)
-  expected <- stats::coef(gf, s = min(gf$lambda))[, 1, drop = TRUE]
+  tuned <- as.numeric(.getFitHps(fit)["penalty"])
+  expected <- stats::coef(gf, s = tuned)[, 1, drop = TRUE]
   expected <- expected[names(expected) != "(Intercept)"]
+  expected <- expected[expected != 0]
   expect_equal(vi$Importance, sort(abs(unname(expected)), decreasing = TRUE))
+  expect_lt(nrow(vi), length(coef(gf, s = tuned)) - 1)
 })
 
+
+test_that(".viGlmnet drops zeroed-out features", {
+  # Mocked so a zero coefficient is guaranteed, rather than depending on a
+  # real fit happening to produce one.
+  local_mocked_bindings(
+    extract_fit_engine = function(fit) list(lambda = c(0.5, 0.1, 0.01)),
+    .package = "parsnip"
+  )
+  local_mocked_bindings(
+    .getFitHps = function(fit) c(penalty = 0.01, mixture = 1)
+  )
+  local_mocked_bindings(
+    coef = function(object, s, ...) {
+      matrix(
+        c(1, 2, -3, 0),
+        dimnames = list(
+          c("(Intercept)", "pos_feat", "neg_feat", "zero_feat"), NULL
+        )
+      )
+    },
+    .package = "stats"
+  )
+
+  vi <- .viGlmnet(fit = "placeholder")
+
+  expect_setequal(vi$Variable, c("pos_feat", "neg_feat"))
+  expect_equal(unname(vi$Sign[vi$Variable == "pos_feat"]), "POS")
+  expect_equal(unname(vi$Sign[vi$Variable == "neg_feat"]), "NEG")
+  expect_false("zero_feat" %in% vi$Variable)
+})
+
+test_that("extractTopFeats includes the last feature at prop_vi_top_feats = c(0, 1)", {
+  skip_if_missing_deps()
+  fx <- make_pipeline_fixture()
+  mod <- parsnip::logistic_reg(penalty = 0.01, mixture = 0) |>
+    parsnip::set_engine("glmnet")
+  fit <- buildWflow(mod, buildRecipe(fx)) |> parsnip::fit(data = fx)
+
+  # c(0, 1) should return everything .viGlmnet() gives back. The strict "<"
+  # dropped every feature whose cumulative importance equalled the total.
+  all_feats <- .viGlmnet(fit)
+  top <- extractTopFeats(fit, prop_vi_top_feats = c(0, 1), n_top_feats = NA)
+
+  expect_equal(nrow(top), nrow(all_feats))
+  expect_setequal(top$Variable, all_feats$Variable)
+})
 make_log2apop_fixture <- function(n_resistant, n_susceptible, seed = 1) {
   set.seed(seed)
   phenotype <- factor(
@@ -206,4 +255,5 @@ test_that(".calculateLog2APOP warns (not just messages) on roughly balanced clas
 test_that(".calculateLog2APOP warns (not just messages) on imbalanced classes", {
   fx <- make_log2apop_fixture(n_resistant = 9, n_susceptible = 1)
   expect_warning(amRml:::.calculateLog2APOP(fx), "imbalanced")
+
 })
