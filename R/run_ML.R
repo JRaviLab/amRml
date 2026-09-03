@@ -112,9 +112,17 @@ createMLResultDir <- function(path,
       )
     }
 
+    # There is no stratify_by = "drug", so leave-one-drug-out arrives as NULL
+    # and `suffix` is "", making the path "LOO_matrix", which nothing writes.
+    # Those matrices live in LOO_matrix_drug/. Result directories keep the
+    # plain `suffix`, giving LOO_ML_performance/ not LOO_ML_drug_performance/.
+    # TODO: retire this by adding "drug" to the switch above, which also makes
+    # LOO with stratify_by = NULL an error again.
+    matrix_suffix <- if (isTRUE(LOO) && identical(suffix, "")) "_drug" else suffix
+
     # Build paths
     paths <- list(
-      matrix_path     = file.path(path, paste0(half_prefix, "matrix", suffix)),
+      matrix_path     = file.path(path, paste0(half_prefix, "matrix", matrix_suffix)),
       ML_performance  = file.path(path, paste0(full_prefix, "ML", suffix, "_performance")),
       ML_top_features = file.path(path, paste0(full_prefix, "ML", suffix, "_top_features")),
       ML_models       = file.path(path, paste0(full_prefix, "ML", suffix, "_models")),
@@ -201,9 +209,16 @@ createMLinputList <- function(path,
 
   path <- normalizePath(path)
 
-#  if (isTRUE(LOO) && (is.null(stratify_by) || !(stratify_by %in% c("year", "country")))) {
- #   stop("For Leave-One-Out (LOO) models, stratify_by must be 'year' or 'country'.")
- # }
+  # LOO has three kinds: by year, by country, and by drug. Only the first two
+  # have a stratify_by value, so leave-one-drug-out arrives as NULL. Validate
+  # the value when one is given rather than requiring one.
+  if (isTRUE(LOO) && !is.null(stratify_by) &&
+    !(stratify_by %in% c("year", "country"))) {
+    stop(
+      "For Leave-One-Out (LOO) models, `stratify_by` must be NULL ",
+      "(leave-one-drug-out), 'year', or 'country'."
+    )
+  }
 
   if (isTRUE(MDR) && (!is.null(stratify_by) || LOO || cross_test)) {
     stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
@@ -503,7 +518,30 @@ createMLinputList <- function(path,
       # ============================
     } else if (cross_test && LOO) {
         if(is.null(stratify_by)) {
-        # Case A: stratify_by = NULL, pair across abx within same feature + prefix
+        # Leave-one-drug-out cross testing. NOT SUPPORTED YET: it needs its own
+        # test set, the LOO equivalent of cross_drug_test/, which
+        # generateMLInputs() does not produce. Without it the pairing below has
+        # nothing to join against and returns zero rows, so fail loudly.
+        #
+        # The pairing code is kept for when that lands. It needs three fixes:
+        #  1. These filenames carry a "leaveout" marker before the drug, e.g.
+        #     Sfl_drug_leaveout_AMP_gene_binary_sparse.parquet. `parsed` reads
+        #     drug_or_class as the token right after "drug", so it returns the
+        #     marker "leaveout" instead of "AMP", and the join below
+        #     (ref_drug == test_drug) never matches.
+        #  2. `loo_test` is hardcoded to LOO_matrix/, which nothing writes, so
+        #     test_file is always empty. It must point at the new folder once
+        #     that exists. Note the loo_test / parsed_loo_test naming assumes
+        #     the LOO matrices are the test set, but they hold training data
+        #     (see "## Training drugs" in .parquet2LOODrugMatrix()), which is
+        #     what ref_file already reads them as.
+        #  3. This branch should key off stratify_by == "drug" once that is a
+        #     real value, rather than treating NULL as "must mean drug".
+        stop(
+          "Leave-one-drug-out cross testing is not supported yet: ",
+          "generateMLInputs() does not produce a cross-drug test set for the ",
+          "leave-one-drug-out matrices."
+        )
             paths$loo_test <- file.path(dirname(paths$matrix_path), "LOO_matrix/")
 
 loo_files_vec <- list.files(
@@ -579,7 +617,9 @@ parsed_drugs <- parsed |>
     out_top     = paths$ML_top_features,
     out_models  = paths$ML_models,
     out_pred    = paths$ML_prediction
-  ) 
+  )
+
+            return(out)
             }
       # LOO requires special directory structure resolution
       test_path <- file.path(path, stringr::str_remove(basename(paths$matrix_path), "^LOO_"))
@@ -1006,7 +1046,12 @@ runMLmodels <- function(path,
     MDR         = FALSE,
     cross_test  = cross_test
   )
-    
+
+  if (nrow(files) == 0) {
+    message("No files found to process. Exiting.")
+    return(invisible(NULL))
+  }
+
 .findNonRanPrefixes <- function(files,
                                 seed,
                                 shuffle_labels = FALSE) 
