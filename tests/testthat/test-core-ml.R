@@ -171,7 +171,6 @@ test_that(".viGlmnet reports coefficients from the tuned model", {
   # Downstream slicing relies on the decreasing sort.
   expect_equal(vi$Importance, sort(vi$Importance, decreasing = TRUE))
 
-  # Importance is |coefficient| at the tuned penalty, with zeros dropped.
   gf <- parsnip::extract_fit_engine(fit)
   tuned <- as.numeric(.getFitHps(fit)["penalty"])
   expected <- stats::coef(gf, s = tuned)[, 1, drop = TRUE]
@@ -183,8 +182,8 @@ test_that(".viGlmnet reports coefficients from the tuned model", {
 
 
 test_that(".viGlmnet drops zeroed-out features", {
-  # Mock the three external calls so a zero coefficient is guaranteed, rather
-  # than depending on a real fit happening to produce one.
+  # Mocked so a zero coefficient is guaranteed, rather than depending on a
+  # real fit happening to produce one.
   local_mocked_bindings(
     extract_fit_engine = function(fit) list(lambda = c(0.5, 0.1, 0.01)),
     .package = "parsnip"
@@ -219,9 +218,8 @@ test_that("extractTopFeats includes the last feature at prop_vi_top_feats = c(0,
     parsnip::set_engine("glmnet")
   fit <- buildWflow(mod, buildRecipe(fx)) |> parsnip::fit(data = fx)
 
-  # The default prop_vi_top_feats = c(0, 1) is documented to return all
-  # features; the strict "<" upper-bound comparison used to drop the least
-  # important one, since its cumulative importance exactly equals the total.
+  # c(0, 1) should return everything .viGlmnet() gives back. The strict "<"
+  # dropped every feature whose cumulative importance equalled the total.
   all_feats <- .viGlmnet(fit)
   top <- extractTopFeats(fit, prop_vi_top_feats = c(0, 1), n_top_feats = NA)
 
