@@ -174,7 +174,8 @@ buildTopFeatsPq <- function(
   full.names = TRUE,
   recursive = TRUE
 )
-
+files <- files[basename(files) != "all_top_features.parquet"]
+  
 if (length(files) == 0) {
   stop(
     "No files matching '_top_features.parquet' were found in: ",
@@ -489,7 +490,8 @@ buildTopFeatsPqYearCountry <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-
+files <- files[!basename(files) %in% c("year_top_features.parquet", "country_top_features.parquet")]
+  
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |>
@@ -540,7 +542,8 @@ buildTopFeatsPqLOODrug <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-
+files <- files[!basename(files) %in% c("LOO_drug_top_features.parquet")]
+  
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
@@ -572,6 +575,7 @@ buildTopFeatsPqMDR <- function(
     top_feat_dir_path) {
   
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("MDR_top_features.parquet")]
   
   # Read and combine
   merged_df <- files|>
@@ -737,7 +741,8 @@ buildTopFeatsPqLOOCountry <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-
+  files <- files[files != file.path(top_feat_dir_path, "LOO_country_top_features.parquet")]
+  
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
@@ -770,7 +775,8 @@ buildTopFeatsPqLOOYear <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-
+  files <- files[files != file.path(top_feat_dir_path, "LOO_year_top_features.parquet")]
+  
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
