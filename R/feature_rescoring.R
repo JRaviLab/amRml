@@ -18,7 +18,7 @@ filterOptimalModel <- function(all_performance_parquet,
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) 
   
   if (!all(c(TRUE, FALSE) %in% unique(all_perf$shuffled))) {
-  stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingIntense() ")
+  stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
 }
   
 all_perf |>
