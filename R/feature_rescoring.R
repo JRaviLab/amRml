@@ -50,7 +50,7 @@ all_perf |>
 #'
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
 #' @param core_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%), used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.
-#' @param exclude_feature_types Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.
+#' @param exclude_feature_types Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top dyads are identified, not for scoring/ranking/thresholding here.
 #' @param filter_model Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}, so if \code{all_top_features_parquet} contains multiple fits per group, all of that group's rows survive as soon as any one fit passes.
 #' @param all_performance_parquet The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.
 #' @param MCC_threshold The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)
@@ -82,7 +82,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
   all_performance_parquet, 
   MCC_threshold = NULL, 
   compare_to_shuffled = TRUE, 
-add_lasso_advtg = TRUE) 
+add_lasso_advtg = FALSE) 
   {
   # check for the all_perf.parquet and all_top_features.parquet files
   stopifnot(file.exists(all_top_features_parquet))
@@ -118,7 +118,8 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
     feature_type, feature_subtype, fit_penalty, fit_mixture, 
     mcc, n_feat, n_feats_returned) |> 
   dplyr::mutate(feat_return_ratio = n_feats_returned / n_feat,
-  if(add_lasso_advtg) (sparsity_score = 1 - feat_return_ratio) else (sparsity_score = 1))
+  sparsity_score = if(add_lasso_advtg) 1 - feat_return_ratio 
+  else 1) 
   
   # add different layers of scoring to the features within each seed 
   scored_top_features <- all_top_features |>
@@ -129,9 +130,8 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
     ) |>
     dplyr::mutate(
       variable = dplyr::case_when(
-        feature_type == "domains" ~ sub("_.+$", "", variable),
-        feature_type == "proteins" ~ sub("fig.", "fig|", variable, fixed = TRUE),
-        feature_type == "args" ~ sub(
+        feature_type == "protein" ~ sub("fig.", "fig|", variable, fixed = TRUE),
+        feature_type == "AMRFinder" ~ sub(
           "^X", "",
           gsub("\\.NCBIFAM", "", variable)
         ),
@@ -276,7 +276,7 @@ summariseFeaturesAcrossSeeds <- function(scored_features) {
 topFeaturesPerDrugOrClass <- function( 
   all_top_features_parquet, 
   core_contribution_threshold = 0.75, 
-  exclude_feature_types = "struct",
+  exclude_feature_types = NULL,
   filter_model = TRUE, 
   all_performance_parquet, 
   MCC_threshold = NULL, 
@@ -309,7 +309,7 @@ feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
 top_features <- feature_summary |>
   dplyr::filter(
     if (!is.null(seed_ratio_threshold)) seed_ratio == seed_ratio_threshold else TRUE,
-    rank_score_cv <= cv_threshold,
+    seed_ratio == 1 | rank_score_cv <= cv_threshold, # rank_score_cv can be NA if there is only one seed. 
     in_core,
     sign_consistent,
     median_cum_contrib <= cumulative_contribution_threshold,
@@ -327,47 +327,75 @@ dplyr::filter(
   return(top_features)
 }
 
-#' Aggregate mapped features to protein clusters
+#' Aggregate mapped features to protein dyads
 #'
 #' @param top_features The tibble of top features for each drug/class generated from `topFeaturesPerDrugOrClass()`
-#' @param cluster_feature_parquet The path to the Parquet file containing the mapping of features to protein clusters
+#' @param dyad_feature_parquet The path to the Parquet file containing the mapping of features to protein dyads
 #'
-#' @returns a tibble with one row per species/drug_label/drug_or_class/cluster, with:
+#' @returns a tibble with one row per species/drug_label/drug_or_class/dyad, with:
 #' \itemize{
-#'   \item \code{frequency}: the number of top-feature rows mapped to this cluster.
-#'   \item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{variable} values mapped to this cluster.
-#'   \item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type} values mapped to this cluster.
-#'   \item \code{cluster_mean_rank_score}, \code{cluster_median_rank_score}: mean/median of \code{median_rank_score}, down-weighted by \code{1 / n_clusters} for features that map to multiple clusters so promiscuous domains/COGs don't inflate every cluster they touch.
-#'   \item \code{cluster_max_rank_score}: the max of the unweighted \code{median_rank_score}, i.e. the single strongest feature backing this cluster regardless of its fan-out to other clusters.
-#'   \item \code{cluster_rank_score_sd}: standard deviation of the same down-weighted score used for \code{cluster_mean_rank_score}/\code{cluster_median_rank_score}.
-#'   \item \code{cluster_best_rank}: the best (lowest) \code{best_rank} among the features mapped to this cluster.
+#'   \item \code{frequency}: the number of top-feature rows mapped to this dyad.
+#'   \item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{variable} values mapped to this dyad.
+#'   \item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type} values mapped to this dyad.
+#'   \item \code{dyad_mean_rank_score}, \code{dyad_median_rank_score}: mean/median of \code{median_rank_score}, down-weighted by \code{1 / n_dyads} for features that map to multiple dyads so promiscuous domains/COGs don't inflate every dyad they touch.
+#'   \item \code{dyad_max_rank_score}: the max of the unweighted \code{median_rank_score}, i.e. the single strongest feature backing this dyad regardless of its fan-out to other dyads.
+#'   \item \code{dyad_rank_score_sd}: standard deviation of the same down-weighted score used for \code{dyad_mean_rank_score}/\code{dyad_median_rank_score}.
+#'   \item \code{dyad_best_rank}: the best (lowest) \code{best_rank} among the features mapped to this dyad.
 #' }
 #' \code{median_rank_score} is used throughout (rather than \code{mean_rank_score}) for consistency with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
-#' \code{top_features} rows whose \code{variable} has no match in \code{cluster_feature_parquet} are not dropped: they collapse into one \code{cluster = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real clusters must filter this out explicitly (as \code{findSharedClusters()} and \code{findUniqueClusters()} do).
+#' \code{top_features} rows whose \code{variable} has no match in \code{dyad_feature_parquet} are not dropped: they collapse into one \code{dyad = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real dyads must filter this out explicitly (as \code{findShareddyads()} and \code{findUniquedyads()} do).
 #'
 #' @export
-summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_summary),
-                               cluster_feature_parquet
+summariseDyads <- function(top_features = topFeaturesPerDrugOrClass(),
+                               dyad_feature_parquet
                               ) {
-  stopifnot(file.exists(cluster_feature_parquet))
-  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet)) |>
-    dplyr::add_count(feature, name = "n_clusters")
+  stopifnot(file.exists(dyad_feature_parquet))
 
-  top_clusters <- top_features |>
+#   dyad_feature <- arrow::read_parquet(normalizePath(dyad_feature_parquet)) |>
+#     dplyr::add_count(target, name = "n_sources") |>
+#     dplyr::mutate(
+#     feature_type = sub(":.*$", "", target),
+#     target = sub("^[^:]+:", "", target)
+# )
+ 
+con <- DBI::dbConnect(duckdb::duckdb())
+
+dyad_feature <- DBI::dbGetQuery(
+  con,
+  glue::glue("
+    WITH counts AS (
+        SELECT
+            target,
+            COUNT(*) AS n_sources
+        FROM read_parquet('{normalizePath(dyad_feature_parquet)}')
+        GROUP BY target
+    )
+    SELECT
+        d.source,
+        regexp_extract(d.target, '^([^:]+)', 1) AS feature_type,
+        regexp_replace(d.target, '^[^:]+:', '') AS target,
+        c.n_sources
+    FROM read_parquet('{normalizePath(dyad_feature_parquet)}') d
+    JOIN counts c
+        ON d.target = c.target
+  ")
+)
+  
+  top_dyads <- top_features |>
     dplyr::left_join(
-      cluster_feature,
-      by = dplyr::join_by(variable == feature),
+      dyad_feature |> dplyr::select(-feature_type),
+      by = dplyr::join_by(variable == target),
       relationship = "many-to-many"
     ) |>
     dplyr::mutate(
-      n_clusters = dplyr::coalesce(n_clusters, 1L),
-      weighted_rank_score = median_rank_score / n_clusters
+      n_sources = dplyr::coalesce(n_sources, 1L),
+      weighted_rank_score = median_rank_score / n_sources
     ) |>
     dplyr::group_by(
       species,
       drug_label,
       drug_or_class,
-      cluster
+      source
     ) |>
     dplyr::summarise(
       frequency = dplyr::n(),
@@ -375,58 +403,58 @@ summariseClusters <- function(top_features = topFeaturesPerDrugOrClass(feature_s
       variables_csv = paste(sort(unique(variable)), collapse = ","),
       n_feature_types = dplyr::n_distinct(feature_type),
       feature_types_csv = paste(sort(unique(feature_type)), collapse = ","),
-      cluster_mean_rank_score = mean(weighted_rank_score, na.rm = TRUE),
-      cluster_median_rank_score = median(weighted_rank_score, na.rm = TRUE),
-      cluster_max_rank_score = max(median_rank_score, na.rm = TRUE),
-      cluster_rank_score_sd = sd(weighted_rank_score, na.rm = TRUE),
-      cluster_best_rank = min(best_rank, na.rm = TRUE),
+      dyad_mean_rank_score = mean(weighted_rank_score, na.rm = TRUE),
+      dyad_median_rank_score = median(weighted_rank_score, na.rm = TRUE),
+      dyad_max_rank_score = max(median_rank_score, na.rm = TRUE),
+      dyad_rank_score_sd = sd(weighted_rank_score, na.rm = TRUE),
+      dyad_best_rank = min(best_rank, na.rm = TRUE),
       .groups = "drop"
     ) |>
   dplyr::arrange(dplyr::desc(frequency), dplyr::desc(n_feature_types))
 
-  return(top_clusters)
+  return(top_dyads)
 }
 
-#' Find clusters that appear across multiple drugs/classes
+#' Find dyads that appear across multiple drugs/classes
 #'
-#' @param top_clusters The tibble of summarized clusters generated from `summariseClusters()`
-#' @param label The \code{drug_label} value to filter clusters by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
-#' @param min_drugs_or_classes The minimum number of distinct drugs or classes required for a cluster to be considered shared (default is \code{2})
+#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
+#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
+#' @param min_drugs_or_classes The minimum number of distinct drugs or classes required for a dyad to be considered shared (default is \code{2})
 #'
-#' @returns a tibble with one row per shared \code{cluster}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the cluster appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
+#' @returns a tibble with one row per shared \code{dyad}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the dyad appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
 #'
 #' @export
-findSharedClusters <- function(top_clusters = summariseClusters(top_features, cluster_feature_parquet),
+findSharedDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
                                 label = "drug",
                                  min_drugs_or_classes = 2
                                 ) {
-  shared_clusters <- top_clusters |>
-    dplyr::filter(!is.na(cluster), drug_label == label) |>
-    dplyr::group_by(cluster) |>
+  shared_dyads <- top_dyads |>
+    dplyr::filter(!is.na(source), drug_label == label) |>
+    dplyr::group_by(source) |>
     dplyr::mutate(
       n_drug_or_class = dplyr::n_distinct(drug_or_class),
       drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
     ) |>
     dplyr::filter(n_drug_or_class >= min_drugs_or_classes) |>
     dplyr::ungroup() |>
-    dplyr::select(cluster, n_drug_or_class, drug_or_class_csv) |>
+    dplyr::select(source, n_drug_or_class, drug_or_class_csv) |>
     dplyr::arrange(dplyr::desc(n_drug_or_class))
 
-  return(shared_clusters)
+  return(shared_dyads)
 }
 
-#' Find the clusters that are unique to a single drug/class
+#' Find the dyads that are unique to a single drug/class
 #'
-#' @param top_clusters The tibble of summarized clusters generated from `summariseClusters()`
-#' @param label The \code{drug_label} value to filter clusters by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
-#' @param protein_names_parquet The path to the Parquet file containing the annotations to protein cluster names
+#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
+#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
+#' @param protein_names_parquet The path to the Parquet file containing the annotations to protein dyad names
 #'
-#' @returns a tibble with one row per cluster unique to a single drug/class, with \code{drug_or_class}, \code{cluster}, \code{cluster_name} (from the protein name annotations), and \code{cluster_mean_rank_score}, sorted by \code{cluster_mean_rank_score} descending.
+#' @returns a tibble with one row per dyad unique to a single drug/class, with \code{drug_or_class}, \code{dyad}, \code{dyad_name} (from the protein name annotations), and \code{dyad_mean_rank_score}, sorted by \code{dyad_mean_rank_score} descending.
 #'
 #' @export
 #' @examples
-#' findUniqueClusters(summariseClusters(top_features, cluster_feature_parquet), label = "drug", protein_names_parquet)
-findUniqueClusters <- function(top_clusters = summariseClusters(top_features, cluster_feature_parquet),
+#' findUniquedyads(summarisedyads(top_features, dyad_feature_parquet), label = "drug", protein_names_parquet)
+findUniqueDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
                             label = "drug",
                             protein_names_parquet
 ) {
@@ -434,43 +462,40 @@ findUniqueClusters <- function(top_clusters = summariseClusters(top_features, cl
   protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
     dplyr::distinct()
 
-  unique_clusters <- top_clusters |>
-    dplyr::filter(!is.na(cluster), drug_label == label) |>
-    dplyr::group_by(cluster) |>
+  unique_dyads <- top_dyads |>
+    dplyr::filter(!is.na(source), drug_label == label) |>
+    dplyr::group_by(source) |>
     dplyr::mutate(
       n_drug_or_class = dplyr::n_distinct(drug_or_class),
       drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
     ) |>
     dplyr::filter(n_drug_or_class == 1) |>
     dplyr::ungroup() |>
-    dplyr::select(cluster, drug_or_class_csv, cluster_mean_rank_score) |>
-    dplyr::arrange(dplyr::desc(cluster_mean_rank_score)) |>
-dplyr::rename(drug_or_class = drug_or_class_csv) |>
-    dplyr::left_join(protein_names, by = dplyr::join_by(cluster == proteinID)) |>
-    dplyr::rename(cluster_name = proteinName) |>
-    dplyr::select(drug_or_class, cluster, cluster_name, cluster_mean_rank_score)
+    dplyr::select(source, drug_or_class_csv, dyad_median_rank_score) |>
+    dplyr::arrange(dplyr::desc(dyad_median_rank_score)) |>
+dplyr::rename(drug_or_class = drug_or_class_csv) 
 
-  return(unique_clusters)
+  return(unique_dyads)
 }
 
-#' Build a feature network from selected top features and top clusters
+#' Build a feature network from selected top features and top dyads
 #'
 #' @param top_features Output of \code{topFeaturesPerDrugOrClass()}.
-#' @param top_clusters Output of \code{summariseClusters()}.
-#' @param cluster_feature_parquet Path to the Parquet file mapping variables to clusters.
-#' @param protein_names_parquet Path to the Parquet file with cluster name annotations.
+#' @param top_dyads Output of \code{summarisedyads()}.
+#' @param dyad_feature_parquet Path to the Parquet file mapping variables to dyads.
+#' @param protein_names_parquet Path to the Parquet file with dyad name annotations.
 #'
-#' @returns A list with \code{feature_table}, \code{cluster_table}, \code{nodes}, \code{edges}, and \code{graph}.
-#' Node/edge weights are built from \code{median_rank_score} (features) and \code{cluster_mean_rank_score} (clusters, itself median-based per \code{summariseClusters()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+#' @returns A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.
+#' Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_mean_rank_score} (dyads, itself median-based per \code{summarisedyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
 #' @export
 buildFeatureNetwork <- function(top_features,
-                               top_clusters,
-                               cluster_feature_parquet,
+                               top_dyads,
+                               dyad_feature_parquet,
                                protein_names_parquet
                               ) {
   stopifnot(is.data.frame(top_features))
-  stopifnot(is.data.frame(top_clusters))
-  stopifnot(file.exists(cluster_feature_parquet))
+  stopifnot(is.data.frame(top_dyads))
+  stopifnot(file.exists(dyad_feature_parquet))
   stopifnot(file.exists(protein_names_parquet))
 
   required_feature_cols <- c(
@@ -478,24 +503,24 @@ buildFeatureNetwork <- function(top_features,
     "feature_type", "variable",
     "median_rank_score"
   )
-  required_cluster_cols <- c(
+  required_dyad_cols <- c(
     "species", "drug_label", "drug_or_class",
-    "cluster", "cluster_mean_rank_score"
+    "source", "dyad_median_rank_score"
   )
 
   missing_feature_cols <- setdiff(required_feature_cols, names(top_features))
-  missing_cluster_cols <- setdiff(required_cluster_cols, names(top_clusters))
+  missing_dyad_cols <- setdiff(required_dyad_cols, names(top_dyads))
 
   if (length(missing_feature_cols) > 0) {
     stop("top_features is missing required columns: ",
          paste(missing_feature_cols, collapse = ", "))
   }
-  if (length(missing_cluster_cols) > 0) {
-    stop("top_clusters is missing required columns: ",
-         paste(missing_cluster_cols, collapse = ", "))
+  if (length(missing_dyad_cols) > 0) {
+    stop("top_dyads is missing required columns: ",
+         paste(missing_dyad_cols, collapse = ", "))
   }
 
-  cluster_feature <- arrow::read_parquet(normalizePath(cluster_feature_parquet)) |>
+  dyad_feature <- arrow::read_parquet(normalizePath(dyad_feature_parquet)) |>
     dplyr::distinct()
 
   protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
@@ -515,22 +540,18 @@ buildFeatureNetwork <- function(top_features,
       .groups = "drop"
     )
 
-  cluster_table <- top_clusters |>
+  dyad_table <- top_dyads |>
     dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
-    dplyr::left_join(
-      protein_names,
-      by = dplyr::join_by(cluster == proteinID)
-    ) |>
-    dplyr::group_by(species, model_id, cluster, proteinName) |>
+    dplyr::group_by(species, model_id, source) |>
     dplyr::summarise(
-      cluster_score = mean(cluster_mean_rank_score, na.rm = TRUE),
+      dyad_score = mean(dyad_median_rank_score, na.rm = TRUE),
       .groups = "drop"
     )
 
   model_nodes <- dplyr::bind_rows(
     feature_table |>
       dplyr::distinct(species, model_id),
-    cluster_table |>
+    dyad_table |>
       dplyr::distinct(species, model_id)
   ) |>
     dplyr::distinct(species, model_id) |>
@@ -561,28 +582,24 @@ buildFeatureNetwork <- function(top_features,
       node_size = pmax(3, pmin(10, breadth + 2))
     )
 
-  cluster_nodes <- cluster_table |>
-    dplyr::group_by(species, cluster, proteinName) |>
+  dyad_nodes <- dyad_table |>
+    dplyr::group_by(species, source) |>
     dplyr::summarise(
-      score = mean(cluster_score, na.rm = TRUE),
+      score = median(dyad_score, na.rm = TRUE),
       breadth = dplyr::n_distinct(model_id),
       .groups = "drop"
     ) |>
     dplyr::transmute(
-      name = cluster,
-      label = dplyr::if_else(
-        is.na(proteinName) | proteinName == "",
-        cluster,
-        proteinName
-      ),
-      node_type = "cluster",
+      name = source,
+      label = source,
+      node_type = "dyad",
       species = species,
       score = score,
       breadth = breadth,
       node_size = pmax(3, pmin(10, breadth + 2))
     )
 
-  nodes <- dplyr::bind_rows(model_nodes, feature_nodes, cluster_nodes) |>
+  nodes <- dplyr::bind_rows(model_nodes, feature_nodes, dyad_nodes) |>
     dplyr::distinct(name, .keep_all = TRUE)
 
   feature_edges <- feature_table |>
@@ -594,33 +611,33 @@ buildFeatureNetwork <- function(top_features,
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
-  cluster_edges <- cluster_table |>
+  dyad_edges <- dyad_table |>
     dplyr::transmute(
       from = model_id,
-      to = cluster,
-      weight = cluster_score,
-      edge_type = "model_cluster"
+      to = dyad,
+      weight = dyad_score,
+      edge_type = "model_dyad"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
-  feature_cluster_edges <- feature_table |>
+  feature_dyad_edges <- feature_table |>
     dplyr::left_join(
-      cluster_feature |> dplyr::add_count(feature, name = "n_clusters"),
+      dyad_feature |> dplyr::add_count(feature, name = "n_dyads"),
       by = dplyr::join_by(variable == feature),
       relationship = "many-to-many"
     ) |>
-    dplyr::filter(!is.na(cluster)) |>
+    dplyr::filter(!is.na(dyad)) |>
     dplyr::transmute(
       from = variable,
-      to = cluster,
-      weight = 1 / n_clusters,
-      edge_type = "feature_cluster"
+      to = dyad,
+      weight = 1 / n_dyads,
+      edge_type = "feature_dyad"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
-  edges <- dplyr::bind_rows(feature_edges, feature_cluster_edges)
+  edges <- dplyr::bind_rows(feature_edges, feature_dyad_edges)
 
-    edges <- dplyr::bind_rows(edges, cluster_edges)
+    edges <- dplyr::bind_rows(edges, dyad_edges)
 
 
   missing_vertices <- setdiff(unique(c(edges$from, edges$to)), nodes$name)
@@ -630,7 +647,7 @@ buildFeatureNetwork <- function(top_features,
         label = name,
         node_type = dplyr::case_when(
           grepl("^drug\\.|^drug_class\\.", name) ~ "model",
-          grepl("^fig\\||^cluster", name) ~ "cluster",
+          grepl("^fig\\||^dyad", name) ~ "dyad",
           TRUE ~ "feature"
         ),
         species = NA_character_,
@@ -659,7 +676,7 @@ buildFeatureNetwork <- function(top_features,
 
   feature_network <- list(
     feature_table = feature_table,
-    cluster_table = cluster_table,
+    dyad_table = dyad_table,
     nodes = nodes,
     edges = edges,
     graph = graph
@@ -700,7 +717,7 @@ plotFeatureNetworkD3 <- function(feature_network,
   links <- feature_network$edges |>
     dplyr::filter(!is.na(from), !is.na(to)) |>
     # dplyr::filter(
-    #   show_direct_model_cluster | edge_type != "model_cluster"
+    #   show_direct_model_dyad | edge_type != "model_dyad"
     # ) |>
     dplyr::left_join(
       nodes |> dplyr::select(name, id),
@@ -723,7 +740,7 @@ plotFeatureNetworkD3 <- function(feature_network,
 
   colour_scale <- networkD3::JS(
     "d3.scaleOrdinal()
-      .domain(['model', 'feature', 'cluster'])
+      .domain(['model', 'feature', 'dyad'])
       .range(['#4C78A8', '#F58518', '#54A24B'])"
   )
 
@@ -744,7 +761,7 @@ plotFeatureNetworkD3 <- function(feature_network,
     colourScale = colour_scale,
     linkDistance = networkD3::JS(
       "function(d) {
-         if (d.edge_type === 'feature_cluster') return 60;
+         if (d.edge_type === 'feature_dyad') return 60;
          if (d.edge_type === 'model_feature') return 120;
          return 90;
        }"
@@ -755,7 +772,7 @@ plotFeatureNetworkD3 <- function(feature_network,
 
 # final run would be:
 # top_features <- topFeaturesPerDrugOrClass(rank_score_quantile = 0.75)
-# top_clusters <- summariseClusters(top_features, cluster_feature_parquet = cluster_feature_parquet)
-# feature_network <- buildFeatureNetwork(top_features = top_features, top_clusters = top_clusters,
-#   cluster_feature_parquet = cluster_feature_parquet, protein_names_parquet = protein_names_parquet)
-# plotFeatureNetworkD3(feature_network)
+# top_dyads <- summarisedyads(top_features, dyad_feature_parquet = dyad_feature_parquet)
+# feature_network <- buildFeatureNetwork(top_features = top_features, top_dyads = top_dyads,
+#   dyad_feature_parquet = dyad_feature_parquet, protein_names_parquet = protein_names_parquet)
+  # plotFeatureNetworkD3(feature_network)
