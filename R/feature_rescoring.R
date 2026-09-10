@@ -1,4 +1,3 @@
-
 #' Filter model fits to those passing quality thresholds
 #'
 #' @param all_performance_parquet The path to the 'all performance parquet' file
@@ -10,57 +9,57 @@
 #' @keywords internal
 #' @examples
 #' filterOptimalModel(all_performance_parquet = "inst/extdata/all_perf.parquet")
-filterOptimalModel <- function(all_performance_parquet, 
-  MCC_threshold = NULL, 
-  compare_to_shuffled = TRUE) 
+filterOptimalModel <- function(all_performance_parquet,
+  MCC_threshold = NULL,
+  compare_to_shuffled = TRUE)
   {
   stopifnot(file.exists(all_performance_parquet))
-  all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) 
-  
+  all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
+
   if (!all(c(TRUE, FALSE) %in% unique(all_perf$shuffled))) {
-  stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
-}
-  
-all_perf |>
-  dplyr::select(
-    species, drug_label, drug_or_class,
-    seed, feature_type, feature_subtype,
-    model, fit_penalty, fit_mixture,
-    shuffled, mcc
-  ) |>
-  tidyr::pivot_wider(
-    names_from = shuffled,
-    values_from = mcc,
-    names_prefix = "shuffled_"
-  ) |>
-  dplyr::rename(
-    nonshuffled_MCC = shuffled_FALSE,
-    shuffled_MCC = shuffled_TRUE
-  ) |>
-  dplyr::mutate(
-    MCC_diff = nonshuffled_MCC - shuffled_MCC
-  ) |>
-  dplyr::filter(
-  if (!is.null(MCC_threshold))(nonshuffled_MCC >= MCC_threshold) else TRUE,
-  if (compare_to_shuffled) (MCC_diff > 0 | is.na(shuffled_MCC)) else TRUE
-)
+    stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
+  }
+
+  all_perf |>
+    dplyr::select(
+      species, drug_label, drug_or_class,
+      seed, feature_type, feature_subtype,
+      model, fit_penalty, fit_mixture,
+      shuffled, mcc
+    ) |>
+    tidyr::pivot_wider(
+      names_from = shuffled,
+      values_from = mcc,
+      names_prefix = "shuffled_"
+    ) |>
+    dplyr::rename(
+      nonshuffled_MCC = shuffled_FALSE,
+      shuffled_MCC = shuffled_TRUE
+    ) |>
+    dplyr::mutate(
+      MCC_diff = nonshuffled_MCC - shuffled_MCC
+    ) |>
+    dplyr::filter(
+      if (!is.null(MCC_threshold)) (nonshuffled_MCC >= MCC_threshold) else TRUE,
+      if (compare_to_shuffled) (MCC_diff > 0 | is.na(shuffled_MCC)) else TRUE
+    )
 }
 
 #' Score features within each seed
 #'
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
 #' @param core_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%), used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.
-#' @param exclude_feature_types Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top dyads are identified, not for scoring/ranking/thresholding here.
-#' @param filter_model Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}, so if \code{all_top_features_parquet} contains multiple fits per group, all of that group's rows survive as soon as any one fit passes.
+#' @param exclude_feature_types Feature types to drop before any scoring happens (default is \code{NULL}, i.e. no feature types are excluded and struct is currently included). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. Pass \code{"struct"} here to exclude it once struct is meant to be reserved for post-hoc biological annotation rather than scoring/ranking/thresholding.
+#' @param filter_model Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}; this is only safe because there is currently never more than one fit per (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) group. If that assumption changes, this join (and the \code{all_perf} join below) would need a finer-grained key to avoid silently keeping/duplicating rows from multiple fits.
 #' @param all_performance_parquet The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.
 #' @param MCC_threshold The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)
 #' @param compare_to_shuffled Logical indicating whether to compare the model to shuffled data, passed through to \code{filterOptimalModel()} (default is \code{TRUE})
-#' @param add_lasso_advtg Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{TRUE})
+#' @param add_lasso_advtg Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{FALSE})
 #'
 #' @returns a tibble of scored top features, one row per feature within each species/drug_label/drug_or_class/feature_type/feature_subtype/seed group, with the following columns added:
 #' \itemize{
 #'   \item \code{contribution}: the feature's importance divided by the sum of importance across all features in the group.
-#'   \item \code{feat_return_ratio}: \code{n_feats_returned / n_feat} for the fit that produced this group (from \code{all_performance_parquet}).
+#'   \item \code{feat_return_ratio}: \code{n_feats_returned / n_feat} for the fit that produced this group. This assumes there is never more than one surviving fit per (species, drug_label, drug_or_class, seed, feature_type, feature_subtype) group; if that ever stops being true, this join would need a finer-grained key (\code{all_top_features_parquet} carries no \code{model}/\code{fit_penalty}/\code{fit_mixture} column to join on directly) or the ratio would need to be aggregated across fits before joining, to avoid fanning out and double-counting feature rows.
 #'   \item \code{sparsity_score}: \code{1 - feat_return_ratio} when \code{add_lasso_advtg = TRUE} (fits returning fewer features relative to the candidate space score closer to 1), else 1 for every row.
 #'   \item \code{adjusted_contribution}: \code{contribution * sparsity_score}. This, not raw \code{contribution}, is what every downstream column below is actually computed from.
 #'   \item \code{rank}: descending rank of \code{adjusted_contribution} within the group; ties receive the average of the ranks they span.
@@ -72,61 +71,84 @@ all_perf |>
 #'
 #' @keywords internal
 #' @examples
-#' scoreFeaturesWithinSeed(all_top_features_parquet = "inst/extdata/all_top_features.parquet", 
+#' scoreFeaturesWithinSeed(all_top_features_parquet = "inst/extdata/all_top_features.parquet",
 #' all_performance_parquet = "inst/extdata/all_perf.parquet")
 #'
-scoreFeaturesWithinSeed <- function(all_top_features_parquet, 
-  core_contribution_threshold = 0.75, 
-  exclude_feature_types = "struct",
-  filter_model = TRUE, 
-  all_performance_parquet, 
-  MCC_threshold = NULL, 
-  compare_to_shuffled = TRUE, 
-add_lasso_advtg = FALSE) 
+scoreFeaturesWithinSeed <- function(all_top_features_parquet,
+  core_contribution_threshold = 0.75,
+  exclude_feature_types = NULL,
+  filter_model = TRUE,
+  all_performance_parquet,
+  MCC_threshold = NULL,
+  compare_to_shuffled = TRUE,
+  add_lasso_advtg = FALSE)
   {
   # check for the all_perf.parquet and all_top_features.parquet files
   stopifnot(file.exists(all_top_features_parquet))
   stopifnot(file.exists(all_performance_parquet))
 
   all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
-  dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types)
+    dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types)
 
-if (filter_model) {
-  filtered_model <- filterOptimalModel(
-    normalizePath(all_performance_parquet),
-    MCC_threshold = MCC_threshold,
-    compare_to_shuffled = compare_to_shuffled
-  )
-
-  all_top_features <- all_top_features |>
-    dplyr::semi_join(
-      filtered_model,
-      by = dplyr::join_by(
-        species, drug_label, drug_or_class,
-        feature_type, feature_subtype, seed
-      )
+  if (filter_model) {
+    filtered_model <- filterOptimalModel(
+      normalizePath(all_performance_parquet),
+      MCC_threshold = MCC_threshold,
+      compare_to_shuffled = compare_to_shuffled
     )
-}
+
+    all_top_features <- all_top_features |>
+      dplyr::semi_join(
+        filtered_model,
+        by = dplyr::join_by(
+          species, drug_label, drug_or_class,
+          feature_type, feature_subtype, seed
+        )
+      )
+  }
 
   # The models are elastic net, fit with a mix of penalties from lasso to ridge.
   # Lasso shrinks the feature space to fewer selected variables, while
   # ridge retains variables (keeps correlated variables together).
   # Calculate the sparsity score to give an advantage to lasso-like fits.
-all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
-  dplyr::filter(!shuffled) |>
-  dplyr::select(species, drug_label, drug_or_class, seed, 
-    feature_type, feature_subtype, fit_penalty, fit_mixture, 
-    mcc, n_feat, n_feats_returned) |> 
-  dplyr::mutate(feat_return_ratio = n_feats_returned / n_feat,
-  sparsity_score = if(add_lasso_advtg) 1 - feat_return_ratio 
-  else 1) 
-  
-  # add different layers of scoring to the features within each seed 
+  #
+  # NOTE: all_top_features_parquet has no model/fit_penalty/fit_mixture column,
+  # so this join is keyed at the (species, drug_label, drug_or_class, seed,
+  # feature_type, feature_subtype) level. That is only safe because there is
+  # currently never more than one surviving fit per group; the check below
+  # enforces that assumption instead of silently fanning out and
+  # double-counting feature rows if it were ever violated.
+  all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
+    dplyr::filter(!shuffled) |>
+    dplyr::select(species, drug_label, drug_or_class, seed,
+      feature_type, feature_subtype, fit_penalty, fit_mixture,
+      mcc, n_feat, n_feats_returned) |>
+    dplyr::mutate(
+      feat_return_ratio = n_feats_returned / n_feat,
+      sparsity_score = if (add_lasso_advtg) 1 - feat_return_ratio else 1
+    )
+
+  dup_groups <- all_perf |>
+    dplyr::count(species, drug_label, drug_or_class, seed,
+      feature_type, feature_subtype) |>
+    dplyr::filter(n > 1)
+
+  if (nrow(dup_groups) > 0) {
+    stop(
+      "scoreFeaturesWithinSeed() assumes at most one fit per (species, ",
+      "drug_label, drug_or_class, seed, feature_type, feature_subtype) group, ",
+      "but ", nrow(dup_groups), " group(s) in all_performance_parquet have ",
+      "more than one. Re-check filterOptimalModel()'s thresholds, or update ",
+      "this join to key on model/fit_penalty/fit_mixture as well."
+    )
+  }
+
+  # add different layers of scoring to the features within each seed
   scored_top_features <- all_top_features |>
     dplyr::select(
       species, drug_label, drug_or_class, seed,
-      feature_type, feature_subtype, variable=Variable,
-      importance=Importance, sign=Sign
+      feature_type, feature_subtype, variable = Variable,
+      importance = Importance, sign = Sign
     ) |>
     dplyr::mutate(
       variable = dplyr::case_when(
@@ -137,7 +159,7 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
         ),
         TRUE ~ variable
       )
-    )|>
+    ) |>
     dplyr::left_join(all_perf, by = dplyr::join_by(species, drug_label, drug_or_class, seed,
       feature_type, feature_subtype)) |>
     dplyr::group_by(
@@ -180,11 +202,11 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
 #' collapsing the per-seed rows from `scoreFeaturesWithinSeed()` down to one
 #' row per feature.
 #'
-#' @param scored_features The tibble of scored top features with their contribution, rank, and rank score within each seed generated from `scoreFeaturesWithinSeed()`
+#' @param scored_top_features The tibble of scored top features with their contribution, rank, and rank score within each seed generated from `scoreFeaturesWithinSeed()`
 #'
 #' @returns a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_subtype/variable, with:
 #' \itemize{
-#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
+#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_top_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
 #'   \item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
 #'   \item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
 #'   \item \code{median_contribution}: median of \code{adjusted_contribution} across seeds. (\code{mean_contribution} is not currently computed.)
@@ -199,14 +221,14 @@ all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
 #' @keywords internal
 #' @examples
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
-summariseFeaturesAcrossSeeds <- function(scored_features) {
-  
-  # find max number of seeds
-  max_seeds <- scored_features |>
-  dplyr::summarise(n_seeds = dplyr::n_distinct(seed)) |>
-  dplyr::pull(n_seeds)
+summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 
- feature_summary <- scored_features |>
+  # find max number of seeds
+  max_seeds <- scored_top_features |>
+    dplyr::summarise(n_seeds = dplyr::n_distinct(seed)) |>
+    dplyr::pull(n_seeds)
+
+  feature_summary <- scored_top_features |>
     dplyr::group_by(
       species,
       drug_label,
@@ -216,30 +238,32 @@ summariseFeaturesAcrossSeeds <- function(scored_features) {
       variable
     ) |>
     dplyr::summarise(
-    seed_ratio = dplyr::n_distinct(seed)/max_seeds,
-    # mean_rank = mean(rank, na.rm = TRUE),
-    # mean_contribution = mean(contribution, na.rm = TRUE),
-    # mean_cum_contrib = mean(cum_contrib, na.rm = TRUE),
-    mean_rank_score = mean(rank_score, na.rm = TRUE),
-    median_rank = median(rank, na.rm = TRUE),
-    median_contribution = median(adjusted_contribution, na.rm = TRUE),
-    median_cum_contrib = median(cum_contrib, na.rm = TRUE),
-    median_rank_score = median(rank_score, na.rm = TRUE),
-    best_rank = min(rank, na.rm = TRUE),
-    rank_consistent = dplyr::n_distinct(rank) == 1,
-    rank_score_sd = sd(rank_score, na.rm = TRUE),
-    # coefficient of variation: how large rank_score_sd is relative to mean_rank_score
-    rank_score_cv = dplyr::if_else(
-      mean_rank_score != 0,
-      rank_score_sd / mean_rank_score,
-      NA_real_
-    ),
-    in_core_consistent = dplyr::n_distinct(in_core) == 1,
-    in_core = if (in_core_consistent) dplyr::first(in_core) else FALSE,
-    sign_consistent = dplyr::n_distinct(sign) == 1,
-    sign = if (sign_consistent) dplyr::first(sign) else "MIXED",
-    .groups = "drop"
-  )
+      seed_ratio = dplyr::n_distinct(seed) / max_seeds,
+
+      mean_rank_score = mean(rank_score, na.rm = TRUE),
+      median_rank_score = median(rank_score, na.rm = TRUE),
+      rank_score_sd = sd(rank_score, na.rm = TRUE),
+      # coefficient of variation: how large rank_score_sd is relative to mean_rank_score
+      rank_score_cv = dplyr::if_else(
+        mean_rank_score != 0,
+        rank_score_sd / mean_rank_score,
+        NA_real_
+      ),
+
+      median_rank = median(rank, na.rm = TRUE),
+      best_rank = min(rank, na.rm = TRUE),
+      rank_consistent = dplyr::n_distinct(rank) == 1,
+
+      median_contribution = median(adjusted_contribution, na.rm = TRUE),
+      median_cum_contrib = median(cum_contrib, na.rm = TRUE),
+
+      in_core_consistent = dplyr::n_distinct(in_core) == 1,
+      in_core = if (in_core_consistent) dplyr::first(in_core) else FALSE,
+
+      sign_consistent = dplyr::n_distinct(sign) == 1,
+      sign = if (sign_consistent) dplyr::first(sign) else "MIXED",
+      .groups = "drop"
+    )
 
   return(feature_summary)
 }
@@ -251,242 +275,159 @@ summariseFeaturesAcrossSeeds <- function(scored_features) {
 #' down to the top features for each drug/class.
 #'
 #' @inheritParams scoreFeaturesWithinSeed
-#' @param rank_score_quantile A value in \[0, 1\] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}. The quantile is computed once over every row of \code{feature_summary} — globally across all species/drugs/drug classes/feature types/subtypes, not per group — and is not restricted to rows that already pass the other conditions listed below: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original, ungrouped data, so this threshold does not narrow as other conditions are applied
-#' @param cv_threshold The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean
+#' @param rank_score_quantile A value in \[0, 1\] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}. The quantile is computed once over every row of \code{feature_summary} (with \code{na.rm = TRUE}) — globally across all species/drugs/drug classes/feature types/subtypes, not per group — and is not restricted to rows that already pass the other conditions listed below: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original, ungrouped data, so this threshold does not narrow as other conditions are applied
+#' @param cv_threshold The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean. A feature present in every seed (\code{seed_ratio == 1}) always passes this check regardless of its \code{rank_score_cv} — including when \code{rank_score_cv} is \code{NA}, which happens whenever a group has only a single seed
 #' @param cumulative_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%). Keep only features with \code{median_cum_contrib <= cumulative_contribution_threshold}
 #' @param seed_ratio_threshold If not \code{NULL} (the default), keep only features whose \code{seed_ratio} exactly equals this value
-#' @param both_subtypes Logical indicating whether to additionally restrict to features that survive the filters above in both the binary and counts \code{feature_subtype} (default is \code{FALSE})
+#' @param found_in_both_subtypes Logical indicating whether to additionally restrict to features that survive the filters above in both the binary and counts \code{feature_subtype} (default is \code{FALSE})
 #' @param compare_median_to_sd_rank_score Logical indicating whether to additionally require \code{median_rank_score > rank_score_sd} (default is \code{FALSE})
 #'
 #' @returns a tibble of top features for each drug/class: the `summariseFeaturesAcrossSeeds()` output (species, drug label, drug or class, feature type, feature subtype, variable, seed_ratio, mean/median rank score, median rank, median contribution, median cumulative contribution, best rank, rank/sign/in_core consistency flags, sign), filtered in two \code{dplyr::filter()} passes.
 #' The first pass keeps rows where all of the following hold, evaluated together against the full, ungrouped \code{feature_summary} (see \code{rank_score_quantile} for what that means for the last condition):
 #' \itemize{
 #'   \item \code{seed_ratio == seed_ratio_threshold}, only applied when \code{seed_ratio_threshold} is not \code{NULL},
-#'   \item \code{rank_score_cv <= cv_threshold},
+#'   \item \code{seed_ratio == 1} OR \code{rank_score_cv <= cv_threshold} (see \code{cv_threshold}),
 #'   \item \code{in_core} is TRUE,
 #'   \item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
 #'   \item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
 #'   \item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}.
 #' }
 #' Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.
-#' A second \code{dplyr::filter()} pass then optionally keeps only rows where \code{subtype_csv == "binary,counts"} (when \code{both_subtypes = TRUE}) and/or \code{median_rank_score > rank_score_sd} (when \code{compare_median_to_sd_rank_score = TRUE}).
+#' A second \code{dplyr::filter()} pass then optionally keeps only rows where \code{subtype_csv == "binary,counts"} (when \code{found_in_both_subtypes = TRUE}) and/or \code{median_rank_score > rank_score_sd} (when \code{compare_median_to_sd_rank_score = TRUE}).
 #' Every drug/class may not have variables from all feature types.
 #'
 #' @export
-topFeaturesPerDrugOrClass <- function( 
-  all_top_features_parquet, 
-  core_contribution_threshold = 0.75, 
+topFeaturesPerDrugOrClass <- function(
+  all_top_features_parquet,
+  core_contribution_threshold = 0.75,
   exclude_feature_types = NULL,
-  filter_model = TRUE, 
-  all_performance_parquet, 
-  MCC_threshold = NULL, 
+  filter_model = TRUE,
+  all_performance_parquet,
+  MCC_threshold = NULL,
   compare_to_shuffled = TRUE,
-  add_lasso_advtg = TRUE,
-  # feature_summary = summariseFeaturesAcrossSeeds(scored_features),
-                                        rank_score_quantile = 0.95,
-                                        cv_threshold = 1,
-                                        cumulative_contribution_threshold = 0.75,
-                                        #additional filters
-                                        seed_ratio_threshold = NULL,
-                                        both_subtypes = FALSE,
-                                        compare_median_to_sd_rank_score = FALSE 
-                                        ) 
-                                        {
-  
+  add_lasso_advtg = FALSE,
+  rank_score_quantile = 0.95,
+  cv_threshold = 1,
+  cumulative_contribution_threshold = 0.75,
+  # additional filters
+  seed_ratio_threshold = NULL,
+  found_in_both_subtypes = FALSE,
+  compare_median_to_sd_rank_score = FALSE
+  )
+  {
+
   scored_features <- scoreFeaturesWithinSeed(
-  all_top_features_parquet, 
-  core_contribution_threshold = core_contribution_threshold, 
-  exclude_feature_types = exclude_feature_types,
-  filter_model = filter_model, 
-  all_performance_parquet, 
-  MCC_threshold = MCC_threshold, 
-  compare_to_shuffled = compare_to_shuffled,
-  add_lasso_advtg = add_lasso_advtg
+    all_top_features_parquet,
+    core_contribution_threshold = core_contribution_threshold,
+    exclude_feature_types = exclude_feature_types,
+    filter_model = filter_model,
+    all_performance_parquet,
+    MCC_threshold = MCC_threshold,
+    compare_to_shuffled = compare_to_shuffled,
+    add_lasso_advtg = add_lasso_advtg
   )
 
-feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
+  feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
 
-top_features <- feature_summary |>
-  dplyr::filter(
-    if (!is.null(seed_ratio_threshold)) seed_ratio == seed_ratio_threshold else TRUE,
-    seed_ratio == 1 | rank_score_cv <= cv_threshold, # rank_score_cv can be NA if there is only one seed. 
-    in_core,
-    sign_consistent,
-    median_cum_contrib <= cumulative_contribution_threshold,
-    median_rank_score >= quantile(median_rank_score, rank_score_quantile)
-  ) |>
-  dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
-    dplyr::mutate( n_subtype = dplyr::n_distinct(feature_subtype),
-  subtype_csv = paste(sort(unique(feature_subtype)), collapse = ",") ) |>
-  dplyr::ungroup() |>
-dplyr::filter(
-  if(both_subtypes) (subtype_csv == "binary,counts") else TRUE,
-  if(compare_median_to_sd_rank_score) (median_rank_score > rank_score_sd) else TRUE
+  top_filtered_features <- feature_summary |>
+    dplyr::filter(
+      if (!is.null(seed_ratio_threshold)) seed_ratio == seed_ratio_threshold else TRUE,
+      seed_ratio == 1 | rank_score_cv <= cv_threshold, # rank_score_cv can be NA if there is only one seed.
+      in_core,
+      sign_consistent,
+      median_cum_contrib <= cumulative_contribution_threshold,
+      median_rank_score >= quantile(median_rank_score, rank_score_quantile, na.rm = TRUE)
+    ) |>
+    dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
+    dplyr::mutate(
+      n_subtype = dplyr::n_distinct(feature_subtype),
+      subtype_csv = paste(sort(unique(feature_subtype)), collapse = ",")
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::filter(
+      if (found_in_both_subtypes) (subtype_csv == "binary,counts") else TRUE,
+      if (compare_median_to_sd_rank_score) (median_rank_score > rank_score_sd) else TRUE
     )
-  
-  return(top_features)
+
+  return(top_filtered_features)
 }
 
 #' Aggregate mapped features to protein dyads
 #'
-#' @param top_features The tibble of top features for each drug/class generated from `topFeaturesPerDrugOrClass()`
-#' @param dyad_feature_parquet The path to the Parquet file containing the mapping of features to protein dyads
+#' Internal helper called on the output of `topFeaturesPerDrugOrClass()`.
 #'
-#' @returns a tibble with one row per species/drug_label/drug_or_class/dyad, with:
+#' @param top_filtered_features The tibble of top features for each drug/class generated from `topFeaturesPerDrugOrClass()`.
+#' @param dyad_feature_parquet The path to the Parquet file containing the mapping of features to protein dyads. Must have a \code{target} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{source} column giving the dyad id.
+#'
+#' @returns a tibble with one row per species/drug_label/drug_or_class/source (\code{source} is the protein-dyad id), with:
 #' \itemize{
 #'   \item \code{frequency}: the number of top-feature rows mapped to this dyad.
-#'   \item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{variable} values mapped to this dyad.
-#'   \item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type} values mapped to this dyad.
-#'   \item \code{dyad_mean_rank_score}, \code{dyad_median_rank_score}: mean/median of \code{median_rank_score}, down-weighted by \code{1 / n_dyads} for features that map to multiple dyads so promiscuous domains/COGs don't inflate every dyad they touch.
-#'   \item \code{dyad_max_rank_score}: the max of the unweighted \code{median_rank_score}, i.e. the single strongest feature backing this dyad regardless of its fan-out to other dyads.
-#'   \item \code{dyad_rank_score_sd}: standard deviation of the same down-weighted score used for \code{dyad_mean_rank_score}/\code{dyad_median_rank_score}.
-#'   \item \code{dyad_best_rank}: the best (lowest) \code{best_rank} among the features mapped to this dyad.
+#'   \item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{target} (\code{"<feature_type>:<variable>"}) values mapped to this dyad.
+#'   \item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type_subtype} (\code{"<feature_type>:<feature_subtype>"}) values mapped to this dyad.
+#'   \item \code{dyad_median_rank_score}: median of \code{median_rank_score} across the top-feature rows mapped to this dyad.
+#'   \item \code{dyad_median_contribution}: median of \code{median_contribution} across the top-feature rows mapped to this dyad.
+#'   \item \code{sign_consistent}, \code{sign}: whether \code{sign} is identical across every top-feature row mapped to this dyad; \code{sign} is that shared value if consistent, else \code{"MIXED"}.
 #' }
-#' \code{median_rank_score} is used throughout (rather than \code{mean_rank_score}) for consistency with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
-#' \code{top_features} rows whose \code{variable} has no match in \code{dyad_feature_parquet} are not dropped: they collapse into one \code{dyad = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real dyads must filter this out explicitly (as \code{findShareddyads()} and \code{findUniquedyads()} do).
+#' \code{top_filtered_features} rows whose \code{target} has no match in \code{dyad_feature_parquet} are not dropped: they collapse into one \code{source = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real dyads must filter this out explicitly (e.g. \code{dplyr::filter(!is.na(source))}).
 #'
-#' @export
-summariseDyads <- function(top_features = topFeaturesPerDrugOrClass(),
-                               dyad_feature_parquet
-                              ) {
+#' @keywords internal
+summariseDyads <- function(top_filtered_features,
+                            dyad_feature_parquet
+                            ) {
+  stopifnot(is.data.frame(top_filtered_features))
   stopifnot(file.exists(dyad_feature_parquet))
 
-#   dyad_feature <- arrow::read_parquet(normalizePath(dyad_feature_parquet)) |>
-#     dplyr::add_count(target, name = "n_sources") |>
-#     dplyr::mutate(
-#     feature_type = sub(":.*$", "", target),
-#     target = sub("^[^:]+:", "", target)
-# )
- 
-con <- DBI::dbConnect(duckdb::duckdb())
-
-dyad_feature <- DBI::dbGetQuery(
-  con,
-  glue::glue("
-    WITH counts AS (
-        SELECT
-            target,
-            COUNT(*) AS n_sources
-        FROM read_parquet('{normalizePath(dyad_feature_parquet)}')
-        GROUP BY target
+  dyad_feature <- arrow::read_parquet(dyad_feature_parquet)
+  if (!all(c("source", "target") %in% names(dyad_feature))) {
+    stop(
+      "dyad_feature_parquet is expected to have 'source' (dyad id) and ",
+      "'target' ('<feature_type>:<variable>') columns; found: ",
+      paste(names(dyad_feature), collapse = ", ")
     )
-    SELECT
-        d.source,
-        regexp_extract(d.target, '^([^:]+)', 1) AS feature_type,
-        regexp_replace(d.target, '^[^:]+:', '') AS target,
-        c.n_sources
-    FROM read_parquet('{normalizePath(dyad_feature_parquet)}') d
-    JOIN counts c
-        ON d.target = c.target
-  ")
-)
-  
-  top_dyads <- top_features |>
-    dplyr::left_join(
-      dyad_feature |> dplyr::select(-feature_type),
-      by = dplyr::join_by(variable == target),
-      relationship = "many-to-many"
-    ) |>
+  }
+
+  top_dyads <- top_filtered_features |>
     dplyr::mutate(
-      n_sources = dplyr::coalesce(n_sources, 1L),
-      weighted_rank_score = median_rank_score / n_sources
+      feature_type = dplyr::case_when(
+        feature_type == "AMRFinder"  ~ "amr",
+        feature_type == "COG"        ~ "cog",
+        feature_type == "DefenseCas" ~ "defense",
+        feature_type == "Pfam"       ~ "pfam",
+        TRUE                         ~ feature_type
+      )
     ) |>
-    dplyr::group_by(
-      species,
-      drug_label,
-      drug_or_class,
-      source
-    ) |>
+    tidyr::unite("target", feature_type, variable, sep = ":", remove = FALSE) |>
+    tidyr::unite("feature_type_subtype", feature_type, feature_subtype, sep = ":", remove = FALSE) |>
+    dplyr::left_join(dyad_feature, by = "target") |>
+    dplyr::select(species, drug_label, drug_or_class, feature_type_subtype, source, target, sign,
+      median_rank_score, median_contribution, subtype_csv) |>
+    dplyr::group_by(species, drug_label, drug_or_class, source) |>
     dplyr::summarise(
       frequency = dplyr::n(),
-      n_variables = dplyr::n_distinct(variable),
-      variables_csv = paste(sort(unique(variable)), collapse = ","),
-      n_feature_types = dplyr::n_distinct(feature_type),
-      feature_types_csv = paste(sort(unique(feature_type)), collapse = ","),
-      dyad_mean_rank_score = mean(weighted_rank_score, na.rm = TRUE),
-      dyad_median_rank_score = median(weighted_rank_score, na.rm = TRUE),
-      dyad_max_rank_score = max(median_rank_score, na.rm = TRUE),
-      dyad_rank_score_sd = sd(weighted_rank_score, na.rm = TRUE),
-      dyad_best_rank = min(best_rank, na.rm = TRUE),
+      n_variables = dplyr::n_distinct(target),
+      variables_csv = paste(sort(unique(target)), collapse = ","),
+      n_feature_types = dplyr::n_distinct(feature_type_subtype),
+      feature_types_csv = paste(sort(unique(feature_type_subtype)), collapse = ","),
+      dyad_median_rank_score = median(median_rank_score, na.rm = TRUE),
+      dyad_median_contribution = median(median_contribution, na.rm = TRUE),
+      sign_consistent = dplyr::n_distinct(sign) == 1,
+      sign = if (sign_consistent) dplyr::first(sign) else "MIXED",
       .groups = "drop"
     ) |>
-  dplyr::arrange(dplyr::desc(frequency), dplyr::desc(n_feature_types))
+    dplyr::arrange(dplyr::desc(frequency), dplyr::desc(n_feature_types))
 
   return(top_dyads)
-}
-
-#' Find dyads that appear across multiple drugs/classes
-#'
-#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
-#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
-#' @param min_drugs_or_classes The minimum number of distinct drugs or classes required for a dyad to be considered shared (default is \code{2})
-#'
-#' @returns a tibble with one row per shared \code{dyad}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the dyad appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
-#'
-#' @export
-findSharedDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
-                                label = "drug",
-                                 min_drugs_or_classes = 2
-                                ) {
-  shared_dyads <- top_dyads |>
-    dplyr::filter(!is.na(source), drug_label == label) |>
-    dplyr::group_by(source) |>
-    dplyr::mutate(
-      n_drug_or_class = dplyr::n_distinct(drug_or_class),
-      drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
-    ) |>
-    dplyr::filter(n_drug_or_class >= min_drugs_or_classes) |>
-    dplyr::ungroup() |>
-    dplyr::select(source, n_drug_or_class, drug_or_class_csv) |>
-    dplyr::arrange(dplyr::desc(n_drug_or_class))
-
-  return(shared_dyads)
-}
-
-#' Find the dyads that are unique to a single drug/class
-#'
-#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
-#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
-#' @param protein_names_parquet The path to the Parquet file containing the annotations to protein dyad names
-#'
-#' @returns a tibble with one row per dyad unique to a single drug/class, with \code{drug_or_class}, \code{dyad}, \code{dyad_name} (from the protein name annotations), and \code{dyad_mean_rank_score}, sorted by \code{dyad_mean_rank_score} descending.
-#'
-#' @export
-#' @examples
-#' findUniquedyads(summarisedyads(top_features, dyad_feature_parquet), label = "drug", protein_names_parquet)
-findUniqueDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
-                            label = "drug",
-                            protein_names_parquet
-) {
-
-  protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
-    dplyr::distinct()
-
-  unique_dyads <- top_dyads |>
-    dplyr::filter(!is.na(source), drug_label == label) |>
-    dplyr::group_by(source) |>
-    dplyr::mutate(
-      n_drug_or_class = dplyr::n_distinct(drug_or_class),
-      drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
-    ) |>
-    dplyr::filter(n_drug_or_class == 1) |>
-    dplyr::ungroup() |>
-    dplyr::select(source, drug_or_class_csv, dyad_median_rank_score) |>
-    dplyr::arrange(dplyr::desc(dyad_median_rank_score)) |>
-dplyr::rename(drug_or_class = drug_or_class_csv) 
-
-  return(unique_dyads)
 }
 
 #' Build a feature network from selected top features and top dyads
 #'
 #' @param top_features Output of \code{topFeaturesPerDrugOrClass()}.
-#' @param top_dyads Output of \code{summarisedyads()}.
-#' @param dyad_feature_parquet Path to the Parquet file mapping variables to dyads.
+#' @param top_dyads Output of \code{summariseDyads()}.
+#' @param dyad_feature_parquet Path to the same Parquet file passed to \code{summariseDyads()}: a \code{target} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{source} column giving the dyad id. \code{target} is reconstructed here from \code{top_features$feature_type}/\code{variable} the same way \code{summariseDyads()} builds it, so the feature-to-dyad edges use the same mapping as the dyad table itself.
 #' @param protein_names_parquet Path to the Parquet file with dyad name annotations.
 #'
 #' @returns A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.
-#' Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_mean_rank_score} (dyads, itself median-based per \code{summarisedyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+#' Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_median_rank_score} (dyads, via the \code{dyad_score} column, itself median-based per \code{summariseDyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
 #' @export
 buildFeatureNetwork <- function(top_features,
                                top_dyads,
@@ -523,11 +464,30 @@ buildFeatureNetwork <- function(top_features,
   dyad_feature <- arrow::read_parquet(normalizePath(dyad_feature_parquet)) |>
     dplyr::distinct()
 
+  if (!all(c("source", "target") %in% names(dyad_feature))) {
+    stop(
+      "dyad_feature_parquet is expected to have 'source' (dyad id) and ",
+      "'target' ('<feature_type>:<variable>') columns, matching what ",
+      "summariseDyads() expects; found: ", paste(names(dyad_feature), collapse = ", ")
+    )
+  }
+
   protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
     dplyr::distinct()
 
   make_model_id <- function(drug_label, drug_or_class) {
     paste(drug_label, drug_or_class, sep = ".")
+  }
+
+  # Same short feature-type codes used by summariseDyads() to build `target`.
+  shorten_feature_type <- function(feature_type) {
+    dplyr::case_when(
+      feature_type == "AMRFinder"  ~ "amr",
+      feature_type == "COG"        ~ "cog",
+      feature_type == "DefenseCas" ~ "defense",
+      feature_type == "Pfam"       ~ "pfam",
+      TRUE                         ~ feature_type
+    )
   }
 
   feature_table <- top_features |>
@@ -614,31 +574,30 @@ buildFeatureNetwork <- function(top_features,
   dyad_edges <- dyad_table |>
     dplyr::transmute(
       from = model_id,
-      to = dyad,
+      to = source,
       weight = dyad_score,
       edge_type = "model_dyad"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
   feature_dyad_edges <- feature_table |>
+    dplyr::mutate(short_feature_type = shorten_feature_type(feature_type)) |>
+    tidyr::unite("target", short_feature_type, variable, sep = ":", remove = FALSE) |>
     dplyr::left_join(
-      dyad_feature |> dplyr::add_count(feature, name = "n_dyads"),
-      by = dplyr::join_by(variable == feature),
+      dyad_feature |> dplyr::add_count(target, name = "n_dyads"),
+      by = "target",
       relationship = "many-to-many"
     ) |>
-    dplyr::filter(!is.na(dyad)) |>
+    dplyr::filter(!is.na(source)) |>
     dplyr::transmute(
       from = variable,
-      to = dyad,
+      to = source,
       weight = 1 / n_dyads,
       edge_type = "feature_dyad"
     ) |>
     dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
 
-  edges <- dplyr::bind_rows(feature_edges, feature_dyad_edges)
-
-    edges <- dplyr::bind_rows(edges, dyad_edges)
-
+  edges <- dplyr::bind_rows(feature_edges, feature_dyad_edges, dyad_edges)
 
   missing_vertices <- setdiff(unique(c(edges$from, edges$to)), nodes$name)
   if (length(missing_vertices) > 0) {
@@ -684,6 +643,7 @@ buildFeatureNetwork <- function(top_features,
 
   return(feature_network)
 }
+
 #' Plot the feature network with networkD3
 #'
 #' @param feature_network Output of \code{buildFeatureNetwork()}.
@@ -716,9 +676,6 @@ plotFeatureNetworkD3 <- function(feature_network,
 
   links <- feature_network$edges |>
     dplyr::filter(!is.na(from), !is.na(to)) |>
-    # dplyr::filter(
-    #   show_direct_model_dyad | edge_type != "model_dyad"
-    # ) |>
     dplyr::left_join(
       nodes |> dplyr::select(name, id),
       by = c("from" = "name")
@@ -755,7 +712,6 @@ plotFeatureNetworkD3 <- function(feature_network,
     opacity = 0.9,
     zoom = TRUE,
     fontSize = 14,
-    # nodeWidth = 24,
     height = height,
     width = width,
     colourScale = colour_scale,
@@ -769,6 +725,68 @@ plotFeatureNetworkD3 <- function(feature_network,
   )
 }
 
+#' Find dyads that appear across multiple drugs/classes
+#'
+#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
+#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
+#' @param min_drugs_or_classes The minimum number of distinct drugs or classes required for a dyad to be considered shared (default is \code{2})
+#'
+#' @returns a tibble with one row per shared \code{dyad}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the dyad appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
+#'
+#' @export
+findSharedDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
+                                label = "drug",
+                                 min_drugs_or_classes = 2
+                                ) {
+  shared_dyads <- top_dyads |>
+    dplyr::filter(!is.na(source), drug_label == label) |>
+    dplyr::group_by(source) |>
+    dplyr::mutate(
+      n_drug_or_class = dplyr::n_distinct(drug_or_class),
+      drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
+    ) |>
+    dplyr::filter(n_drug_or_class >= min_drugs_or_classes) |>
+    dplyr::ungroup() |>
+    dplyr::select(source, n_drug_or_class, drug_or_class_csv) |>
+    dplyr::arrange(dplyr::desc(n_drug_or_class))
+
+  return(shared_dyads)
+}
+
+#' Find the dyads that are unique to a single drug/class
+#'
+#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
+#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
+#' @param protein_names_parquet The path to the Parquet file containing the annotations to protein dyad names
+#'
+#' @returns a tibble with one row per dyad unique to a single drug/class, with \code{drug_or_class}, \code{dyad}, \code{dyad_name} (from the protein name annotations), and \code{dyad_mean_rank_score}, sorted by \code{dyad_mean_rank_score} descending.
+#'
+#' @export
+#' @examples
+#' findUniquedyads(summarisedyads(top_features, dyad_feature_parquet), label = "drug", protein_names_parquet)
+findUniqueDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
+                            label = "drug",
+                            protein_names_parquet
+) {
+
+  protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
+    dplyr::distinct()
+
+  unique_dyads <- top_dyads |>
+    dplyr::filter(!is.na(source), drug_label == label) |>
+    dplyr::group_by(source) |>
+    dplyr::mutate(
+      n_drug_or_class = dplyr::n_distinct(drug_or_class),
+      drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
+    ) |>
+    dplyr::filter(n_drug_or_class == 1) |>
+    dplyr::ungroup() |>
+    dplyr::select(source, drug_or_class_csv, dyad_median_rank_score) |>
+    dplyr::arrange(dplyr::desc(dyad_median_rank_score)) |>
+dplyr::rename(drug_or_class = drug_or_class_csv) 
+
+  return(unique_dyads)
+}
 
 # final run would be:
 # top_features <- topFeaturesPerDrugOrClass(rank_score_quantile = 0.75)

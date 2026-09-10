@@ -7,7 +7,7 @@
 topFeaturesPerDrugOrClass(
   all_top_features_parquet,
   core_contribution_threshold = 0.75,
-  exclude_feature_types = "struct",
+  exclude_feature_types = NULL,
   filter_model = TRUE,
   all_performance_parquet,
   MCC_threshold = NULL,
@@ -26,7 +26,7 @@ topFeaturesPerDrugOrClass(
 
 \item{core_contribution_threshold}{The cumulative-contribution cutoff, in [0, 1] (default is \code{0.75}, i.e. 75\%), used to flag whether a feature falls within the "core" set of features that jointly account for that share of a seed's total importance.}
 
-\item{exclude_feature_types}{Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top clusters are identified, not for scoring/ranking/thresholding here.}
+\item{exclude_feature_types}{Feature types to drop before any scoring happens (default is \code{"struct"}). struct variables are composite IDs (e.g. \code{polA.group_211.group_2176}, three dot-joined gene/domain identifiers) representing a co-occurrence/structural motif rather than a single molecular entity like the other five scales, and its candidate-variable count (tens of thousands per group) dwarfs the other scales by orders of magnitude — pooling it into this rank_score/contribution machinery would compare a compound signal against five primary ones on an incomparable scale. struct is reserved for post-hoc biological annotation once top dyads are identified, not for scoring/ranking/thresholding here.}
 
 \item{filter_model}{Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}, so if \code{all_top_features_parquet} contains multiple fits per group, all of that group's rows survive as soon as any one fit passes.}
 

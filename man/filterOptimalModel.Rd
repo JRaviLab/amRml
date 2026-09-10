@@ -23,4 +23,7 @@ a tibble of model fits (one row per species, drug_label, drug_or_class, seed, fe
 \description{
 Filter model fits to those passing quality thresholds
 }
+\examples{
+filterOptimalModel(all_performance_parquet = "inst/extdata/all_perf.parquet")
+}
 \keyword{internal}

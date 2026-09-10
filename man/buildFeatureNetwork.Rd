@@ -2,28 +2,28 @@
 % Please edit documentation in R/feature_rescoring.R
 \name{buildFeatureNetwork}
 \alias{buildFeatureNetwork}
-\title{Build a feature network from selected top features and top clusters}
+\title{Build a feature network from selected top features and top dyads}
 \usage{
 buildFeatureNetwork(
   top_features,
-  top_clusters,
-  cluster_feature_parquet,
+  top_dyads,
+  dyad_feature_parquet,
   protein_names_parquet
 )
 }
 \arguments{
 \item{top_features}{Output of \code{topFeaturesPerDrugOrClass()}.}
 
-\item{top_clusters}{Output of \code{summariseClusters()}.}
+\item{top_dyads}{Output of \code{summarisedyads()}.}
 
-\item{cluster_feature_parquet}{Path to the Parquet file mapping variables to clusters.}
+\item{dyad_feature_parquet}{Path to the Parquet file mapping variables to dyads.}
 
-\item{protein_names_parquet}{Path to the Parquet file with cluster name annotations.}
+\item{protein_names_parquet}{Path to the Parquet file with dyad name annotations.}
 }
 \value{
-A list with \code{feature_table}, \code{cluster_table}, \code{nodes}, \code{edges}, and \code{graph}.
-Node/edge weights are built from \code{median_rank_score} (features) and \code{cluster_mean_rank_score} (clusters, itself median-based per \code{summariseClusters()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.
+Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_mean_rank_score} (dyads, itself median-based per \code{summarisedyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
 }
 \description{
-Build a feature network from selected top features and top clusters
+Build a feature network from selected top features and top dyads
 }
