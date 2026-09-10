@@ -14,15 +14,15 @@ buildFeatureNetwork(
 \arguments{
 \item{top_features}{Output of \code{topFeaturesPerDrugOrClass()}.}
 
-\item{top_dyads}{Output of \code{summarisedyads()}.}
+\item{top_dyads}{Output of \code{summariseDyads()}.}
 
-\item{dyad_feature_parquet}{Path to the Parquet file mapping variables to dyads.}
+\item{dyad_feature_parquet}{Path to the same Parquet file passed to \code{summariseDyads()}: a \code{target} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{source} column giving the dyad id. \code{target} is reconstructed here from \code{top_features$feature_type}/\code{variable} the same way \code{summariseDyads()} builds it, so the feature-to-dyad edges use the same mapping as the dyad table itself.}
 
 \item{protein_names_parquet}{Path to the Parquet file with dyad name annotations.}
 }
 \value{
 A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.
-Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_mean_rank_score} (dyads, itself median-based per \code{summarisedyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_median_rank_score} (dyads, via the \code{dyad_score} column, itself median-based per \code{summariseDyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
 }
 \description{
 Build a feature network from selected top features and top dyads

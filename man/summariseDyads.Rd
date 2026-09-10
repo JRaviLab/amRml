@@ -4,30 +4,26 @@
 \alias{summariseDyads}
 \title{Aggregate mapped features to protein dyads}
 \usage{
-summariseDyads(
-  top_features = topFeaturesPerDrugOrClass(),
-  dyad_feature_parquet
-)
+summariseDyads(top_filtered_features, dyad_feature_parquet)
 }
 \arguments{
-\item{top_features}{The tibble of top features for each drug/class generated from \code{topFeaturesPerDrugOrClass()}}
+\item{top_filtered_features}{The tibble of top features for each drug/class generated from \code{topFeaturesPerDrugOrClass()}.}
 
-\item{dyad_feature_parquet}{The path to the Parquet file containing the mapping of features to protein dyads}
+\item{dyad_feature_parquet}{The path to the Parquet file containing the mapping of features to protein dyads. Must have a \code{target} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{source} column giving the dyad id.}
 }
 \value{
-a tibble with one row per species/drug_label/drug_or_class/dyad, with:
+a tibble with one row per species/drug_label/drug_or_class/source (\code{source} is the protein-dyad id), with:
 \itemize{
 \item \code{frequency}: the number of top-feature rows mapped to this dyad.
-\item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{variable} values mapped to this dyad.
-\item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type} values mapped to this dyad.
-\item \code{dyad_mean_rank_score}, \code{dyad_median_rank_score}: mean/median of \code{median_rank_score}, down-weighted by \code{1 / n_dyads} for features that map to multiple dyads so promiscuous domains/COGs don't inflate every dyad they touch.
-\item \code{dyad_max_rank_score}: the max of the unweighted \code{median_rank_score}, i.e. the single strongest feature backing this dyad regardless of its fan-out to other dyads.
-\item \code{dyad_rank_score_sd}: standard deviation of the same down-weighted score used for \code{dyad_mean_rank_score}/\code{dyad_median_rank_score}.
-\item \code{dyad_best_rank}: the best (lowest) \code{best_rank} among the features mapped to this dyad.
+\item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{target} (\code{"<feature_type>:<variable>"}) values mapped to this dyad.
+\item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type_subtype} (\code{"<feature_type>:<feature_subtype>"}) values mapped to this dyad.
+\item \code{dyad_median_rank_score}: median of \code{median_rank_score} across the top-feature rows mapped to this dyad.
+\item \code{dyad_median_contribution}: median of \code{median_contribution} across the top-feature rows mapped to this dyad.
+\item \code{sign_consistent}, \code{sign}: whether \code{sign} is identical across every top-feature row mapped to this dyad; \code{sign} is that shared value if consistent, else \code{"MIXED"}.
 }
-\code{median_rank_score} is used throughout (rather than \code{mean_rank_score}) for consistency with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
-\code{top_features} rows whose \code{variable} has no match in \code{dyad_feature_parquet} are not dropped: they collapse into one \code{dyad = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real dyads must filter this out explicitly (as \code{findShareddyads()} and \code{findUniquedyads()} do).
+\code{top_filtered_features} rows whose \code{target} has no match in \code{dyad_feature_parquet} are not dropped: they collapse into one \code{source = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real dyads must filter this out explicitly (e.g. \code{dplyr::filter(!is.na(source))}).
 }
 \description{
-Aggregate mapped features to protein dyads
+Internal helper called on the output of \code{topFeaturesPerDrugOrClass()}.
 }
+\keyword{internal}
