@@ -1486,7 +1486,7 @@ log(
 #' }
 #' @export
 generateMLInputs <- function(parquet_dir = "data/",
-                             out_path = "data/",
+                             out_path = NULL,
                              n_fold = 5,
                              split = c(1, 0), # Default: CV
                              min_n = 25,
@@ -1499,8 +1499,8 @@ generateMLInputs <- function(parquet_dir = "data/",
     stop("Parquet directory not found: ", parquet_dir)
   }
 
-  if (!dir.exists(dirname(out_path))) {
-    stop("Output directory does not exist: ", dirname(out_path))
+  if (is.null(out_path)) {
+   out_path <- parquet_dir
   }
 
   # Normalize input paths
