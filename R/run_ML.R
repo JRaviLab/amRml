@@ -112,9 +112,17 @@ createMLResultDir <- function(path,
       )
     }
 
+    # There is no stratify_by = "drug", so leave-one-drug-out arrives as NULL
+    # and `suffix` is "", making the path "LOO_matrix", which nothing writes.
+    # Those matrices live in LOO_matrix_drug/. Result directories keep the
+    # plain `suffix`, giving LOO_ML_performance/ not LOO_ML_drug_performance/.
+    # TODO: retire this by adding "drug" to the switch above, which also makes
+    # LOO with stratify_by = NULL an error again.
+    matrix_suffix <- if (isTRUE(LOO) && identical(suffix, "")) "_drug" else suffix
+
     # Build paths
     paths <- list(
-      matrix_path     = file.path(path, paste0(half_prefix, "matrix", suffix)),
+      matrix_path     = file.path(path, paste0(half_prefix, "matrix", matrix_suffix)),
       ML_performance  = file.path(path, paste0(full_prefix, "ML", suffix, "_performance")),
       ML_top_features = file.path(path, paste0(full_prefix, "ML", suffix, "_top_features")),
       ML_models       = file.path(path, paste0(full_prefix, "ML", suffix, "_models")),
@@ -201,9 +209,16 @@ createMLinputList <- function(path,
 
   path <- normalizePath(path)
 
-#  if (isTRUE(LOO) && (is.null(stratify_by) || !(stratify_by %in% c("year", "country")))) {
- #   stop("For Leave-One-Out (LOO) models, stratify_by must be 'year' or 'country'.")
- # }
+  # LOO has three kinds: by year, by country, and by drug. Only the first two
+  # have a stratify_by value, so leave-one-drug-out arrives as NULL. Validate
+  # the value when one is given rather than requiring one.
+  if (isTRUE(LOO) && !is.null(stratify_by) &&
+    !(stratify_by %in% c("year", "country"))) {
+    stop(
+      "For Leave-One-Out (LOO) models, `stratify_by` must be NULL ",
+      "(leave-one-drug-out), 'year', or 'country'."
+    )
+  }
 
   if (isTRUE(MDR) && (!is.null(stratify_by) || LOO || cross_test)) {
     stop("MDR can only run when stratify_by = NULL, LOO = FALSE, cross_test = FALSE.")
@@ -503,7 +518,30 @@ createMLinputList <- function(path,
       # ============================
     } else if (cross_test && LOO) {
         if(is.null(stratify_by)) {
-        # Case A: stratify_by = NULL, pair across abx within same feature + prefix
+        # Leave-one-drug-out cross testing. NOT SUPPORTED YET: it needs its own
+        # test set, the LOO equivalent of cross_drug_test/, which
+        # generateMLInputs() does not produce. Without it the pairing below has
+        # nothing to join against and returns zero rows, so fail loudly.
+        #
+        # The pairing code is kept for when that lands. It needs three fixes:
+        #  1. These filenames carry a "leaveout" marker before the drug, e.g.
+        #     Sfl_drug_leaveout_AMP_gene_binary_sparse.parquet. `parsed` reads
+        #     drug_or_class as the token right after "drug", so it returns the
+        #     marker "leaveout" instead of "AMP", and the join below
+        #     (ref_drug == test_drug) never matches.
+        #  2. `loo_test` is hardcoded to LOO_matrix/, which nothing writes, so
+        #     test_file is always empty. It must point at the new folder once
+        #     that exists. Note the loo_test / parsed_loo_test naming assumes
+        #     the LOO matrices are the test set, but they hold training data
+        #     (see "## Training drugs" in .parquet2LOODrugMatrix()), which is
+        #     what ref_file already reads them as.
+        #  3. This branch should key off stratify_by == "drug" once that is a
+        #     real value, rather than treating NULL as "must mean drug".
+        stop(
+          "Leave-one-drug-out cross testing is not supported yet: ",
+          "generateMLInputs() does not produce a cross-drug test set for the ",
+          "leave-one-drug-out matrices."
+        )
             paths$loo_test <- file.path(dirname(paths$matrix_path), "LOO_matrix/")
 
 loo_files_vec <- list.files(
@@ -579,7 +617,9 @@ parsed_drugs <- parsed |>
     out_top     = paths$ML_top_features,
     out_models  = paths$ML_models,
     out_pred    = paths$ML_prediction
-  ) 
+  )
+
+            return(out)
             }
       # LOO requires special directory structure resolution
       test_path <- file.path(path, stringr::str_remove(basename(paths$matrix_path), "^LOO_"))
@@ -806,24 +846,28 @@ runMDRmodels <- function(path,
       base <- paste0(shuffle_tag, output_prefix, pca_tag, seed_tag)
 
       if (!is.null(res$performance_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$performance_tibble,
-          file.path(files$out_perf[i], paste0(base, "_performance.tsv"))
+          file.path(files$out_perf[i], paste0(base, "_performance.parquet")),
+          compression = "zstd"
         )
       }
       if (!is.null(res$top_feat_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$top_feat_tibble,
-          file.path(files$out_top[i], paste0(base, "_top_features.tsv"))
+          file.path(files$out_top[i], paste0(base, "_top_features.parquet")),
+          compression = "zstd"
         )
       }
+
       if (!is.null(res$fit)) {
         saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
       if (!is.null(res$pred)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$pred,
-          file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
+          file.path(files$out_pred[i], paste0(base, "_prediction.parquet")),
+          compression = "zstd"
         )
       }
 
@@ -916,7 +960,7 @@ runMDRmodels <- function(path,
 #'   \item Stratification: Suffixed with \code{"_country"} or \code{"_year"}
 #' }
 #'
-#' For example: \code{"LOO_cross_test_ML_year_performance.tsv"}
+#' For example: \code{"LOO_cross_test_ML_year_performance.parquet"}
 #'
 #' @note
 #' This function requires the following packages:
@@ -1002,10 +1046,16 @@ runMLmodels <- function(path,
     MDR         = FALSE,
     cross_test  = cross_test
   )
-    
+
+  if (nrow(files) == 0) {
+    message("No files found to process. Exiting.")
+    return(invisible(NULL))
+  }
+
 .findNonRanPrefixes <- function(files,
                                 seed,
-                                shuffle_labels = FALSE) {
+                                shuffle_labels = FALSE) 
+                                {
 
   # ---- matrix prefixes ----
   matrix_prefixes <- unique(
@@ -1015,7 +1065,7 @@ runMLmodels <- function(path,
   # ---- performance files ----
   perf_files <- list.files(
     path = unique(files$out_perf),
-    pattern = "_performance\\.tsv$",
+    pattern = "_performance\\.parquet$",
     full.names = FALSE
   )
 
@@ -1042,7 +1092,7 @@ runMLmodels <- function(path,
   perf_base <- sub("^cross_test_", "", perf_base)
 
   # ---- keep only this seed ----
-  seed_pattern <- paste0("_", seed, "_performance\\.tsv$")
+  seed_pattern <- paste0("_", seed, "_performance\\.parquet$")
   perf_base <- perf_base[grepl(seed_pattern, perf_base)]
 
   if (length(perf_base) == 0) {
@@ -1050,8 +1100,8 @@ runMLmodels <- function(path,
   }
 
   # ---- strip stratification BEFORE seed ----
-  perf_base <- sub("_(country|year)_([0-9]+)_performance\\.tsv$", 
-                   "_\\2_performance.tsv", 
+  perf_base <- sub("_([0-9]+)_performance\\.parquet$", 
+                   "_\\2_performance.parquet", 
                    perf_base)
 
   # ---- final prefixes that ran ----
@@ -1111,15 +1161,15 @@ if (nrow(files) == 0) {
   )
 
   # Stratification suffix
-  strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
-    ""
-  } else {
-    switch(stratify_by,
-      "country" = "_country",
-      "year"    = "_year",
-      stop("`stratify_by` must be NULL, 'year', or 'country'.")
-    )
-  }
+  # strat_suffix <- if (is.null(stratify_by) || identical(stratify_by, "")) {
+  #   ""
+  # } else {
+  #   switch(stratify_by,
+  #     "country" = "_country",
+  #     "year"    = "_year",
+  #     stop("`stratify_by` must be NULL, 'year', or 'country'.")
+  #   )
+  # }
 
   # Auto naming for shuffled and PCA
   shuffle_tag <- if (isTRUE(shuffle_labels)) "shuffled_" else ""
@@ -1199,28 +1249,33 @@ if (nrow(files) == 0) {
       }
 
         seed_tag <- paste0("_", seed)
-      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + _year/_country
-      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, strat_suffix, seed_tag)
+      # Final base filename: shuffled_ + [LOO_/cross_test_] + <matrix prefix> + _pcaXX + seed
+      base <- paste0(shuffle_tag, config_prefix, output_prefix, pca_tag, seed_tag)
 
       if (!is.null(res$performance_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$performance_tibble,
-          file.path(files$out_perf[i], paste0(base, "_performance.tsv"))
+          file.path(files$out_perf[i], paste0(base, "_performance.parquet")),
+          compression = "zstd"
         )
       }
+      
       if (!is.null(res$top_feat_tibble)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$top_feat_tibble,
-          file.path(files$out_top[i], paste0(base, "_top_features.tsv"))
+          file.path(files$out_top[i], paste0(base, "_top_features.parquet")),
+          compression = "zstd"
         )
       }
+
       if (!is.null(res$fit)) {
         saveRDS(res$fit, file.path(files$out_models[i], paste0(base, "_model_fit.rds")))
       }
       if (!is.null(res$pred)) {
-        readr::write_tsv(
+        arrow::write_parquet(
           res$pred,
-          file.path(files$out_pred[i], paste0(base, "_prediction.tsv"))
+          file.path(files$out_pred[i], paste0(base, "_prediction.parquet")),
+          compression = "zstd"
         )
       }
 
