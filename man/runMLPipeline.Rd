@@ -14,7 +14,7 @@ runMLPipeline(
   use_pca = FALSE,
   pca_threshold = 0.95,
   penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5/5,
+  mix_vec = 0,
   min_n_vec = c(2, 6, 12),
   tree_vec = c(100, 500, 1000),
   select_best_metric = "mcc",
