@@ -174,6 +174,7 @@ buildTopFeatsPq <- function(
   full.names = TRUE,
   recursive = TRUE
 )
+  files <- files[basename(files) != "all_top_features.parquet"]
 
 if (length(files) == 0) {
   stop(
@@ -312,6 +313,7 @@ buildPerfPqYearCountry <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("year_perf.parquet", "country_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -360,6 +362,7 @@ buildPerfPqCrossDrug <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("cross_drug_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -391,6 +394,7 @@ buildPerfPqCrossYear <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("cross_year_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -422,6 +426,7 @@ buildPerfPqCrossCountry <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("cross_country_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -454,6 +459,7 @@ buildPerfPqLOODrug <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("LOO_drug_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -489,6 +495,7 @@ buildTopFeatsPqYearCountry <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("year_top_features.parquet", "country_top_features.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -540,6 +547,7 @@ buildTopFeatsPqLOODrug <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("LOO_drug_top_features.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -572,6 +580,7 @@ buildTopFeatsPqMDR <- function(
     top_feat_dir_path) {
   
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("MDR_top_features.parquet")]
   
   # Read and combine
   merged_df <- files|>
@@ -606,7 +615,8 @@ buildPerfPqMDR <- function(
     perf_dir_path) {
   
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-  
+  files <- files[!basename(files) %in% c("MDR_perf.parquet")]
+
   # Read and combine
   merged_df <- files|>
     purrr::set_names() |>   # keeps file names attached
@@ -617,7 +627,7 @@ buildPerfPqMDR <- function(
       into = c("feature_type", "feature_subtype", "seed"),
       regex = "classes_([a-z]+)_(binary|counts)_([0-9]+)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(perf_dir_path, "MDR_perf.parquet"))
   
 }
@@ -640,7 +650,8 @@ buildPredPqMDR <- function(
     pred_dir_path) {
   
   files <- list.files(pred_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-  
+  files <- files[!basename(files) %in% c("MDR_pred.parquet")]
+
   # Read and combine
   merged_df <- files|>
     purrr::set_names() |>   # keeps file names attached
@@ -652,7 +663,7 @@ buildPredPqMDR <- function(
       into = c("feature_type", "feature_subtype", "seed"),
       regex = "classes_([a-z]+)_(binary|counts)_([0-9]+)"
     )
-  
+
   arrow::write_parquet(merged_df, file.path(pred_dir_path, "MDR_pred.parquet"))
   
 }
@@ -673,6 +684,7 @@ buildPerfPqLOOCountry <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("LOO_country_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -704,6 +716,7 @@ buildPerfPqLOOYear <- function(
   perf_dir_path
 ) {
   files <- list.files(perf_dir_path, pattern = "\\.parquet$", full.names = TRUE)
+  files <- files[!basename(files) %in% c("LOO_year_perf.parquet")]
 
   # Read and combine
   merged_df <- files |>
@@ -737,7 +750,8 @@ buildTopFeatsPqLOOCountry <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-
+  files <- files[files != file.path(top_feat_dir_path, "LOO_country_top_features.parquet")]
+  
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
@@ -770,7 +784,8 @@ buildTopFeatsPqLOOYear <- function(
   top_feat_dir_path
 ) {
   files <- list.files(top_feat_dir_path, pattern = "\\.parquet$", full.names = TRUE)
-
+  files <- files[files != file.path(top_feat_dir_path, "LOO_year_top_features.parquet")]
+  
   # Read and combine
   merged_df <- files |>
     purrr::set_names() |> # keeps file names attached
