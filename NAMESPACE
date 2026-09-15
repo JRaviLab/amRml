@@ -193,7 +193,6 @@ importFrom(tidyr,
 )
 importFrom(tune,
   control_grid,
-  extract_fit_parsnip,
   finalize_workflow,
   select_best,
   tune_grid
@@ -202,10 +201,6 @@ importFrom(workflows,
   add_model,
   add_recipe,
   workflow
-)
-importFrom(workflowsets,
-  extract_fit_parsnip,
-  extract_spec_parsnip
 )
 importFrom(yardstick,
   bal_accuracy,

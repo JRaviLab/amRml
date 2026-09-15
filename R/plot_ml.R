@@ -17,7 +17,6 @@
 #' @importFrom ggplot2 xlab
 #' @importFrom ggplot2 ylim
 #' @importFrom graphics barplot
-#' @importFrom tune extract_fit_parsnip
 #' @importFrom yardstick pr_curve
 NULL
 
