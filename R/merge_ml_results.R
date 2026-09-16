@@ -823,13 +823,15 @@ mergeMLresults <- function(path) {
   # -----------------------
   # Standard ML
   # -----------------------
-  if (dir.exists(file.path(path, "ML_performance"))) {
+  if (dir.exists(file.path(path, "ML_performance")) &&
+    length(list.files(file.path(path, "ML_performance"))) > 0) {
     buildPerfPq(
       perf_dir_path = file.path(path, "ML_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "ML_top_features"))) {
+  if (dir.exists(file.path(path, "ML_top_features")) &&
+    length(list.files(file.path(path, "ML_top_features"))) > 0) {
     buildTopFeatsPq(
       top_feat_dir_path = file.path(path, "ML_top_features")
     )
@@ -838,13 +840,15 @@ mergeMLresults <- function(path) {
   # -----------------------
   # Year stratified
   # -----------------------
-  if (dir.exists(file.path(path, "ML_year_performance"))) {
+  if (dir.exists(file.path(path, "ML_year_performance")) &&
+    length(list.files(file.path(path, "ML_year_performance"))) > 0) {
     buildPerfPqYearCountry(
       perf_dir_path = file.path(path, "ML_year_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "ML_year_top_features"))) {
+  if (dir.exists(file.path(path, "ML_year_top_features")) &&
+    length(list.files(file.path(path, "ML_year_top_features"))) > 0) {
     buildTopFeatsPqYearCountry(
       top_feat_dir_path = file.path(path, "ML_year_top_features")
     )
@@ -853,13 +857,15 @@ mergeMLresults <- function(path) {
   # -----------------------
   # Country stratified
   # -----------------------
-  if (dir.exists(file.path(path, "ML_country_performance"))) {
+  if (dir.exists(file.path(path, "ML_country_performance")) &&
+    length(list.files(file.path(path, "ML_country_performance"))) > 0) {
     buildPerfPqYearCountry(
       perf_dir_path = file.path(path, "ML_country_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "ML_country_top_features"))) {
+  if (dir.exists(file.path(path, "ML_country_top_features")) &&
+    length(list.files(file.path(path, "ML_country_top_features"))) > 0) {
     buildTopFeatsPqYearCountry(
       top_feat_dir_path = file.path(path, "ML_country_top_features")
     )
@@ -868,19 +874,22 @@ mergeMLresults <- function(path) {
   # -----------------------
   # Cross-testing
   # -----------------------
-  if (dir.exists(file.path(path, "cross_test_ML_performance"))) {
+  if (dir.exists(file.path(path, "cross_test_ML_performance")) &&
+    length(list.files(file.path(path, "cross_test_ML_performance"))) > 0) {
     buildPerfPqCrossDrug(
       perf_dir_path = file.path(path, "cross_test_ML_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "cross_test_ML_year_performance"))) {
+  if (dir.exists(file.path(path, "cross_test_ML_year_performance")) &&
+    length(list.files(file.path(path, "cross_test_ML_year_performance"))) > 0) {
     buildPerfPqCrossYear(
       perf_dir_path = file.path(path, "cross_test_ML_year_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "cross_test_ML_country_performance"))) {
+  if (dir.exists(file.path(path, "cross_test_ML_country_performance")) &&
+    length(list.files(file.path(path, "cross_test_ML_country_performance"))) > 0) {
     buildPerfPqCrossCountry(
       perf_dir_path = file.path(path, "cross_test_ML_country_performance")
     )
@@ -889,37 +898,43 @@ mergeMLresults <- function(path) {
   # -----------------------
   # LOO
   # -----------------------
-  if (dir.exists(file.path(path, "LOO_ML_performance"))) {
+  if (dir.exists(file.path(path, "LOO_ML_performance")) &&
+    length(list.files(file.path(path, "LOO_ML_performance"))) > 0) {
     buildPerfPqLOODrug(
       perf_dir_path = file.path(path, "LOO_ML_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "LOO_ML_top_features"))) {
+  if (dir.exists(file.path(path, "LOO_ML_top_features")) &&
+    length(list.files(file.path(path, "LOO_ML_top_features"))) > 0) {
     buildTopFeatsPqLOODrug(
       top_feat_dir_path = file.path(path, "LOO_ML_top_features")
     )
   }
 
-  if (dir.exists(file.path(path, "LOO_ML_country_performance"))) {
+  if (dir.exists(file.path(path, "LOO_ML_country_performance")) &&
+    length(list.files(file.path(path, "LOO_ML_country_performance"))) > 0) {
     buildPerfPqLOOCountry(
       perf_dir_path = file.path(path, "LOO_ML_country_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "LOO_ML_country_top_features"))) {
+  if (dir.exists(file.path(path, "LOO_ML_country_top_features")) &&
+    length(list.files(file.path(path, "LOO_ML_country_top_features"))) > 0) {
     buildTopFeatsPqLOOCountry(
       top_feat_dir_path = file.path(path, "LOO_ML_country_top_features")
     )
   }
 
-  if (dir.exists(file.path(path, "LOO_ML_year_performance"))) {
+  if (dir.exists(file.path(path, "LOO_ML_year_performance")) &&
+    length(list.files(file.path(path, "LOO_ML_year_performance"))) > 0) {
     buildPerfPqLOOYear(
       perf_dir_path = file.path(path, "LOO_ML_year_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "LOO_ML_year_top_features"))) {
+  if (dir.exists(file.path(path, "LOO_ML_year_top_features")) &&
+    length(list.files(file.path(path, "LOO_ML_year_top_features"))) > 0) {
     buildTopFeatsPqLOOYear(
       top_feat_dir_path = file.path(path, "LOO_ML_year_top_features")
     )
@@ -928,19 +943,22 @@ mergeMLresults <- function(path) {
   # -----------------------
   # MDR
   # -----------------------
-  if (dir.exists(file.path(path, "MDR_ML_performance"))) {
+  if (dir.exists(file.path(path, "MDR_ML_performance")) &&
+    length(list.files(file.path(path, "MDR_ML_performance"))) > 0) {
     buildPerfPqMDR(
       perf_dir_path = file.path(path, "MDR_ML_performance")
     )
   }
 
-  if (dir.exists(file.path(path, "MDR_ML_top_features"))) {
+  if (dir.exists(file.path(path, "MDR_ML_top_features")) &&
+    length(list.files(file.path(path, "MDR_ML_top_features"))) > 0) {
     buildTopFeatsPqMDR(
       top_feat_dir_path = file.path(path, "MDR_ML_top_features")
     )
   }
 
-  if (dir.exists(file.path(path, "MDR_ML_pred"))) {
+  if (dir.exists(file.path(path, "MDR_ML_pred")) &&
+    length(list.files(file.path(path, "MDR_ML_pred"))) > 0) {
     buildPredPqMDR(
       pred_dir_path = file.path(path, "MDR_ML_pred")
     )
