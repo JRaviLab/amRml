@@ -580,7 +580,8 @@ parsed_drugs <- parsed |>
     out_models  = paths$ML_models,
     out_pred    = paths$ML_prediction
   )
-            }
+       return(out)      
+        } else {
       # LOO requires special directory structure resolution
       test_path <- file.path(path, stringr::str_remove(basename(paths$matrix_path), "^LOO_"))
       test_path <- normalizePath(test_path)
@@ -607,6 +608,7 @@ parsed_drugs <- parsed |>
         )
 
       return(out)
+    }
     }
   }
 
