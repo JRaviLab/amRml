@@ -73,7 +73,6 @@ Imports:
     utils,
     withr,
     workflows,
-    workflowsets,
     yardstick
 biocViews:
     Software,
