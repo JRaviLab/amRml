@@ -29,5 +29,5 @@ test_that("runModelingPipelineIntense() generates matrices before training", {
   # to work with).
   expect_length(generate_calls, 1)
   expect_equal(generate_calls[[1]]$parquet_dir, normalizePath(parquet_dir))
-  expect_equal(generate_calls[[1]]$out_path, normalizePath(tmp_root))
+  expect_equal(generate_calls[[1]]$out_path, normalizePath(parquet_dir))
 })
