@@ -391,20 +391,25 @@ summariseDyads <- function(top_filtered_features,
 #' @param top_features Output of \code{topFeaturesPerDrugOrClass()}.
 #' @param top_dyads Output of \code{summariseDyads()}.
 #' @param dyad_feature_parquet Path to the same Parquet file passed to \code{summariseDyads()}: a \code{feature} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{dyad} column giving the dyad id. \code{feature} is reconstructed here from \code{top_features$feature_type}/\code{variable} the same way \code{summariseDyads()} builds it, so the feature-to-dyad edges use the same mapping as the dyad table itself.
-#' @param protein_names_parquet Path to the Parquet file with dyad name annotations.
 #'
 #' @returns A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.
 #' Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_median_rank_score} (dyads, via the \code{dyad_score} column, itself median-based per \code{summariseDyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
+#' @example \dontrun{buildFeatureNetwork(top_features = topFeaturesPerDrugOrClass(...), 
+#' top_dyads = summariseDyads(...), 
+#' dyad_feature_parquet = "inst/extdata/dyad_feature.parquet",
+#' filtered_model = filterOptimalModel(...))}
 #' @export
 buildFeatureNetwork <- function(top_features,
+median_rank_score_quantile = 1,
                                top_dyads,
+                               n_feature_types_threshold = 6,
                                dyad_feature_parquet,
-                               protein_names_parquet
+                               filtered_model,
+                               parquet_dir_path = NULL
                               ) {
   stopifnot(is.data.frame(top_features))
   stopifnot(is.data.frame(top_dyads))
   stopifnot(file.exists(dyad_feature_parquet))
-  stopifnot(file.exists(protein_names_parquet))
 
   required_feature_cols <- c(
     "species", "drug_label", "drug_or_class",
@@ -429,18 +434,8 @@ buildFeatureNetwork <- function(top_features,
   }
 
   dyad_feature <- arrow::read_parquet(normalizePath(dyad_feature_parquet)) |>
-    dplyr::distinct()
-
-  if (!all(c("dyad", "feature") %in% names(dyad_feature))) {
-    stop(
-      "dyad_feature_parquet is expected to have 'dyad' (dyad id) and ",
-      "'feature' ('<feature_type>:<variable>') columns, matching what ",
-      "summariseDyads() expects; found: ", paste(names(dyad_feature), collapse = ", ")
-    )
-  }
-
-  protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
-    dplyr::distinct()
+    dplyr::distinct() |>
+    dplyr::filter(!is.na(dyad), !is.na(feature))
 
   make_model_id <- function(drug_label, drug_or_class) {
     paste(drug_label, drug_or_class, sep = ".")
@@ -458,8 +453,13 @@ buildFeatureNetwork <- function(top_features,
   }
 
   feature_table <- top_features |>
-    dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
-    dplyr::group_by(species, model_id, feature_type, variable) |>
+    dplyr::filter(median_rank_score >= quantile(median_rank_score, median_rank_score_quantile, na.rm = TRUE)) |>
+    dplyr::mutate(feature_type = shorten_feature_type(feature_type)) |>
+    dplyr::mutate(
+      feature = paste(feature_type, variable, sep = ":"),
+      model_id = make_model_id(drug_label, drug_or_class)
+    ) |>
+    dplyr::group_by(species, model_id, feature_type, feature) |>
     dplyr::summarise(
       # mean of median_rank_score across subtype (bin/count) rows for this variable --
       # this is where bin/count reconciliation currently happens (implicitly)
@@ -467,146 +467,132 @@ buildFeatureNetwork <- function(top_features,
       .groups = "drop"
     )
 
-  dyad_table <- top_dyads |>
-    dplyr::mutate(model_id = make_model_id(drug_label, drug_or_class)) |>
-    dplyr::group_by(species, model_id, dyad) |>
-    dplyr::summarise(
-      dyad_score = mean(dyad_median_rank_score, na.rm = TRUE),
-      .groups = "drop"
-    )
+ feature_dyad_edges <- dyad_feature |>
+  dplyr::semi_join(
+    feature_table,
+    by = "feature"
+  ) 
 
-  model_nodes <- dplyr::bind_rows(
-    feature_table |>
-      dplyr::distinct(species, model_id),
-    dyad_table |>
-      dplyr::distinct(species, model_id)
+  feature_dyad_edges <- feature_dyad_edges |>
+  dplyr::semi_join(
+    top_dyads |> dplyr::filter(n_feature_types > n_feature_types_threshold),
+    by = "dyad"
+  )
+  
+  model_feature_edges <- feature_table |>
+  dplyr::transmute(
+    source = model_id,
+    target = feature,
+    weight = feature_score,
+    edge_type = "model_feature"
   ) |>
-    dplyr::distinct(species, model_id) |>
-    dplyr::transmute(
-      name = model_id,
-      label = model_id,
-      node_type = "model",
-      species = species,
-      score = NA_real_,
-      breadth = NA_real_,
-      node_size = 4
-    )
+  dplyr::distinct()
+  
+  feature_dyad_edges <- feature_dyad_edges |>
+  dplyr::transmute(
+    source = feature,
+    target = dyad,
+    weight = 1,
+    edge_type = "feature_dyad"
+  ) |>
+  dplyr::distinct()
+  
+  edges <- dplyr::bind_rows(
+  model_feature_edges,
+  feature_dyad_edges
+)
+  
+ feature_nodes <- feature_table |>
+  # dplyr::filter(feature %in% feature_dyad_edges$source) |>
+  dplyr::mutate(
+    node_type = feature_type
+  )|> 
+  dplyr::group_by(node_type, feature) |>
+  dplyr::summarise(
+    score = mean(feature_score),
+    breadth = dplyr::n_distinct(model_id),
+    .groups = "drop"
+  ) |>
+   dplyr::rename(name = feature)
+  
+  dyad_nodes <- top_dyads |>
+    dplyr::filter(dyad %in% feature_dyad_edges$target) |>
+  dplyr::group_by(dyad) |>
+  dplyr::summarise(
+    score = mean(dyad_median_rank_score),
+    breadth = dplyr::n_distinct(
+      paste(drug_label, drug_or_class)
+    ),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(
+    node_type = "dyad"
+  ) |>
+  dplyr::rename(name = dyad)
 
-  feature_nodes <- feature_table |>
-    dplyr::group_by(species, variable) |>
-    dplyr::summarise(
-      score = mean(feature_score, na.rm = TRUE),
-      breadth = dplyr::n_distinct(model_id),
+  model_nodes <- filtered_model |>
+dplyr::group_by(drug_label, drug_or_class) |>
+    dplyr::summarize(
+      score = median(nonshuffled_MCC, na.rm = TRUE),
+      breadth = dplyr::n(),
       .groups = "drop"
     ) |>
-    dplyr::transmute(
-      name = variable,
-      label = variable,
-      node_type = "feature",
-      species = species,
-      score = score,
-      breadth = breadth,
-      node_size = pmax(3, pmin(10, breadth + 2))
+  tidyr::unite("name", drug_label, drug_or_class, sep = ".") |>
+  dplyr::mutate(
+    node_type = "model")
+
+  nodes <- bind_rows(
+  model_nodes,
+  feature_nodes,
+  dyad_nodes
+)
+  cog_names <- arrow::read_parquet(file.path(parquet_dir_path, "protein_COG.parquet")) |> 
+    dplyr::distinct(name = query_name, label = description)
+  
+defense_names <- arrow::read_parquet(file.path(parquet_dir_path, "protein_DefenseCas.parquet")) |> 
+    dplyr::distinct(name = query_name, label = description)
+
+ amr_names <- arrow::read_parquet(file.path(parquet_dir_path, "protein_AMRFinder.parquet")) |> 
+    dplyr::distinct(name = query_name, label = description) 
+
+ pfam_names <- arrow::read_parquet(file.path(parquet_dir_path, "protein_Pfam.parquet")) |> 
+    dplyr::distinct(name = query_name, label = description)  
+
+   protein_names <- arrow::read_parquet(file.path(parquet_dir_path, "protein_names.parquet")) |>
+    dplyr::distinct(name = proteinID, label = proteinName)
+
+  gene_names <- arrow::read_parquet(file.path(parquet_dir_path, "gene_names.parquet")) |>
+    dplyr::distinct(name = Gene, label = Annotation)
+
+  nodes <- nodes |>
+    dplyr::left_join(cog_names, by = "name") |>
+    dplyr::left_join(defense_names, by = "name") |>
+    dplyr::left_join(amr_names, by = "name") |>
+    dplyr::left_join(pfam_names, by = "name") |>
+    dplyr::left_join(protein_names, by = "name") |>
+    dplyr::left_join(gene_names, by = "name") |>
+    dplyr::mutate(
+      label = dplyr::coalesce(label.x, label.y, label.x.x, label.y.y, label.x.x.x, label.y.y.y)
+    ) |>
+    dplyr::select(-dplyr::starts_with("label.")) |>
+    dplyr::mutate(
+      label = dplyr::if_else(is.na(label), name, label)
     )
-
-  dyad_nodes <- dyad_table |>
-    dplyr::group_by(species, dyad) |>
-    dplyr::summarise(
-      score = median(dyad_score, na.rm = TRUE),
-      breadth = dplyr::n_distinct(model_id),
-      .groups = "drop"
-    ) |>
-    dplyr::transmute(
-      name = dyad,
-      label = dyad,
-      node_type = "dyad",
-      species = species,
-      score = score,
-      breadth = breadth,
-      node_size = pmax(3, pmin(10, breadth + 2))
-    )
-
-  nodes <- dplyr::bind_rows(model_nodes, feature_nodes, dyad_nodes) |>
-    dplyr::distinct(name, .keep_all = TRUE)
-
-  feature_edges <- feature_table |>
-    dplyr::transmute(
-      from = model_id,
-      to = variable,
-      weight = feature_score,
-      edge_type = "model_feature"
-    ) |>
-    dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
-
-  dyad_edges <- dyad_table |>
-    dplyr::transmute(
-      from = model_id,
-      to = dyad,
-      weight = dyad_score,
-      edge_type = "model_dyad"
-    ) |>
-    dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
-
-  feature_dyad_edges <- feature_table |>
-    dplyr::mutate(short_feature_type = shorten_feature_type(feature_type)) |>
-    tidyr::unite("feature", short_feature_type, variable, sep = ":", remove = FALSE) |>
-    dplyr::left_join(
-      dyad_feature |> dplyr::add_count(feature, name = "n_dyads"),
-      by = "feature",
-      relationship = "many-to-many"
-    ) |>
-    dplyr::filter(!is.na(dyad)) |>
-    dplyr::transmute(
-      from = variable,
-      to = dyad,
-      weight = 1 / n_dyads,
-      edge_type = "feature_dyad"
-    ) |>
-    dplyr::distinct(from, to, edge_type, .keep_all = TRUE)
-
-  edges <- dplyr::bind_rows(feature_edges, feature_dyad_edges, dyad_edges)
-
-  missing_vertices <- setdiff(unique(c(edges$from, edges$to)), nodes$name)
-  if (length(missing_vertices) > 0) {
-    extra_nodes <- tibble::tibble(name = missing_vertices) |>
-      dplyr::mutate(
-        label = name,
-        node_type = dplyr::case_when(
-          grepl("^drug\\.|^drug_class\\.", name) ~ "model",
-          grepl("^fig\\||^dyad", name) ~ "dyad",
-          TRUE ~ "feature"
-        ),
-        species = NA_character_,
-        score = NA_real_,
-        breadth = NA_real_,
-        node_size = 4
-      )
-
-    nodes <- dplyr::bind_rows(nodes, extra_nodes) |>
-      dplyr::distinct(name, .keep_all = TRUE)
-  }
-
-  graph <- if (nrow(edges) > 0) {
-    igraph::graph_from_data_frame(
-      d = edges,
-      directed = FALSE,
-      vertices = nodes
-    )
-  } else {
-    igraph::graph_from_data_frame(
-      d = data.frame(from = character(), to = character()),
-      directed = FALSE,
-      vertices = nodes
-    )
-  }
+  
+  graph <- igraph::graph_from_data_frame(
+  edges,
+  directed = FALSE,
+  vertices = nodes
+)
 
   feature_network <- list(
-    feature_table = feature_table,
-    dyad_table = dyad_table,
-    nodes = nodes,
-    edges = edges,
-    graph = graph
-  )
+  feature_table = feature_table,
+  feature_dyad_edges = feature_dyad_edges,
+  model_feature_edges = model_feature_edges,
+  nodes = nodes,
+  edges = edges,
+  graph = graph
+)
 
   return(feature_network)
 }
@@ -634,47 +620,62 @@ plotFeatureNetworkD3 <- function(feature_network,
       id = dplyr::row_number() - 1L,
       group = node_type,
       title = paste0(
-        "<b>", label, "</b>",
-        ifelse(is.na(species), "", paste0("<br>Species: ", species)),
-        ifelse(is.na(score), "", paste0("<br>Score: ", signif(score, 3))),
+        "<b>", name, "</b>",
+        ifelse(is.na(score), "", paste0("<br>Score: ", signif(score, 2))),
         ifelse(is.na(breadth), "", paste0("<br>Breadth: ", breadth))
       )
     )
 
   links <- feature_network$edges |>
-    dplyr::filter(!is.na(from), !is.na(to)) |>
-    dplyr::left_join(
-      nodes |> dplyr::select(name, id),
-      by = c("from" = "name")
-    ) |>
-    dplyr::rename(dyad = id) |>
-    dplyr::left_join(
-      nodes |> dplyr::select(name, id),
-      by = c("to" = "name")
-    ) |>
-    dplyr::rename(feature = id) |>
-    dplyr::filter(!is.na(dyad), !is.na(feature)) |>
-    dplyr::mutate(
-      value = dplyr::if_else(is.na(weight), 1, weight)
-    ) |>
-    dplyr::select(dyad, feature, value, edge_type)
+    dplyr::filter(!is.na(source), !is.na(target))|>
+  dplyr::left_join(
+    nodes |>
+      dplyr::select(source = name, source_id = id),
+    by = "source"
+  ) |>
+  dplyr::left_join(
+    nodes |>
+      dplyr::select(target = name, target_id = id),
+    by = "target"
+  )
 
   stopifnot(nrow(nodes) > 0)
   stopifnot(nrow(links) > 0)
 
   colour_scale <- networkD3::JS(
-    "d3.scaleOrdinal()
-      .domain(['model', 'feature', 'dyad'])
-      .range(['#4C78A8', '#F58518', '#54A24B'])"
-  )
-
+"
+d3.scaleOrdinal()
+  .domain([
+    'model',
+    'amr',
+    'cog',
+    'defense',
+    'gene',
+    'pfam',
+    'protein',
+    'struct',
+    'dyad'
+  ])
+  .range([
+    '#4a6b8a',
+    '#87ceeb',
+    '#e6ab80',
+    '#8b6b7a',
+    '#4e9a9a',
+    '#c4a35a',
+    '#9b7fba',
+    '#5b8db8',
+    '#d4735e'
+  ])
+"
+)
   networkD3::forceNetwork(
     Links = links,
     Nodes = nodes,
-    Source = "dyad",
-    Target = "feature",
-    Value = "value",
-    NodeID = "label",
+    Source = "source_id",
+    Target = "target_id",
+    Value = "weight",
+    NodeID = "name",
     Group = "group",
     opacity = 0.9,
     zoom = TRUE,
@@ -696,7 +697,7 @@ plotFeatureNetworkD3 <- function(feature_network,
 # top_features <- topFeaturesPerDrugOrClass(rank_score_quantile = 0.75)
 # top_dyads <- summarisedyads(top_features, dyad_feature_parquet = dyad_feature_parquet)
 # feature_network <- buildFeatureNetwork(top_features = top_features, top_dyads = top_dyads,
-#   dyad_feature_parquet = dyad_feature_parquet, protein_names_parquet = protein_names_parquet)
+#   dyad_feature_parquet = dyad_feature_parquet)
   # plotFeatureNetworkD3(feature_network)
 
 #' Discover high-performing models, stable features, and protein dyads
