@@ -38,6 +38,7 @@ Config/testthat/edition: 3
 Imports:
     arrow,
     BiocParallel,
+    BiocFileCache,
     ComplexHeatmap,
     DBI,
     dplyr,

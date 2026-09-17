@@ -12,7 +12,7 @@ test_that("runMLmodels() exits cleanly instead of crashing on no files", {
     result <- runMLmodels(
       path = tmp, stratify_by = NULL, LOO = FALSE, cross_test = FALSE
     ),
-    "No files found"
+    "No eligible standard ML matrices were found"
   )
   expect_null(result)
 })
