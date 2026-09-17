@@ -692,69 +692,6 @@ plotFeatureNetworkD3 <- function(feature_network,
   )
 }
 
-#' Find dyads that appear across multiple drugs/classes
-#'
-#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
-#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
-#' @param min_drugs_or_classes The minimum number of distinct drugs or classes required for a dyad to be considered shared (default is \code{2})
-#'
-#' @returns a tibble with one row per shared \code{dyad}, with \code{n_drug_or_class} (the number of distinct \code{drug_or_class} values the dyad appears in) and \code{drug_or_class_csv} (a comma-separated string of those values), sorted by \code{n_drug_or_class} descending.
-#'
-#' @export
-findSharedDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
-                                label = "drug",
-                                 min_drugs_or_classes = 2
-                                ) {
-  shared_dyads <- top_dyads |>
-    dplyr::filter(!is.na(dyad), drug_label == label) |>
-    dplyr::group_by(dyad) |>
-    dplyr::mutate(
-      n_drug_or_class = dplyr::n_distinct(drug_or_class),
-      drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
-    ) |>
-    dplyr::filter(n_drug_or_class >= min_drugs_or_classes) |>
-    dplyr::ungroup() |>
-    dplyr::select(dyad, n_drug_or_class, drug_or_class_csv) |>
-    dplyr::arrange(dplyr::desc(n_drug_or_class))
-
-  return(shared_dyads)
-}
-
-#' Find the dyads that are unique to a single drug/class
-#'
-#' @param top_dyads The tibble of summarized dyads generated from `summarisedyads()`
-#' @param label The \code{drug_label} value to filter dyads by, either \code{"drug"} or \code{"drug_class"} (default is \code{"drug"})
-#' @param protein_names_parquet The path to the Parquet file containing the annotations to protein dyad names
-#'
-#' @returns a tibble with one row per dyad unique to a single drug/class, with \code{drug_or_class}, \code{dyad}, \code{dyad_name} (from the protein name annotations), and \code{dyad_mean_rank_score}, sorted by \code{dyad_mean_rank_score} descending.
-#'
-#' @export
-#' @examples
-#' findUniquedyads(summarisedyads(top_features, dyad_feature_parquet), label = "drug", protein_names_parquet)
-findUniqueDyads <- function(top_dyads = summariseDyads(top_features, dyad_feature_parquet),
-                            label = "drug",
-                            protein_names_parquet
-) {
-
-  protein_names <- arrow::read_parquet(normalizePath(protein_names_parquet)) |>
-    dplyr::distinct()
-
-  unique_dyads <- top_dyads |>
-    dplyr::filter(!is.na(dyad), drug_label == label) |>
-    dplyr::group_by(dyad) |>
-    dplyr::mutate(
-      n_drug_or_class = dplyr::n_distinct(drug_or_class),
-      drug_or_class_csv = paste(sort(unique(drug_or_class)), collapse = ", ")
-    ) |>
-    dplyr::filter(n_drug_or_class == 1) |>
-    dplyr::ungroup() |>
-    dplyr::select(dyad, drug_or_class_csv, dyad_median_rank_score) |>
-    dplyr::arrange(dplyr::desc(dyad_median_rank_score)) |>
-dplyr::rename(drug_or_class = drug_or_class_csv) 
-
-  return(unique_dyads)
-}
-
 # final run would be:
 # top_features <- topFeaturesPerDrugOrClass(rank_score_quantile = 0.75)
 # top_dyads <- summarisedyads(top_features, dyad_feature_parquet = dyad_feature_parquet)
