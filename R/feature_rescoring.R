@@ -36,6 +36,7 @@ filterOptimalModel <- function(all_performance_parquet,
       nonshuffled_MCC = shuffled_FALSE,
       shuffled_MCC = shuffled_TRUE
     ) |>
+    dplyr::filter(!is.na(nonshuffled_MCC)) |>
     dplyr::mutate(
       MCC_diff = nonshuffled_MCC - shuffled_MCC
     ) |>
@@ -80,8 +81,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
   filter_model = TRUE,
   all_performance_parquet,
   MCC_threshold = NULL,
-  compare_to_shuffled = TRUE,
-  add_lasso_advtg = FALSE)
+  compare_to_shuffled = TRUE)
   {
   # check for the all_perf.parquet and all_top_features.parquet files
   stopifnot(file.exists(all_top_features_parquet))
@@ -107,41 +107,14 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
       )
   }
 
-  # The models are elastic net, fit with a mix of penalties from lasso to ridge.
-  # Lasso shrinks the feature space to fewer selected variables, while
-  # ridge retains variables (keeps correlated variables together).
-  # Calculate the sparsity score to give an advantage to lasso-like fits.
-  #
-  # NOTE: all_top_features_parquet has no model/fit_penalty/fit_mixture column,
-  # so this join is keyed at the (species, drug_label, drug_or_class, seed,
-  # feature_type, feature_subtype) level. That is only safe because there is
-  # currently never more than one surviving fit per group; the check below
-  # enforces that assumption instead of silently fanning out and
-  # double-counting feature rows if it were ever violated.
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
     dplyr::filter(!shuffled) |>
     dplyr::select(species, drug_label, drug_or_class, seed,
       feature_type, feature_subtype, fit_penalty, fit_mixture,
       mcc, n_feat, n_feats_returned) |>
     dplyr::mutate(
-      feat_return_ratio = n_feats_returned / n_feat,
-      sparsity_score = if (add_lasso_advtg) 1 - feat_return_ratio else 1
+      feat_return_ratio = n_feats_returned / n_feat
     )
-
-  dup_groups <- all_perf |>
-    dplyr::count(species, drug_label, drug_or_class, seed,
-      feature_type, feature_subtype) |>
-    dplyr::filter(n > 1)
-
-  if (nrow(dup_groups) > 0) {
-    stop(
-      "scoreFeaturesWithinSeed() assumes at most one fit per (species, ",
-      "drug_label, drug_or_class, seed, feature_type, feature_subtype) group, ",
-      "but ", nrow(dup_groups), " group(s) in all_performance_parquet have ",
-      "more than one. Re-check filterOptimalModel()'s thresholds, or update ",
-      "this join to key on model/fit_penalty/fit_mixture as well."
-    )
-  }
 
   # add different layers of scoring to the features within each seed
   scored_top_features <- all_top_features |>
@@ -171,21 +144,20 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
       seed
     ) |>
     dplyr::mutate(
-      contribution = importance / sum(importance, na.rm = TRUE),
-      adjusted_contribution = contribution * sparsity_score
+      contribution = importance / sum(importance, na.rm = TRUE)
     ) |>
-    dplyr::arrange(dplyr::desc(adjusted_contribution), .by_group = TRUE) |>
+    dplyr::arrange(dplyr::desc(contribution), .by_group = TRUE) |>
     dplyr::mutate(
-      rank = rank(dplyr::desc(adjusted_contribution), ties.method = "average"),
+      rank = rank(dplyr::desc(contribution), ties.method = "average"),
       n_features = dplyr::n(),
       rank_score = dplyr::if_else(
         n_features > 1,
         (n_features - rank) / (n_features - 1),
         1
       ),
-      running_contrib = cumsum(adjusted_contribution)
+      running_contrib = cumsum(contribution)
     ) |>
-    dplyr::group_by(adjusted_contribution, .add = TRUE) |>
+    dplyr::group_by(contribution, .add = TRUE) |>
     dplyr::mutate(
       cum_contrib = max(running_contrib),
       in_core = cum_contrib <= core_contribution_threshold
