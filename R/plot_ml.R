@@ -17,8 +17,6 @@
 #' @importFrom ggplot2 xlab
 #' @importFrom ggplot2 ylim
 #' @importFrom graphics barplot
-#' @importFrom tune extract_fit_parsnip
-#' @importFrom vip vip
 #' @importFrom yardstick pr_curve
 NULL
 
@@ -425,7 +423,7 @@ plotFishers <- function(
 #' @export
 #'
 #' @examples
-#' plotDrugDist(metadata_path = system.file("extdata", package = "amRml"))
+#' plotDrugDist(metadata_path = system.file("extdata", "Shigella_flexneri", package = "amRml"))
 plotDrugDist <- function(metadata_path = ".") {
   metadata <- .readMetadata(metadata_path)
 
@@ -500,7 +498,7 @@ plotDrugDist <- function(metadata_path = ".") {
 #' performance$shuffled <- FALSE
 #' performance$mcc <- 0.6 + 0.3 * sin(seq_len(nrow(performance)))
 #' plotDrugPerf(
-#'   metadata_path = system.file("extdata", package = "amRml"),
+#'   metadata_path = system.file("extdata", "Shigella_flexneri", package = "amRml"),
 #'   performance_path = performance
 #' )
 plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
@@ -656,7 +654,7 @@ plotDrugPerf <- function(metadata_path = ".", performance_path = ".") {
 #' plotCrossDrug(
 #'   cross_test_performance_path = cross_drug,
 #'   drug_performance_path = performance,
-#'   metadata_path = system.file("extdata", package = "amRml")
+#'   metadata_path = system.file("extdata", "Shigella_flexneri", package = "amRml")
 #' )
 plotCrossDrug <- function(
   cross_test_performance_path = ".",

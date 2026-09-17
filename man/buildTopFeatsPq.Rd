@@ -5,26 +5,14 @@
 \title{Build Parquet file of top ML features}
 \usage{
 buildTopFeatsPq(
-  path,
-  stratify_by = NULL,
-  LOO = FALSE,
-  MDR = FALSE,
-  cross_test = FALSE,
+  top_feat_dir_path,
   out_parquet = "all_top_features.parquet",
   compression = "zstd",
   verbose = TRUE
 )
 }
 \arguments{
-\item{path}{Base directory containing ML results}
-
-\item{stratify_by}{NULL, "year", or "country"}
-
-\item{LOO}{Logical; leave-one-out analysis}
-
-\item{MDR}{Logical; MDR mode}
-
-\item{cross_test}{Logical; cross-testing mode}
+\item{top_feat_dir_path}{The directory containing ML top features files}
 
 \item{out_parquet}{Output file name}
 
@@ -36,10 +24,12 @@ buildTopFeatsPq(
 A tibble with metadata columns + feature importance data
 }
 \description{
-Reads all \verb{_top_features.tsv} files, parses metadata from filenames,
+Reads all \verb{_top_features.parquet} files, parses metadata from filenames,
 combines them into a single table, and writes a Parquet file.
 }
 \examples{
-buildTopFeatsPq("data/Campylobacter")
+\dontrun{
+buildTopFeatsPq("data/Campylobacter/ML_top_features/")
+}
 
 }

@@ -5,8 +5,8 @@
 \title{Generate all ML input matrices}
 \usage{
 generateMLInputs(
-  parquet_duckdb_path = "results/Cje_parquet.duckdb",
-  out_path = "results/",
+  parquet_dir = "data/",
+  out_path = "data/",
   n_fold = 5,
   split = c(1, 0),
   min_n = 25,
@@ -14,7 +14,7 @@ generateMLInputs(
 )
 }
 \arguments{
-\item{parquet_duckdb_path}{\link{character} path to the DuckDB that contains the view of metadata and feature parquets}
+\item{parquet_dir}{\link{character} path to the directory that contains the metadata and feature parquets}
 
 \item{out_path}{\link{character} path to the directory where the results files (matrices) will be written}
 
@@ -49,8 +49,8 @@ e) MDR based on classes
 \dontrun{
 # Generate ML input matrices with 5-fold cross-validation (using shorthand)
 generateMLInputs(
-  parquet_duckdb_path = "results/Cje_parquet.duckdb",
-  out_path = "results/",
+  parquet_dir = "data/",
+  out_path = "data/",
   n_fold = 5,
   split = 0, # shorthand for CV mode
   min_n = 25,
@@ -59,8 +59,8 @@ generateMLInputs(
 
 # Same as above but using vector notation
 generateMLInputs(
-  parquet_duckdb_path = "results/Cje_parquet.duckdb",
-  out_path = "results/",
+  parquet_dir = "data/",
+  out_path = "data/",
   n_fold = 5,
   split = c(1, 0), # explicit CV mode
   verbosity = "minimal"
@@ -68,8 +68,8 @@ generateMLInputs(
 
 # Generate with classical train/val/test split (70/15/15)
 generateMLInputs(
-  parquet_duckdb_path = "results/Cje_parquet.duckdb",
-  out_path = "results/",
+  parquet_dir = "data/",
+  out_path = "data/",
   n_fold = NULL,
   split = c(0.7, 0.15), # 70\% train, 15\% val, 15\% test
   min_n = 25,

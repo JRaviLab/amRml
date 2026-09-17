@@ -16,8 +16,6 @@ A named list with elements:
 \item{species}{Species name}
 \item{drug_label}{"drug" or "drug_class"}
 \item{drug_or_class}{Drug name or class}
-\item{strat_label}{Stratification type (year/country) or NA}
-\item{strat_value}{Stratification value or NA}
 \item{feature_type}{Feature category}
 \item{feature_subtype}{binary/counts}
 \item{seed}{Integer seed}
@@ -25,10 +23,17 @@ A named list with elements:
 }
 \description{
 Extracts metadata fields encoded in machine learning result filenames.
-Supports shuffled runs, drug vs drug_class, optional stratification,
-feature types, and seed information.
+Supports shuffled runs, drug vs drug_class, feature types, and seed
+information.
+}
+\details{
+This helper handles only unstratified result filenames. Year/country
+stratified filenames carry extra tokens and are aggregated by
+\code{\link[=buildPerfPqYearCountry]{buildPerfPqYearCountry()}} instead; passing one here raises an error
+rather than returning silently wrong metadata.
 }
 \examples{
-parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.tsv")
+parse_ml_filename("Csp_drug_AMX_genes_binary_42_top_features.parquet")
+parse_ml_filename("Csp_drug_class_AMG_genes_binary_42_performance.parquet")
 
 }

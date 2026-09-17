@@ -6,7 +6,7 @@
 \usage{
 runMDRmodels(
   path,
-  threads = 16,
+  threads = 8,
   split = c(0.8, 0),
   n_fold = 5,
   prop_vi_top_feats = c(0, 1),
@@ -18,7 +18,7 @@ runMDRmodels(
   use_saved_split = TRUE,
   shuffle_labels = FALSE,
   use_pca = FALSE,
-  seed = 5280
+  seed = 123
 )
 }
 \arguments{
@@ -48,14 +48,14 @@ runMDRmodels(
 
 \item{use_pca}{Logical. Use PCA on predictors. Default FALSE.}
 
-\item{seed}{Integer. Seed for the parallel RNG streams (\code{BiocParallel}). Default 5280.}
+\item{seed}{Integer. Seed for the parallel RNG streams (\code{BiocParallel}).}
 }
 \value{
 NULL (invisible). Called for side effects (model training and result saving).
 }
 \description{
 Executes machine learning pipeline for MDR analysis using logistic regression
-with parallel processing via BiocParallel. Trains models on all MDR
+with parallel processing via the future backend. Trains models on all MDR
 parquet files and saves results to designated output directories.
 }
 \examples{

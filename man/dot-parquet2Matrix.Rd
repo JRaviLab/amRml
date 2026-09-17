@@ -5,7 +5,7 @@
 \title{Metadata and Feature parquets to bug-drug-feature parquet as ML input}
 \usage{
 .parquet2Matrix(
-  parquet_duckdb_path,
+  parquet_dir,
   path,
   n_fold,
   split,
@@ -14,7 +14,7 @@
 )
 }
 \arguments{
-\item{parquet_duckdb_path}{\link{character} The path to the DuckDB that contains the view of metadata and feature parquets}
+\item{parquet_dir}{\link{character} The path to the directory that contains the metadata and feature parquets}
 
 \item{path}{\link{character} The path to the working directory}
 

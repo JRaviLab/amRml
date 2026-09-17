@@ -7,7 +7,7 @@
 buildPredPqMDR(pred_dir_path)
 }
 \arguments{
-\item{perf_dir_path}{Directory containing prediction TSV files}
+\item{pred_dir_path}{Directory containing prediction TSV files}
 }
 \value{
 Writes a Parquet file to the same directory
@@ -16,7 +16,9 @@ Writes a Parquet file to the same directory
 Build Parquet file from MDR ML predictions
 }
 \examples{
+\dontrun{
 # MDR
 buildPredPqMDR(pred_dir_path = "data/Campylobacter/MDR_ML_pred/")
+}
 
 }

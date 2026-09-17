@@ -16,7 +16,9 @@ Writes a Parquet file to the same directory
 Build Parquet file from MDR ML top features
 }
 \examples{
+\dontrun{
 # MDR
 buildTopFeatsPqMDR(top_feat_dir_path = "data/Campylobacter/MDR_ML_top_features/")
+}
 
 }

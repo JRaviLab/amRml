@@ -14,7 +14,7 @@ runMLPipeline(
   use_pca = FALSE,
   pca_threshold = 0.95,
   penalty_vec = 10^seq(-4, -1, length.out = 10),
-  mix_vec = 0:5/5,
+  mix_vec = 0,
   min_n_vec = c(2, 6, 12),
   tree_vec = c(100, 500, 1000),
   select_best_metric = "mcc",
@@ -35,8 +35,7 @@ classification for one bug/drug combination) or \code{resistant_classes}
 (multi-class classification for determining the drug classes to which each
 genome is resistant), but not both.}
 
-\item{model}{\link[rlang:chr]{chr} Logistic regression ("LR"), random forest ("RF"), or
-boosted tree ("BT")}
+\item{model}{\link[rlang:chr]{chr} Logistic regression ("LR")}
 
 \item{split}{\link[pillar:num]{num} Vector of length 2 indicating the proportion of data to
 be designated as training and validation, respectively. Note: if \code{test_data}

@@ -16,8 +16,10 @@ Writes a Parquet file to the same directory
 Build Parquet file from LOO country ML top features
 }
 \examples{
+\dontrun{
 
 # LOO country
 buildTopFeatsPqLOOCountry(top_feat_dir_path = "data/Campylobacter/LOO_ML_country_top_features/")
+}
 
 }

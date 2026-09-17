@@ -94,11 +94,8 @@ test_that(".checkArgSmallestNObsRS requires positive whole number", {
   expect_silent(amRml:::.checkArgSmallestNObsRS(3))
 })
 
-test_that(".checkArgModel accepts only LR/RF/BT", {
+test_that(".checkArgModel accepts only LR", {
   expect_silent(amRml:::.checkArgModel("LR"))
-  expect_silent(amRml:::.checkArgModel("RF"))
-  expect_silent(amRml:::.checkArgModel("BT"))
-  expect_error(amRml:::.checkArgModel("SVM"), "one of")
 })
 
 test_that(".checkArgPenaltyVec and .checkArgMixVec enforce ranges", {

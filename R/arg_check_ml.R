@@ -276,14 +276,13 @@ NULL
 #'
 #' @noRd
 #' @keywords internal
-#' @param model [chr]  Logistic regression ("LR"), random forest ("RF"), or
-#' boosted tree ("BT")
+#' @param model [chr]  Logistic regression ("LR")
 #'
 .checkArgModel <- function(model) {
-  if (!(model %in% c("LR", "RF", "BT"))) {
+  if (!(model %in% c("LR"))) {
     stop(
       "The `model` argument must be one of: ",
-      "'LR' (logistic regression), 'RF' (random forest), 'BT' (boosted tree)."
+      "'LR' (logistic regression)"
     )
   }
 }

@@ -7,7 +7,7 @@
 .parquet2LOODrugMatrix(path, verbosity = c("minimal", "debug"))
 }
 \arguments{
-\item{path}{Character. Base directory containing stratified parquet matrices.
+\item{path}{Character. Base directory containing parquet matrices.
 Expected subdirs: matrix/..}
 
 \item{verbosity}{Character. "minimal" or "debug"; when "debug", prints detailed steps.}

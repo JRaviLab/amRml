@@ -16,10 +16,12 @@ Writes a Parquet file to the same directory
 Build Parquet file from year/country ML top features
 }
 \examples{
+\dontrun{
 # Year stratified
 buildTopFeatsPqYearCountry(top_feat_dir_path = "data/Campylobacter/ML_year_top_features/")
 
 # Country stratified
 buildTopFeatsPqYearCountry(top_feat_dir_path = "data/Campylobacter/ML_country_top_features/")
+}
 
 }

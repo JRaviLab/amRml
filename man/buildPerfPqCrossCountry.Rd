@@ -16,6 +16,8 @@ Writes a Parquet file to the same directory
 Build Parquet file from cross country testing ML performances
 }
 \examples{
+\dontrun{
 buildPerfPqCrossCountry(perf_dir_path = "data/Campylobacter/cross_test_ML_country_performance/")
+}
 
 }

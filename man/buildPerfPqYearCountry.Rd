@@ -10,12 +10,16 @@ buildPerfPqYearCountry(perf_dir_path)
 \item{perf_dir_path}{Directory containing performance TSV files}
 }
 \value{
-Writes a Parquet file to the same directoryYear stratified
-
-buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_year_performance/")Country stratified
-
-buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_country_performance/")
+Writes a Parquet file to the same directory
 }
 \description{
 Build Parquet file from year/country ML performances
+}
+\examples{
+\dontrun{
+# Year stratified
+buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_year_performance/")
+# Country stratified
+buildPerfPqYearCountry(perf_dir_path = "data/Campylobacter/ML_country_performance/")
+}
 }

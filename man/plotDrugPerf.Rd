@@ -32,7 +32,7 @@ performance$drug_label <- "drug"
 performance$shuffled <- FALSE
 performance$mcc <- 0.6 + 0.3 * sin(seq_len(nrow(performance)))
 plotDrugPerf(
-  metadata_path = system.file("extdata", package = "amRml"),
+  metadata_path = system.file("extdata", "Shigella_flexneri", package = "amRml"),
   performance_path = performance
 )
 }

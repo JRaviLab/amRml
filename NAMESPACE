@@ -37,6 +37,7 @@ export(generateMLInputs)
 export(getConfusionMatrix)
 export(getNumFeat)
 export(loadMLInputTibble)
+export(mergeMLresults)
 export(parse_ml_filename)
 export(plotBaselineComparison)
 export(plotCM)
@@ -197,23 +198,14 @@ importFrom(tidyr,
 )
 importFrom(tune,
   control_grid,
-  extract_fit_parsnip,
   finalize_workflow,
   select_best,
   tune_grid
-)
-importFrom(vip,
-  vi,
-  vip
 )
 importFrom(workflows,
   add_model,
   add_recipe,
   workflow
-)
-importFrom(workflowsets,
-  extract_fit_parsnip,
-  extract_spec_parsnip
 )
 importFrom(yardstick,
   bal_accuracy,

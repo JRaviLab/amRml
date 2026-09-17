@@ -16,7 +16,9 @@ Writes a Parquet file to the same directory
 Build Parquet file from MDR ML performances
 }
 \examples{
+\dontrun{
 # MDR
 buildPerfPqMDR(perf_dir_path = "data/Campylobacter/MDR_ML_performance/")
+}
 
 }

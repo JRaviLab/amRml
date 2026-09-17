@@ -16,7 +16,9 @@ Writes a Parquet file to the same directory
 Build Parquet file from LOO drug ML performances
 }
 \examples{
+\dontrun{
 # LOO drug
 buildPerfPqLOODrug(perf_dir_path = "data/Campylobacter/LOO_ML_performance/")
+}
 
 }

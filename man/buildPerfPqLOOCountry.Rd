@@ -16,7 +16,9 @@ Writes a Parquet file to the same directory
 Build Parquet file from LOO country ML performances
 }
 \examples{
+\dontrun{
 # LOO country
 buildPerfPqLOOCountry(perf_dir_path = "data/Campylobacter/LOO_ML_country_performance/")
+}
 
 }

@@ -8,8 +8,6 @@ buildPerfPqLOOYear(perf_dir_path)
 }
 \arguments{
 \item{perf_dir_path}{Directory containing performance TSV files}
-
-\item{top_feat_dir_path}{Directory containing top feature TSV files}
 }
 \value{
 Writes a Parquet file to the same directory
@@ -18,7 +16,9 @@ Writes a Parquet file to the same directory
 Build Parquet file from LOO year ML performances
 }
 \examples{
+\dontrun{
 # LOO year
 buildPerfPqLOOYear(perf_dir_path = "data/Campylobacter/LOO_ML_year_performance/")
+}
 
 }
