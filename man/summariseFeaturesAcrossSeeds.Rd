@@ -15,7 +15,7 @@ a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_
 \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_top_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
 \item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
 \item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
-\item \code{median_contribution}: median of \code{adjusted_contribution} across seeds. (\code{mean_contribution} is not currently computed.)
+\item \code{median_contribution}: median of \code{contribution} across seeds. (\code{mean_contribution} is not currently computed.)
 \item \code{median_cum_contrib}: median of \code{cum_contrib} across seeds.
 \item \code{best_rank}: the best (lowest) rank seen across seeds.
 \item \code{rank_consistent}: TRUE if the feature's rank is identical in every seed.

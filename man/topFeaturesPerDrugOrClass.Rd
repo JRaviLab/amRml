@@ -12,7 +12,6 @@ topFeaturesPerDrugOrClass(
   all_performance_parquet,
   MCC_threshold = NULL,
   compare_to_shuffled = TRUE,
-  add_lasso_advtg = FALSE,
   rank_score_quantile = 0.95,
   cv_threshold = 1,
   cumulative_contribution_threshold = 0.75,
@@ -30,15 +29,13 @@ topFeaturesPerDrugOrClass(
 
 \item{filter_model}{Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}; this is only safe because there is currently never more than one fit per (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) group. If that assumption changes, this join (and the \code{all_perf} join below) would need a finer-grained key to avoid silently keeping/duplicating rows from multiple fits.}
 
-\item{all_performance_parquet}{The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.}
+\item{all_performance_parquet}{The path to the all performance parquet file. Always required — it is read unconditionally}
 
 \item{MCC_threshold}{The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)}
 
 \item{compare_to_shuffled}{Logical indicating whether to compare the model to shuffled data, passed through to \code{filterOptimalModel()} (default is \code{TRUE})}
 
-\item{add_lasso_advtg}{Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{FALSE})}
-
-\item{rank_score_quantile}{A value in [0, 1] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}. The quantile is computed once over every row of \code{feature_summary} (with \code{na.rm = TRUE}) — globally across all species/drugs/drug classes/feature types/subtypes, not per group — and is not restricted to rows that already pass the other conditions listed below: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original, ungrouped data, so this threshold does not narrow as other conditions are applied}
+\item{rank_score_quantile}{A value in [0, 1] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}, where the quantile is computed separately within each (species, drug_label, drug_or_class) group (with \code{na.rm = TRUE}) — so a feature is compared only against other features from the same drug/class, not against the whole panel. This means a drug/class with weaker or more diffuse signal overall can still contribute its own top features, rather than being crowded out by drugs/classes with stronger or more concentrated signal. As with the other conditions listed below, this is not restricted to rows that already pass them: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original data, so this threshold does not narrow as other conditions are applied}
 
 \item{cv_threshold}{The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean. A feature present in every seed (\code{seed_ratio == 1}) always passes this check regardless of its \code{rank_score_cv} — including when \code{rank_score_cv} is \code{NA}, which happens whenever a group has only a single seed}
 
@@ -52,18 +49,18 @@ topFeaturesPerDrugOrClass(
 }
 \value{
 a tibble of top features for each drug/class: the \code{summariseFeaturesAcrossSeeds()} output (species, drug label, drug or class, feature type, feature subtype, variable, seed_ratio, mean/median rank score, median rank, median contribution, median cumulative contribution, best rank, rank/sign/in_core consistency flags, sign), filtered in two \code{dplyr::filter()} passes.
-The first pass keeps rows where all of the following hold, evaluated together against the full, ungrouped \code{feature_summary} (see \code{rank_score_quantile} for what that means for the last condition):
+The first pass keeps rows where all of the following hold, evaluated together against \code{feature_summary} (see \code{rank_score_quantile} for how the last condition is grouped):
 \itemize{
 \item \code{seed_ratio == seed_ratio_threshold}, only applied when \code{seed_ratio_threshold} is not \code{NULL},
 \item \code{seed_ratio == 1} OR \code{rank_score_cv <= cv_threshold} (see \code{cv_threshold}),
 \item \code{in_core} is TRUE,
 \item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
 \item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
-\item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}.
+\item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}, computed separately per (species, drug_label, drug_or_class) group.
 }
 Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.
 A second \code{dplyr::filter()} pass then optionally keeps only rows where \code{subtype_csv == "binary,counts"} (when \code{found_in_both_subtypes = TRUE}) and/or \code{median_rank_score > rank_score_sd} (when \code{compare_median_to_sd_rank_score = TRUE}).
-Every drug/class may not have variables from all feature types.
+Every drug/class may not have variables from all feature types. Because the \code{rank_score_quantile} cutoff is now per drug/class rather than global, every drug/class with at least one feature surviving the other conditions will generally contribute something here, rather than potentially being excluded entirely by comparison to stronger-signal drugs/classes elsewhere in the panel.
 }
 \description{
 Runs \code{scoreFeaturesWithinSeed()} and \code{summariseFeaturesAcrossSeeds()} on

@@ -11,8 +11,7 @@ scoreFeaturesWithinSeed(
   filter_model = TRUE,
   all_performance_parquet,
   MCC_threshold = NULL,
-  compare_to_shuffled = TRUE,
-  add_lasso_advtg = FALSE
+  compare_to_shuffled = TRUE
 )
 }
 \arguments{
@@ -24,25 +23,21 @@ scoreFeaturesWithinSeed(
 
 \item{filter_model}{Logical indicating whether to restrict scoring to (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) groups that have at least one model fit passing \code{filterOptimalModel()}'s MCC/shuffled-comparison quality thresholds (default is \code{TRUE}). The join is not keyed on \code{model}/\code{fit_penalty}/\code{fit_mixture}; this is only safe because there is currently never more than one fit per (species, drug_label, drug_or_class, feature_type, feature_subtype, seed) group. If that assumption changes, this join (and the \code{all_perf} join below) would need a finer-grained key to avoid silently keeping/duplicating rows from multiple fits.}
 
-\item{all_performance_parquet}{The path to the all performance parquet file. Always required — it is read unconditionally (regardless of \code{filter_model} or \code{add_lasso_advtg}) to compute the per-fit sparsity score.}
+\item{all_performance_parquet}{The path to the all performance parquet file. Always required — it is read unconditionally}
 
 \item{MCC_threshold}{The minimum MCC threshold passed through to \code{filterOptimalModel()} (default is \code{NULL}, no filtering)}
 
 \item{compare_to_shuffled}{Logical indicating whether to compare the model to shuffled data, passed through to \code{filterOptimalModel()} (default is \code{TRUE})}
-
-\item{add_lasso_advtg}{Logical indicating whether to weight each feature's contribution by a sparsity score that rewards model fits returning fewer features relative to the candidate feature space (default is \code{FALSE})}
 }
 \value{
 a tibble of scored top features, one row per feature within each species/drug_label/drug_or_class/feature_type/feature_subtype/seed group, with the following columns added:
 \itemize{
 \item \code{contribution}: the feature's importance divided by the sum of importance across all features in the group.
 \item \code{feat_return_ratio}: \code{n_feats_returned / n_feat} for the fit that produced this group. This assumes there is never more than one surviving fit per (species, drug_label, drug_or_class, seed, feature_type, feature_subtype) group; if that ever stops being true, this join would need a finer-grained key (\code{all_top_features_parquet} carries no \code{model}/\code{fit_penalty}/\code{fit_mixture} column to join on directly) or the ratio would need to be aggregated across fits before joining, to avoid fanning out and double-counting feature rows.
-\item \code{sparsity_score}: \code{1 - feat_return_ratio} when \code{add_lasso_advtg = TRUE} (fits returning fewer features relative to the candidate space score closer to 1), else 1 for every row.
-\item \code{adjusted_contribution}: \code{contribution * sparsity_score}. This, not raw \code{contribution}, is what every downstream column below is actually computed from.
-\item \code{rank}: descending rank of \code{adjusted_contribution} within the group; ties receive the average of the ranks they span.
+\item \code{rank}: descending rank of \code{contribution} within the group; ties receive the average of the ranks they span.
 \item \code{n_features}: the number of rows (features) in the group.
 \item \code{rank_score}: \code{(n_features - rank) / (n_features - 1)}; ranges 0-1 with higher values indicating higher importance (a single-feature group scores 1).
-\item \code{cum_contrib}: the cumulative sum of \code{adjusted_contribution} in descending order; features tied on \code{adjusted_contribution} share the same \code{cum_contrib}, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
+\item \code{cum_contrib}: the cumulative sum of \code{contribution} in descending order; features tied on \code{contribution} share the same \code{cum_contrib}, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
 \item \code{in_core}: TRUE when \code{cum_contrib <= core_contribution_threshold}; a tied block that would push the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
 }
 }
