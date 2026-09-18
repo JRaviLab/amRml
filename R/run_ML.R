@@ -1764,7 +1764,7 @@ name = "matrix_generation",
   runFeatureDyadDiscovery(
     all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
     all_performance_parquet = file.path(out_root, "ML_performance", "all_performance.parquet"),
-    dyad_feature_parquet = file.path(out_root, "ML_dyad_features", "dyad_feature.parquet"),
+    dyad_feature_parquet = file.path(out_root, "dyad_feature.parquet"),
     MCC_threshold = 0.5,
     compare_to_shuffled = TRUE,
     core_contribution_threshold = 0.9,
