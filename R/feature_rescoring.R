@@ -1411,19 +1411,19 @@ runFeatureDyadDiscovery <- function(
     class(result)
   )
 
-  buildFeatureNetwork(
-    top_features = top_features,
-    top_dyads = top_dyads,
-    dyad_feature_parquet = dyad_feature_parquet
-  ) |>
-    magrittr::inset2(result, "feature_network")
+  result$feature_network <- buildFeatureNetwork(
+  top_features = top_features,
+  top_dyads = top_dyads,
+  dyad_feature_parquet = dyad_feature_parquet,
+  filtered_model = qualified_models,
+  parquet_dir_path = dirname(dyad_feature_parquet)
+)
 
-  plotFeatureNetworkD3(
-    feature_network = result$feature_network,
-    height = 800,
-    width = "100%"
-  ) |>
-    magrittr::inset2(result, "feature_network_plot")
+result$feature_network_plot <- plotFeatureNetworkD3(
+  feature_network = result$feature_network,
+  height = 800,
+  width = "100%"
+)
 
   return(result)
 }
