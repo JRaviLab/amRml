@@ -394,7 +394,8 @@ summariseDyads <- function(top_filtered_features,
 #'
 #' @returns A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.
 #' Node/edge weights are built from \code{median_rank_score} (features) and \code{dyad_median_rank_score} (dyads, via the \code{dyad_score} column, itself median-based per \code{summariseDyads()}), consistent with the seed-noise-robust selection made in \code{topFeaturesPerDrugOrClass()}.
-#' @example \dontrun{buildFeatureNetwork(top_features = topFeaturesPerDrugOrClass(...), 
+#' @examples 
+#' \dontrun{buildFeatureNetwork(top_features = topFeaturesPerDrugOrClass(...), 
 #' top_dyads = summariseDyads(...), 
 #' dyad_feature_parquet = "inst/extdata/dyad_feature.parquet",
 #' filtered_model = filterOptimalModel(...))}

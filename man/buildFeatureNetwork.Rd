@@ -28,3 +28,9 @@ Node/edge weights are built from \code{median_rank_score} (features) and \code{d
 \description{
 Build a feature network from selected top features and top dyads
 }
+\examples{
+\dontrun{buildFeatureNetwork(top_features = topFeaturesPerDrugOrClass(...), 
+top_dyads = summariseDyads(...), 
+dyad_feature_parquet = "inst/extdata/dyad_feature.parquet",
+filtered_model = filterOptimalModel(...))}
+}
