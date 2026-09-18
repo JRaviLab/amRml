@@ -9,19 +9,18 @@ summariseDyads(top_filtered_features, dyad_feature_parquet)
 \arguments{
 \item{top_filtered_features}{The tibble of top features for each drug/class generated from \code{topFeaturesPerDrugOrClass()}.}
 
-\item{dyad_feature_parquet}{The path to the Parquet file containing the mapping of features to protein dyads. Must have a \code{target} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{source} column giving the dyad id.}
+\item{dyad_feature_parquet}{The path to the Parquet file containing the mapping of features to protein dyads. Must have a \code{feature} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{dyad} column giving the dyad id.}
 }
 \value{
-a tibble with one row per species/drug_label/drug_or_class/source (\code{source} is the protein-dyad id), with:
+a tibble with one row per species/drug_label/drug_or_class/dyad (\code{dyad} is the protein-dyad id), with:
 \itemize{
 \item \code{frequency}: the number of top-feature rows mapped to this dyad.
-\item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{target} (\code{"<feature_type>:<variable>"}) values mapped to this dyad.
+\item \code{n_variables}, \code{variables_csv}: number of, and comma-separated list of, distinct \code{feature} (\code{"<feature_type>:<variable>"}) values mapped to this dyad.
 \item \code{n_feature_types}, \code{feature_types_csv}: number of, and comma-separated list of, distinct \code{feature_type_subtype} (\code{"<feature_type>:<feature_subtype>"}) values mapped to this dyad.
 \item \code{dyad_median_rank_score}: median of \code{median_rank_score} across the top-feature rows mapped to this dyad.
 \item \code{dyad_median_contribution}: median of \code{median_contribution} across the top-feature rows mapped to this dyad.
 \item \code{sign_consistent}, \code{sign}: whether \code{sign} is identical across every top-feature row mapped to this dyad; \code{sign} is that shared value if consistent, else \code{"MIXED"}.
 }
-\code{top_filtered_features} rows whose \code{target} has no match in \code{dyad_feature_parquet} are not dropped: they collapse into one \code{source = NA} row per species/drug_label/drug_or_class, aggregating every unmapped feature for that group. Callers that want only real dyads must filter this out explicitly (e.g. \code{dplyr::filter(!is.na(source))}).
 }
 \description{
 Internal helper called on the output of \code{topFeaturesPerDrugOrClass()}.

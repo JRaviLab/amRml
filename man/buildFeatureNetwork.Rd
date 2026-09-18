@@ -6,9 +6,12 @@
 \usage{
 buildFeatureNetwork(
   top_features,
+  median_rank_score_quantile = 1,
   top_dyads,
+  n_feature_types_threshold = 6,
   dyad_feature_parquet,
-  protein_names_parquet
+  filtered_model,
+  parquet_dir_path = NULL
 )
 }
 \arguments{
@@ -16,9 +19,7 @@ buildFeatureNetwork(
 
 \item{top_dyads}{Output of \code{summariseDyads()}.}
 
-\item{dyad_feature_parquet}{Path to the same Parquet file passed to \code{summariseDyads()}: a \code{target} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{source} column giving the dyad id. \code{target} is reconstructed here from \code{top_features$feature_type}/\code{variable} the same way \code{summariseDyads()} builds it, so the feature-to-dyad edges use the same mapping as the dyad table itself.}
-
-\item{protein_names_parquet}{Path to the Parquet file with dyad name annotations.}
+\item{dyad_feature_parquet}{Path to the same Parquet file passed to \code{summariseDyads()}: a \code{feature} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{dyad} column giving the dyad id. \code{feature} is reconstructed here from \code{top_features$feature_type}/\code{variable} the same way \code{summariseDyads()} builds it, so the feature-to-dyad edges use the same mapping as the dyad table itself.}
 }
 \value{
 A list with \code{feature_table}, \code{dyad_table}, \code{nodes}, \code{edges}, and \code{graph}.

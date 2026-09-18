@@ -1509,6 +1509,57 @@ name = "matrix_generation",
     inputs =  out_root
     )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_shuffled_models",
+    status = "running",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
+  runMLmodels(
+    path = out_root,
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    shuffle_labels = TRUE,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    verbose = verbose,
+    use_saved_split = use_saved_split
+  )
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_shuffled_models",
+    status = "success",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   if (verbose) message("\n[3/4] Running stratified (year) ML models.")
 
   manifest <- .manifest_stage(
@@ -1655,7 +1706,111 @@ name = "matrix_generation",
     ),
     inputs =  out_root
     )
+  
+  if (verbose) message("Merging ML outputs")
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "merge_ML_results",
+    status = "running",
+    parameters = list(
+    path = out_root
+    ),
+    inputs =  out_root
+    )
+  
+  mergeMLresults(path = out_root)
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "merge_ML_results",
+    status = "success",
+    parameters = list(
+    path = out_root
+    ),
+    inputs =  out_root
+    )
+  
+  if (verbose) message("Explore top models and features") 
+  
+   manifest <- .manifest_stage(
+    manifest,
+    name = "explore_top_models_and_features",
+    status = "running",
+    parameters = list(
+    all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
+    all_performance_parquet = file.path(out_root, "ML_performance", "all_performance.parquet"),
+    dyad_feature_parquet = file.path(out_root, "ML_dyad_features", "dyad_feature.parquet"),
+    MCC_threshold = 0.5,
+    compare_to_shuffled = TRUE,
+    core_contribution_threshold = 0.9,
+    exclude_feature_types = NULL,
+    filter_model = TRUE,
+    rank_score_quantile = 0.95,
+    cv_threshold = 1,
+    cumulative_contribution_threshold = 0.75,
+    seed_ratio_threshold = 1,
+    found_in_both_subtypes = FALSE,
+    compare_median_to_sd_rank_score = FALSE,
+    consistent_seed_ratio = 0.8,
+    consistent_rank_score = 0.75,
+    high_contribution_quantile = 0.75,
+    high_dyad_score_quantile = 0.75,
+    min_models_shared = 2
+    ),
+    inputs =  out_root
+    )
+  
+  runFeatureDyadDiscovery(
+    all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
+    all_performance_parquet = file.path(out_root, "ML_performance", "all_performance.parquet"),
+    dyad_feature_parquet = file.path(out_root, "ML_dyad_features", "dyad_feature.parquet"),
+    MCC_threshold = 0.5,
+    compare_to_shuffled = TRUE,
+    core_contribution_threshold = 0.9,
+    exclude_feature_types = NULL,
+    filter_model = TRUE,
+    rank_score_quantile = 0.95,
+    cv_threshold = 1,
+    cumulative_contribution_threshold = 0.75,
+    seed_ratio_threshold = 1,
+    found_in_both_subtypes = FALSE,
+    compare_median_to_sd_rank_score = FALSE,
+    consistent_seed_ratio = 0.8,
+    consistent_rank_score = 0.75,
+    high_contribution_quantile = 0.75,
+    high_dyad_score_quantile = 0.75,
+    min_models_shared = 2
+)
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "explore_top_models_and_features",
+    status = "success",
+    parameters = list(
+    all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
+    all_performance_parquet = file.path(out_root, "ML_performance", "all_performance.parquet"),
+    dyad_feature_parquet = file.path(out_root, "ML_dyad_features", "dyad_feature.parquet"),
+    MCC_threshold = 0.5,
+    compare_to_shuffled = TRUE,
+    core_contribution_threshold = 0.9,
+    exclude_feature_types = NULL,
+    filter_model = TRUE,
+    rank_score_quantile = 0.95,
+    cv_threshold = 1,
+    cumulative_contribution_threshold = 0.75,
+    seed_ratio_threshold = 1,
+    found_in_both_subtypes = FALSE,
+    compare_median_to_sd_rank_score = FALSE,
+    consistent_seed_ratio = 0.8,
+    consistent_rank_score = 0.75,
+    high_contribution_quantile = 0.75,
+    high_dyad_score_quantile = 0.75,
+    min_models_shared = 2
+    ),
+    inputs =  out_root
+    )
+  
   # All done!
   if (verbose) {
     message("\n=== AMR-ML Pipeline Complete ===")

@@ -30,8 +30,6 @@ export(createMLResultDir)
 export(createMLinputList)
 export(encodePhenotype)
 export(extractTopFeats)
-export(findSharedDyads)
-export(findUniqueDyads)
 export(fitBestModel)
 export(generateMLInputs)
 export(getConfusionMatrix)
@@ -55,6 +53,7 @@ export(plotTopClusters)
 export(plotTopFeatsVI)
 export(predictML)
 export(removeTopFeats)
+export(runFeatureDyadDiscovery)
 export(runFisherTests)
 export(runFishers)
 export(runIFE)
@@ -199,7 +198,6 @@ importFrom(tidyr,
 )
 importFrom(tune,
   control_grid,
-  extract_fit_parsnip,
   finalize_workflow,
   select_best,
   tune_grid
@@ -208,10 +206,6 @@ importFrom(workflows,
   add_model,
   add_recipe,
   workflow
-)
-importFrom(workflowsets,
-  extract_fit_parsnip,
-  extract_spec_parsnip
 )
 importFrom(yardstick,
   bal_accuracy,
