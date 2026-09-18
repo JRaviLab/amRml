@@ -987,22 +987,6 @@ runFeatureDyadDiscovery <- function(
         MCC_diff,
         na.rm = TRUE
       ),
-      if(!is.na(median_MCC_diff)) {
-        minimum_MCC_diff = min(
-          MCC_diff,
-          na.rm = TRUE
-        )
-      } else {
-        minimum_MCC_diff = NULL
-      },
-      if(!is.na(median_MCC_diff)) {
-        maximum_MCC_diff = max(
-          MCC_diff,
-          na.rm = TRUE
-        )
-      } else {
-        maximum_MCC_diff = NULL
-      },
       proportion_outperforming_shuffled = median(
         MCC_diff > 0 | is.na(shuffled_MCC),
         na.rm = TRUE
