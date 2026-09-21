@@ -1415,5 +1415,19 @@ result,
 file = file.path(dir_name, "feature_exploration.RDS"),
 compress = "xz"
 )   
-  return(result)
+
+saved_rds_path <- normalizePath(
+file.path(dir_name, "feature_exploration.RDS"),
+winslash = "/",
+mustWork = TRUE
+)
+
+message(
+"Feature-dyad discovery completed successfully.\n",
+"RDS object saved to: ",
+saved_rds_path
+)
+
+return(invisible(result))
+
 }
