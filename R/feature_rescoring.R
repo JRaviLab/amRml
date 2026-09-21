@@ -542,7 +542,7 @@ dplyr::group_by(drug_label, drug_or_class) |>
   dplyr::mutate(
     node_type = "model")
 
-  nodes <- bind_rows(
+  nodes <- dplyr::bind_rows(
   model_nodes,
   feature_nodes,
   dyad_nodes
@@ -1409,5 +1409,11 @@ result$feature_network_plot <- plotFeatureNetworkD3(
   width = "100%"
 )
 
+dir_name <- dirname(dyad_feature_parquet)
+saveRDS(
+result,
+file = file.path(dir_name, "feature_exploration.RDS"),
+compress = "xz"
+)   
   return(result)
 }
