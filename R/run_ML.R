@@ -1063,7 +1063,7 @@ runMLmodels <- function(path,
       message("No eligible ", analysis, " ML matrices were found. Skipping this modeling stage.")
     }
 
-    return(invisible(FALSE))
+    return(invisible(NULL))
   }
 
 .findNonRanPrefixes <- function(files,
