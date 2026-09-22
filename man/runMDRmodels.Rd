@@ -24,7 +24,7 @@ runMDRmodels(
 \arguments{
 \item{path}{Character scalar. Base directory containing MDR matrix files.}
 
-\item{threads}{Integer. Number of parallel workers for model training. Default is 16.}
+\item{threads}{Integer. Number of workers for parallel model training. Default is 8.}
 
 \item{split}{Numeric vector of length 2. Train/validation split proportions.}
 
@@ -55,7 +55,7 @@ NULL (invisible). Called for side effects (model training and result saving).
 }
 \description{
 Executes machine learning pipeline for MDR analysis using logistic regression
-with parallel processing via the future backend. Trains models on all MDR
+with parallel processing via the BiocParallel backend. Trains models on all MDR
 parquet files and saves results to designated output directories.
 }
 \examples{

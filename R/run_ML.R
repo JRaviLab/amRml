@@ -389,14 +389,14 @@ createMLinputList <- function(path,
     } else if (cross_test && !LOO) {
       if (is.null(stratify_by)) {
         # Case A: stratify_by = NULL, pair across abx within same feature + prefix
-          parsed_drugs <- parsed |> 
+          parsed_drugs <- parsed |>
           dplyr::filter(!stringr::str_detect(prefix_key, "class"))
-          
-     paths$cross_drug_test <- file.path(dirname(paths$matrix_path), "cross_drug_test/")    
-          
+
+     paths$cross_drug_test <- file.path(dirname(paths$matrix_path), "cross_drug_test/")
+
            # List ML test matrix parquet files
   test_files_vec <- list.files(paths$cross_drug_test, pattern = "\\.parquet$", full.names = TRUE)
-          
+
          parsed_cross_test <- tibble::tibble(
   test_file = test_files_vec,
   fname     = basename(test_files_vec),
@@ -420,7 +420,7 @@ createMLinputList <- function(path,
     )
   ) |>
   dplyr::select(test_file, prefix_key, feature, ref_drug, test_drug)
-          
+
      pairs <- parsed_cross_test |>
   dplyr::inner_join(
     parsed_drugs |>
@@ -452,7 +452,7 @@ createMLinputList <- function(path,
             feature
           )
         ) |>
-    dplyr::select(ref_file, test_file, output_prefix)       
+    dplyr::select(ref_file, test_file, output_prefix)
 
         out <- pairs |>
           dplyr::mutate(
@@ -549,9 +549,9 @@ loo_files_vec <- list.files(
   pattern = "\\.parquet$",
   full.names = TRUE
 )
-parsed_drugs <- parsed |> 
+parsed_drugs <- parsed |>
           dplyr::filter(!stringr::str_detect(prefix_key, "class"))
-            
+
             parsed_loo_test <- tibble::tibble(
   test_file = loo_files_vec,
   fname     = basename(loo_files_vec),
@@ -577,7 +577,7 @@ parsed_drugs <- parsed |>
     feature,
     test_drug
   )
-            
+
       loo_pairs <- parsed_loo_test |>
   dplyr::inner_join(
     parsed_drugs |>
@@ -609,7 +609,7 @@ parsed_drugs <- parsed |>
       feature
     )
   )
-      
+
             out <- loo_pairs |>
   dplyr::mutate(
     matrix_path = paths$matrix_path,
@@ -618,9 +618,8 @@ parsed_drugs <- parsed |>
     out_models  = paths$ML_models,
     out_pred    = paths$ML_prediction
   )
-
-            return(out)
-            }
+       return(out)      
+        } else {
       # LOO requires special directory structure resolution
       test_path <- file.path(path, stringr::str_remove(basename(paths$matrix_path), "^LOO_"))
       test_path <- normalizePath(test_path)
@@ -647,6 +646,7 @@ parsed_drugs <- parsed |>
         )
 
       return(out)
+    }
     }
   }
 
@@ -699,11 +699,11 @@ parsed_drugs <- parsed |>
 #' Run MDR (multi-drug resistance) machine learning models
 #'
 #' Executes machine learning pipeline for MDR analysis using logistic regression
-#' with parallel processing via the future backend. Trains models on all MDR
+#' with parallel processing via the BiocParallel backend. Trains models on all MDR
 #' parquet files and saves results to designated output directories.
 #'
 #' @param path Character scalar. Base directory containing MDR matrix files.
-#' @param threads Integer. Number of parallel workers for model training. Default is 16.
+#' @param threads Integer. Number of workers for parallel model training. Default is 8.
 #' @param split Numeric vector of length 2. Train/validation split proportions.
 #' @param n_fold Integer. Number of cross-validation folds. Default 5.
 #' @param prop_vi_top_feats Numeric vector of length 2. Proportion range for variable-importance selection.
@@ -841,7 +841,7 @@ runMDRmodels <- function(path,
       }
 
          seed_tag <- paste0("_", seed)
-   
+
       # Final base filename: shuffled_ + <matrix prefix> + _pcaXX + seed
       base <- paste0(shuffle_tag, output_prefix, pca_tag, seed_tag)
 
@@ -1047,8 +1047,22 @@ runMLmodels <- function(path,
     cross_test  = cross_test
   )
 
-  if (nrow(files) == 0) {
-    message("No files found to process. Exiting.")
+  # A safeguard to catch when data constraints have left us with no usable matrices
+  if (nrow(files) == 0L) {
+    if (isTRUE(verbose)) {
+      analysis <- if (!is.null(stratify_by)) {
+        paste0(stratify_by, "-stratified")
+      } else if (isTRUE(LOO)) {
+        "leave-one-out"
+      } else if (isTRUE(cross_test)) {
+        "cross-test"
+      } else {
+        "standard"
+      }
+
+      message("No eligible ", analysis, " ML matrices were found. Skipping this modeling stage.")
+    }
+
     return(invisible(NULL))
   }
 
@@ -1111,7 +1125,7 @@ runMLmodels <- function(path,
 
   setdiff(matrix_prefixes, ran_prefixes)
 }
-    
+
     # ---- skip matrices that already ran ----
 prefixes_to_run <- .findNonRanPrefixes(
   files          = files,
@@ -1293,18 +1307,24 @@ if (nrow(files) == 0) {
 }
 
 
-#' Run the entire AMR ML pipeline from a parquet-backed DuckDB
+#' Run the complete amR machine-learning workflow
 #'
-#' This function provides a complete end-to-end AMR machine learning workflow.
-#' Given a DuckDB file produced by `runDataProcessing()`, it:
+#' Runs modeling on a completed amRdata dataset. When `parquet_dir` is
+#' `NULL`, completed datasets that have been registered through BiocFileCache
+#' are discovered automatically and, if necessary (i.e., >1 option), then the
+#' user is prompted to select one.
+#'
 #'   1. Generates all ML feature matrices (drug, class, year, country, MDR, LOO)
 #'   2. Creates all ML directory structures
 #'   3. Prepares ML input lists for every mode
 #'   4. Runs logistic regression ML models (standard + stratified + cross-test + MDR)
 #'   5. Saves performance metrics, fitted models, predictions, and top feature rankings
 #'
-#' @param parquet_dir Path to a species-named directory (e.g. `Shigella_flexneri/`) of
-#'   metadata and feature parquets, as produced by data_processing.R
+#' @param parquet_dir Character or `NULL`. Path to a completed amRdata dataset
+#'   directory containing metadata and feature Parquet files. If `NULL`, amRml
+#'   discovers completed amRdata datasets registered with BiocFileCache. A
+#'   single available dataset is selected automatically; if multiple datasets
+#'   are available in an interactive session, the user is prompted to choose.
 #' @param threads Number of parallel workers. Default: 16
 #' @param n_fold Cross-validation folds (default: 5). Use 0 or NULL for classical splits.
 #' @param split Training/validation split (default: c(1,0) for CV mode)
@@ -1317,7 +1337,7 @@ if (nrow(files) == 0) {
 #' @return Invisibly returns the output directory used for ML results.
 #'
 #' @export
-runModelingPipeline <- function(parquet_dir,
+runModelingPipeline <- function(parquet_dir = NULL,
                                 threads = 8,
                                 n_fold = 5,
                                 split = c(1, 0),
@@ -1326,22 +1346,96 @@ runModelingPipeline <- function(parquet_dir,
                                 pca_threshold = 0.99,
                                 verbose = TRUE,
                                 use_saved_split = TRUE) {
-  parquet_dir <- normalizePath(parquet_dir)
-  if (!dir.exists(parquet_dir)) {
-    stop(
-      "Parquet directory at ", parquet_dir, " not found.\n",
-      "Expected a species-named directory (e.g. Shigella_flexneri/) of parquet files."
+  registered_dataset <- NULL
+
+  if (is.null(parquet_dir)) {
+    registered_dataset <- .selectAmrDataset()
+
+    parquet_dir <- registered_dataset$parquet_dir[[1]]
+    manifest_path <- registered_dataset$manifest_path[[1]]
+  } else {
+    parquet_dir <- normalizePath(
+      parquet_dir,
+      mustWork = FALSE
+    )
+
+    if (!dir.exists(parquet_dir)) {
+      stop(
+        "Parquet directory at ",
+        parquet_dir,
+        " not found.\n",
+        "Expected a species-named directory of amRdata Parquet files."
+      )
+    }
+
+    parquet_dir <- normalizePath(
+      parquet_dir,
+      mustWork = TRUE
+    )
+
+    manifest_path <- .manifest_find_latest_ml(
+      parquet_dir
     )
   }
 
-  out_root <- dirname(parquet_dir)
+  out_root <- parquet_dir
 
   if (verbose) {
     message("\n=== amRml: Full pipeline runner ===")
     message("Using parquet directory:\n  ", parquet_dir)
   }
 
+  if (is.null(manifest_path)) {
+    stop(
+      "No amRml-ready provenance manifest found for: ",
+      parquet_dir,
+      "\nRun prepareGenomes() and runDataProcessing() from amRdata first."
+    )
+  }
+
+  manifest <- .manifest_resume(
+    manifest_path = manifest_path,
+    base_dir = dirname(dirname(parquet_dir)),
+    hash_files = FALSE
+  )
+
+  run_failed <- TRUE
+
+  on.exit(
+    if (run_failed) {
+      .manifest_finish(
+        manifest,
+        status = "failed",
+        error = "runModelingPipeline() exited before successful completion."
+      )
+    },
+    add = TRUE
+  )
+
+  # Record the start of this run
+  manifest <- .manifest_event(
+    manifest,
+    message = "Started modeling run.",
+    details = list(
+      parquet_dir = parquet_dir,
+      output_path = out_root
+    )
+  )
+
   if (verbose) message("\n[1/4] Generating ML feature matrices.")
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "matrix_generation",
+    status = "running",
+    parameters = list(
+    n_fold = n_fold,
+    split = split,
+    min_n = min_n
+    ),
+    inputs =  parquet_dir
+    )
+
   generateMLInputs(
     parquet_dir = parquet_dir,
     out_path = out_root,
@@ -1351,7 +1445,38 @@ runModelingPipeline <- function(parquet_dir,
     verbosity = if (verbose) "minimal" else "debug"
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+name = "matrix_generation",
+     status = "success",
+    parameters = list(
+    n_fold = n_fold,
+    split = split,
+    min_n = min_n
+    ),
+    inputs =  parquet_dir
+    )
+
   if (verbose) message("\n[2/4] Running standard ML models.")
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_standard_models",
+    status = "running",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
   runMLmodels(
     path = out_root,
     stratify_by = NULL,
@@ -1366,7 +1491,95 @@ runModelingPipeline <- function(parquet_dir,
     use_saved_split = use_saved_split
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_standard_models",
+    status = "success",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_shuffled_models",
+    status = "running",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
+  runMLmodels(
+    path = out_root,
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    shuffle_labels = TRUE,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    verbose = verbose,
+    use_saved_split = use_saved_split
+  )
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_shuffled_models",
+    status = "success",
+    parameters = list(
+    stratify_by = NULL,
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
   if (verbose) message("\n[3/4] Running stratified (year) ML models.")
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_year_models",
+    status = "running",
+    parameters = list(
+    stratify_by = "year",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
   runMLmodels(
     path = out_root,
     stratify_by = "year",
@@ -1381,7 +1594,44 @@ runModelingPipeline <- function(parquet_dir,
     use_saved_split = use_saved_split
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_year_models",
+    status = "success",
+    parameters = list(
+    stratify_by = "year",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
   if (verbose) message("\n[3/4] Running stratified (country) ML models.")
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_country_models",
+    status = "running",
+    parameters = list(
+    stratify_by = "country",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
   runMLmodels(
     path = out_root,
     stratify_by = "country",
@@ -1396,7 +1646,41 @@ runModelingPipeline <- function(parquet_dir,
     use_saved_split = use_saved_split
   )
 
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_country_models",
+    status = "success",
+    parameters = list(
+    stratify_by = "country",
+    LOO = FALSE,
+    cross_test = FALSE,
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
   if (verbose) message("\n[4/4] Running MDR ML models.")
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_MDR_models",
+    status = "running",
+    parameters = list(
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+
   runMDRmodels(
     path = out_root,
     threads = threads,
@@ -1407,6 +1691,126 @@ runModelingPipeline <- function(parquet_dir,
     verbose = verbose,
     use_saved_split = use_saved_split
   )
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "run_MDR_models",
+    status = "success",
+    parameters = list(
+    threads = threads,
+    split = split,
+    n_fold = n_fold,
+    prop_vi_top_feats = prop_vi_top_feats,
+    pca_threshold = pca_threshold,
+    use_saved_split = use_saved_split
+    ),
+    inputs =  out_root
+    )
+  
+  if (verbose) message("Merging ML outputs")
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "merge_ML_results",
+    status = "running",
+    parameters = list(
+    path = out_root
+    ),
+    inputs =  out_root
+    )
+  
+  mergeMLresults(path = out_root)
+
+  manifest <- .manifest_stage(
+    manifest,
+    name = "merge_ML_results",
+    status = "success",
+    parameters = list(
+    path = out_root
+    ),
+    inputs =  out_root
+    )
+  
+  if (verbose) message("Explore top models and features") 
+  
+   manifest <- .manifest_stage(
+    manifest,
+    name = "explore_top_models_and_features",
+    status = "running",
+    parameters = list(
+    all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
+    all_performance_parquet = file.path(out_root, "ML_performance", "all_perf.parquet"),
+    dyad_feature_parquet = file.path(out_root, "dyad_feature.parquet"),
+    MCC_threshold = 0.5,
+    compare_to_shuffled = TRUE,
+    core_contribution_threshold = 0.9,
+    exclude_feature_types = NULL,
+    filter_model = TRUE,
+    rank_score_quantile = 0.95,
+    cv_threshold = 1,
+    cumulative_contribution_threshold = 0.75,
+    seed_ratio_threshold = 1,
+    found_in_both_subtypes = FALSE,
+    compare_median_to_sd_rank_score = FALSE,
+    consistent_seed_ratio = 0.8,
+    consistent_rank_score = 0.75,
+    high_contribution_quantile = 0.75,
+    high_dyad_score_quantile = 0.75,
+    min_models_shared = 2
+    ),
+    inputs =  out_root
+    )
+  
+  runFeatureDyadDiscovery(
+    all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
+    all_performance_parquet = file.path(out_root, "ML_performance", "all_perf.parquet"),
+    dyad_feature_parquet = file.path(out_root, "dyad_feature.parquet"),
+    MCC_threshold = 0.5,
+    compare_to_shuffled = TRUE,
+    core_contribution_threshold = 0.9,
+    exclude_feature_types = NULL,
+    filter_model = TRUE,
+    rank_score_quantile = 0.95,
+    cv_threshold = 1,
+    cumulative_contribution_threshold = 0.75,
+    seed_ratio_threshold = 1,
+    found_in_both_subtypes = FALSE,
+    compare_median_to_sd_rank_score = FALSE,
+    consistent_seed_ratio = 0.8,
+    consistent_rank_score = 0.75,
+    high_contribution_quantile = 0.75,
+    high_dyad_score_quantile = 0.75,
+    min_models_shared = 2
+)
+  
+  manifest <- .manifest_stage(
+    manifest,
+    name = "explore_top_models_and_features",
+    status = "success",
+    parameters = list(
+    all_top_features_parquet = file.path(out_root, "ML_top_features", "all_top_features.parquet"),
+    all_performance_parquet = file.path(out_root, "ML_performance", "all_perf.parquet"),
+    dyad_feature_parquet = file.path(out_root, "dyad_feature.parquet"),
+    MCC_threshold = 0.5,
+    compare_to_shuffled = TRUE,
+    core_contribution_threshold = 0.9,
+    exclude_feature_types = NULL,
+    filter_model = TRUE,
+    rank_score_quantile = 0.95,
+    cv_threshold = 1,
+    cumulative_contribution_threshold = 0.75,
+    seed_ratio_threshold = 1,
+    found_in_both_subtypes = FALSE,
+    compare_median_to_sd_rank_score = FALSE,
+    consistent_seed_ratio = 0.8,
+    consistent_rank_score = 0.75,
+    high_contribution_quantile = 0.75,
+    high_dyad_score_quantile = 0.75,
+    min_models_shared = 2
+    ),
+    inputs =  out_root
+    )
+  
   # All done!
   if (verbose) {
     message("\n=== AMR-ML Pipeline Complete ===")
@@ -1418,10 +1822,42 @@ runModelingPipeline <- function(parquet_dir,
     message("  ML_performance/, ML_models/, ML_prediction/, ML_top_features/")
   }
 
+  manifest <- .manifest_finish(
+    manifest,
+    status = "success"
+  )
+
+  run_failed <- FALSE
+
   invisible(out_root)
 }
 
-      
+
+#' Run the entire AMR ML pipeline from a parquets
+#'
+#' This function provides a complete end-to-end AMR machine learning workflow.
+#' Given a DuckDB file produced by `runDataProcessing()`, it:
+#'   1. Generates all ML feature matrices (drug, class, year, country, MDR, LOO)
+#'   2. Creates all ML directory structures
+#'   3. Prepares ML input lists for every mode
+#'   4. Runs logistic regression ML models (standard + stratified + cross-test + MDR)
+#'   5. Saves performance metrics, fitted models, predictions, and top feature rankings
+#'
+#' @param parquet_dir Path to a species-named directory (e.g. `Shigella_flexneri/`) of
+#'   metadata and feature parquets, as produced by data_processing.R
+#' @param threads Number of parallel workers. Default: 16
+#' @param n_seeds Number of  random seeds to run for each model (default: 3)
+#' @param n_fold Cross-validation folds (default: 5). Use 0 or NULL for classical splits.
+#' @param split Training/validation split (default: c(1,0) for CV mode)
+#' @param min_n Minimum samples per drug class for MDR matrices (default: 25)
+#' @param prop_vi_top_feats Proportion of variable importance for top features (default: c(0,1))
+#' @param pca_threshold PCA variance threshold (not used unless `use_pca = TRUE`)
+#' @param verbose Print progress updates? Default: TRUE
+#' @param use_saved_split Whether to inherit split/seed/n_fold from ml_parameters.json
+#'
+#' @return Invisibly returns the output directory used for ML results.
+#'
+#' @export
 runModelingPipelineIntense <- function(parquet_dir,
                                        threads = 8,
                                        n_seeds = 3,
@@ -1442,7 +1878,7 @@ runModelingPipelineIntense <- function(parquet_dir,
     )
   }
 
-  out_root <- dirname(parquet_dir)
+  out_root <- parquet_dir
 
   # -------------------------------
   # Helper for safe execution
@@ -1704,7 +2140,7 @@ runModelingPipelineIntense <- function(parquet_dir,
   invisible(out_root)
 }
 
-      
+
             runMultipleMDR <- function(path,
                                 threads = 8,
                                 n_seeds = 3,
@@ -1716,8 +2152,8 @@ runModelingPipelineIntense <- function(parquet_dir,
 
       set.seed(123) # reproducible seed sampling
   seeds <- sample(1:100, n_seeds)
-      
-  for(seed in seeds){        
+
+  for(seed in seeds){
   if (verbose) message("\n Running MDR ML models.")
   runMDRmodels(
     path = path,

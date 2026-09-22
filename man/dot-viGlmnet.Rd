@@ -13,12 +13,8 @@
 A tibble with \code{Variable}, \code{Importance}, and \code{Sign} columns.
 }
 \description{
-Internal replacement for \code{vip::vi()}, dropped as a dependency after it left
-CRAN. Returns \verb{|coefficient|} as \code{Importance} and its direction as \code{Sign},
-sorted by decreasing importance.
-}
-\details{
-Importance is taken at glmnet's minimum lambda, not the tuned \code{penalty}.
-That is what \code{vip::vi()} did.
+Internal replacement for \code{vip::vi()}. Reads coefficients at the tuned
+\code{penalty} and returns \verb{|coefficient|} as \code{Importance} with its direction as
+\code{Sign}, sorted by decreasing importance. Zeroed-out features are dropped.
 }
 \keyword{internal}

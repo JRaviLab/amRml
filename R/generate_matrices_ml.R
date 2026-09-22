@@ -94,7 +94,7 @@ NULL
 #' }
 #'
 .generate3ltrCode <- function(directory_name) {
-  
+
       parts <- stringr::str_split(directory_name, "_")[[1]]
       if (length(parts) == 1) {
         # If only one word, use "sp" as the second part
@@ -105,10 +105,10 @@ NULL
   return(abbreviation)
 }
 
-#' 
+#'
 #' For LOO and cross-drug matrices, which are built by removing genomes and so
-#' can end up single-class or tiny, checking if they should be skipped. 
-#' [skipImbalancedMatrix()] guards the matricesbuilt from source metadata 
+#' can end up single-class or tiny, checking if they should be skipped.
+#' [skipImbalancedMatrix()] guards the matricesbuilt from source metadata
 #' instead, and sizes them per cross-validation fold;
 #' a test set is scored once, so it only needs enough genomes to define a metric.
 #'
@@ -451,7 +451,7 @@ log(
     DBI::dbDisconnect(con0, shutdown = TRUE)
   }
 }, add = TRUE)
-  
+
   .register_parquet_views(con0, parquet_dir)
 
   bug <- .generate3ltrCode(basename(parquet_dir))
@@ -595,28 +595,33 @@ log(
         fid <- feature_types[[ftype]]$id_col
 
         DBI::dbExecute(con, sprintf("
-          CREATE OR REPLACE VIEW %s_binary AS
-          SELECT genome_id, %s,
-                 CASE WHEN value > 0 THEN 1 ELSE 0 END AS present
-          FROM %s
-        ", ftype, fid, fview))
+    CREATE OR REPLACE VIEW %s_binary AS
+    SELECT genome_id, %s,
+           CASE WHEN value > 0 THEN 1 ELSE 0 END AS present
+    FROM %s
+  ", ftype, fid, fview))
 
         if (ftype != "struct") {
           DBI::dbExecute(con, sprintf("
-            CREATE OR REPLACE VIEW %s_counts AS
-            SELECT genome_id, %s, value
-            FROM %s
-          ", ftype, fid, fview))
+      CREATE OR REPLACE VIEW %s_counts AS
+      SELECT genome_id, %s, value
+      FROM %s
+    ", ftype, fid, fview))
         }
 
         for (mtype in names(matrix_types)) {
-          binary_only <- matrix_types[[mtype]]$binary_only
-          if (ftype == "struct" && !binary_only) next
+          if (identical(ftype, "struct")) {
+            if (!identical(mtype, "struct_binary")) next
+          } else {
+            if (identical(mtype, "struct_binary")) next
+          }
 
           mview <- sprintf(
-            "%s_%s", ftype,
+            "%s_%s",
+            ftype,
             ifelse(grepl("binary", mtype), "binary", "counts")
           )
+
           value_col <- matrix_types[[mtype]]$value_col
           filter_clause <- matrix_types[[mtype]]$filter
 
@@ -731,6 +736,7 @@ log(
 
   invisible(tibble::tibble())
 }
+
 
 #' Build leave-one-out (LOO) merged parquet matrices from stratified parquet files.
 #'
@@ -965,8 +971,11 @@ log(
     fid <- feature_types[[ftype]]$id_col
 
     for (mtype in names(matrix_types)) {
-      binary_only <- matrix_types[[mtype]]$binary_only
-      if (ftype == "struct" && !binary_only) next
+      if (identical(ftype, "struct")) {
+        if (!identical(mtype, "struct_binary")) next
+      } else {
+        if (identical(mtype, "struct_binary")) next
+      }
 
       mtype_label <- matrix_types[[mtype]]$label
 
@@ -1447,7 +1456,7 @@ log(
 #' @param split [numeric] training/validation split specification. Two formats accepted:
 #'   - Shorthand for CV: `split = 0` (converted internally to `c(1, 0)`)
 #'   - Vector form: `c(train_prop, val_prop)` where test_prop = 1 - train - val
-#'     * For CV: `c(1, 0)` means 80% training data with k-fold CV, 20% stratified testing
+#'     * For CV: `c(1, 0)` uses the full dataset for k-fold cross-validation
 #'     * For classical splits: all three partitions must be > 0
 #'       Example: `c(0.7, 0.15)` = 70% train, 15% val, 15% test
 #' @param min_n [numeric] minimum number of samples for each combination of drug classes for MDR matrix; default is 25
@@ -1486,7 +1495,7 @@ log(
 #' }
 #' @export
 generateMLInputs <- function(parquet_dir = "data/",
-                             out_path = "data/",
+                             out_path = NULL,
                              n_fold = 5,
                              split = c(1, 0), # Default: CV
                              min_n = 25,
@@ -1497,6 +1506,10 @@ generateMLInputs <- function(parquet_dir = "data/",
   # Validate inputs before processing
   if (!dir.exists(parquet_dir)) {
     stop("Parquet directory not found: ", parquet_dir)
+  }
+
+  if (is.null(out_path)) {
+   out_path <- parquet_dir
   }
 
   if (!dir.exists(dirname(out_path))) {
