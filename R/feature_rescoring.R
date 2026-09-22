@@ -16,11 +16,16 @@ filterOptimalModel <- function(all_performance_parquet,
   stopifnot(file.exists(all_performance_parquet))
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
 
-  if (!all(c(TRUE, FALSE) %in% unique(all_perf$shuffled))) {
-    stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
+  # Non-shuffled (FALSE) rows are always required -- nonshuffled_MCC is the
+  # basis for every threshold below. Shuffled (TRUE) rows are optional: a
+  # dataset with no shuffled runs at all just gets shuffled_MCC = NA
+  # throughout, which the shuffled-comparison filter already treats as a
+  # pass (see compare_to_shuffled below).
+  if (!FALSE %in% unique(all_perf$shuffled)) {
+    stop("The 'shuffled' column must contain FALSE (non-shuffled) values.")
   }
 
-  all_perf |>
+  fits <- all_perf |>
     dplyr::select(
       species, drug_label, drug_or_class,
       seed, feature_type, feature_subtype,
@@ -32,10 +37,18 @@ filterOptimalModel <- function(all_performance_parquet,
       values_from = mcc,
       names_prefix = "shuffled_"
     ) |>
-    dplyr::rename(
-      nonshuffled_MCC = shuffled_FALSE,
-      shuffled_MCC = shuffled_TRUE
-    ) |>
+    dplyr::rename(nonshuffled_MCC = shuffled_FALSE)
+
+  # pivot_wider() only creates a shuffled_TRUE column when at least one
+  # shuffled row exists; add it as all-NA otherwise so downstream code can
+  # rely on shuffled_MCC always being present.
+  if ("shuffled_TRUE" %in% names(fits)) {
+    fits <- dplyr::rename(fits, shuffled_MCC = shuffled_TRUE)
+  } else {
+    fits$shuffled_MCC <- NA_real_
+  }
+
+  fits |>
     dplyr::filter(!is.na(nonshuffled_MCC)) |>
     dplyr::mutate(
       MCC_diff = nonshuffled_MCC - shuffled_MCC
@@ -454,7 +467,11 @@ median_rank_score_quantile = 1,
   }
 
   feature_table <- top_features |>
-    dplyr::filter(median_rank_score >= quantile(median_rank_score, median_rank_score_quantile, na.rm = TRUE)) |>
+    dplyr::group_by(species, drug_label, drug_or_class) |>
+    dplyr::filter(
+      median_rank_score >= quantile(median_rank_score, median_rank_score_quantile, na.rm = TRUE)
+    ) |>
+    dplyr::ungroup() |>
     dplyr::mutate(feature_type = shorten_feature_type(feature_type)) |>
     dplyr::mutate(
       feature = paste(feature_type, variable, sep = ":"),

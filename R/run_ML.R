@@ -881,7 +881,7 @@ runMDRmodels <- function(path,
     message("  ", normalizePath(path))
   }
 
-  invisible(TRUE)
+  invisible(NULL)
 }
 
 #' Run machine learning models with multiple configurations
@@ -1303,7 +1303,7 @@ if (nrow(files) == 0) {
     message("  ", normalizePath(path))
   }
 
-  invisible(TRUE)
+  invisible(NULL)
 }
 
 

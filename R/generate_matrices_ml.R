@@ -1512,6 +1512,10 @@ generateMLInputs <- function(parquet_dir = "data/",
    out_path <- parquet_dir
   }
 
+  if (!dir.exists(dirname(out_path))) {
+    stop("Output directory does not exist: ", dirname(out_path))
+  }
+
   # Normalize input paths
   parquet_dir <- normalizePath(parquet_dir)
   path <- normalizePath(out_path)
