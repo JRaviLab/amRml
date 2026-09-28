@@ -10,10 +10,11 @@ readORB(path)
 \item{path}{Character. The ORB directory amRdata wrote to.}
 }
 \value{
-An \code{amr_orb} list: \code{dataset_id}, \code{label}, \code{directory},
+An \code{amr_orb} list: \code{dataset_id}, \code{label} (what amRdata was asked for,
+species names or taxon IDs, otherwise \code{dataset_id}), \code{directory},
 \code{manifest_path}, \code{metadata_parquet}, \code{producer}, \code{producer_run_id},
-\code{finished_at}, \code{files} (the declared files) and \code{feature_tables}
-(\code{feature_type} and \code{path}).
+\code{finished_at}, \code{files} (the producer run's declared outputs) and
+\code{feature_tables} (\code{feature_type} and \code{path}).
 }
 \description{
 Validates the ORB in \code{path} and returns an object describing it.

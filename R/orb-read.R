@@ -88,10 +88,10 @@
     ))
   }
 
-  completed_at <- string(run$finished_at, "finished_at")
+  finished_at <- string(run$finished_at, "finished_at")
 
-  if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}", completed_at)) {
-    rlang::abort(paste0("`finished_at` is not a timestamp: ", completed_at))
+  if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}", finished_at)) {
+    rlang::abort(paste0("`finished_at` is not a timestamp: ", finished_at))
   }
 
   # The metadata file must be declared, so the file checks cover it.
@@ -105,17 +105,18 @@
   }
 
   dataset_id <- string(json$dataset_id, "dataset_id")
-  species <- unlist(json$dataset$selection$user_bacs, use.names = FALSE)
+  # What amRdata was asked for: species names or taxon IDs.
+  requested <- unlist(json$dataset$selection$user_bacs, use.names = FALSE)
 
   list(
     dataset_id = dataset_id,
-    label = if (length(species)) paste(species, collapse = ", ") else dataset_id,
+    label = if (length(requested)) paste(requested, collapse = ", ") else dataset_id,
     directory = string(artifact$directory, "directory"),
     manifest_path = manifest_path,
     metadata_parquet = metadata_parquet,
     producer = string(artifact$producer, "producer"),
     producer_run_id = producer_run_id,
-    completed_at = completed_at,
+    finished_at = finished_at,
     files = files
   )
 }
@@ -154,10 +155,10 @@
 # the first manifest file name. Timestamps are year first and zero-padded, so
 # they sort correctly as text.
 .newestReady <- function(ready) {
-  completed <- vapply(ready, function(x) x$completed_at, character(1))
+  finished <- vapply(ready, function(x) x$finished_at, character(1))
   files <- vapply(ready, function(x) basename(x$manifest_path), character(1))
 
-  ready[[order(completed, files, decreasing = c(TRUE, FALSE), method = "radix")[[1]]]]
+  ready[[order(finished, files, decreasing = c(TRUE, FALSE), method = "radix")[[1]]]]
 }
 
 # Throw an error unless the ORB is where its manifest says, and its files exist
@@ -205,7 +206,7 @@
       c("Declared files have changed size since amRdata wrote them.", .bullets(listed)),
       observed = list(
         file = changed$path,
-        recorded_bytes = changed$size_bytes,
+        size_bytes = changed$size_bytes,
         actual_bytes = changed$actual_bytes
       ),
       call = call
@@ -301,10 +302,11 @@
 #'
 #' @param path Character. The ORB directory amRdata wrote to.
 #'
-#' @return An `amr_orb` list: `dataset_id`, `label`, `directory`,
+#' @return An `amr_orb` list: `dataset_id`, `label` (what amRdata was asked for,
+#'   species names or taxon IDs, otherwise `dataset_id`), `directory`,
 #'   `manifest_path`, `metadata_parquet`, `producer`, `producer_run_id`,
-#'   `completed_at`, `files` (the declared files) and `feature_tables`
-#'   (`feature_type` and `path`).
+#'   `finished_at`, `files` (the producer run's declared outputs) and
+#'   `feature_tables` (`feature_type` and `path`).
 #'
 #' @examples
 #' \dontrun{
@@ -389,7 +391,7 @@ print.amr_orb <- function(x, ...) {
   cat("<amr_orb>", x$dataset_id, "-", x$label, "\n")
   cat("  directory :", x$directory, "\n")
   cat("  manifest  :", basename(x$manifest_path), "\n")
-  cat("  completed :", x$completed_at, "\n")
+  cat("  finished  :", x$finished_at, "\n")
   cat("  declares  :", nrow(x$files), "files\n")
   cat("  features  :", paste(x$feature_tables$feature_type, collapse = ", "), "\n")
   invisible(x)
