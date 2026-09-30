@@ -13,12 +13,16 @@ profileORB(orb)
 An \code{amr_orb_profile} list:
 \itemize{
 \item \code{orb}: the ORB profiled.
-\item \code{genomes}: each profiled genome's strata values and \code{resistant_classes}.
-\item \code{labels}: each genome's phenotype per \code{unit} (drug or drug class) and
+\item \code{genomes}: each profiled genome and its strata values.
+\item \code{phenotypes}: each genome's phenotype per \code{unit} (drug or drug class) and
 \code{target}.
-\item \code{targets}: genome counts per target and stratum value.
-\item \code{conflicts}: genome and drug pairs recorded as both phenotypes.
-\item \code{excluded_genomes}: genomes missing from a feature table.
+\item \code{targets}: genome counts per target and stratum value; \code{stratum} is NA
+for the whole dataset.
+\item \code{conflicts}: genome and drug pairs recorded as both phenotypes, including
+for excluded genomes.
+\item \code{excluded_genomes}: each excluded genome and its \code{reason}
+(\code{"no_usable_phenotype"}, \code{"missing_features"} or \code{"contradictory"}), with the
+feature types it is \code{missing_from}.
 }
 }
 \description{
@@ -27,9 +31,12 @@ counts the genomes behind each target, over the whole dataset and within each
 value of each stratum (year and country).
 }
 \details{
-Genomes missing from a feature table are excluded and listed. A genome
-recorded as both Resistant and Susceptible for a drug is unlabelled for it.
-A class is Resistant if any member drug is, and Susceptible if all are.
+A genome is excluded, and listed with the reason, if it has no Resistant or
+Susceptible row, is missing from a feature table, or has only contradictory
+phenotypes. A genome recorded as both Resistant and Susceptible for a drug
+gets no phenotype for it, and is listed in \code{conflicts} either way. A class is
+Resistant if any member drug is, and Susceptible if every member drug with a
+phenotype is and none is contradictory.
 }
 \section{Errors}{
 
@@ -37,10 +44,9 @@ All errors have class \code{amrml_error}, plus one of:
 \itemize{
 \item \code{amrml_invalid_argument}: \code{orb} is not from \code{\link[=readORB]{readORB()}}.
 \item \code{amrml_metadata_columns_missing}: the metadata lacks a needed column.
-\item \code{amrml_genome_column_inconsistent}: a genome has two values for a stratum
-or \code{resistant_classes}.
+\item \code{amrml_stratum_inconsistent}: a genome has two values for a stratum.
 \item \code{amrml_no_labelled_genomes}: no genome in every feature table has a
-usable label.
+usable phenotype.
 }
 }
 

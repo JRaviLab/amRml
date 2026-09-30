@@ -32,8 +32,8 @@
 
   # Profiling the ORB: profileORB()
   "metadata_columns_missing",   "profile", "call",     "Metadata lacks a column profiling needs.",
-  "genome_column_inconsistent", "profile", "call",     "A genome-level column varies in a genome.",
-  "no_labelled_genomes",        "profile", "call",     "No genome with features has a label.",
+  "stratum_inconsistent",       "profile", "call",     "A genome has two values for a stratum.",
+  "no_labelled_genomes",        "profile", "call",     "No genome with features has a phenotype.",
 )
 
 # Build an error of class `amrml_<rule_id>` without throwing it. `message` is a
