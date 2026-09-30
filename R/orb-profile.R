@@ -59,38 +59,40 @@
   )
 }
 
-# One row per genome and drug. `phenotype` is NA when the pair is recorded as
-# both Resistant and Susceptible. amRdata gives each drug one class, from a lookup table.
-.drugPhenotypes <- function(metadata) {
-  dplyr::summarise(
-    dplyr::group_by(metadata, .data$genome_id, .data$drug_abbr),
-    class_abbr = dplyr::first(.data$class_abbr),
-    phenotype = if (dplyr::n_distinct(.data$phenotype) == 1L) {
-      dplyr::first(.data$phenotype)
-    } else {
-      NA_character_
-    },
-    .groups = "drop"
-  )
+# One row per genome and drug; repeated rows that agree count once. amRdata gives
+# each drug one class, from a lookup table.
+.drugPhenotypes <- function(metadata, call) {
+  phenotypes <- dplyr::distinct(metadata[c("genome_id", "drug_abbr", "phenotype")])
+  pairs <- phenotypes[c("genome_id", "drug_abbr")]
+  conflicts <- unique(pairs[duplicated(pairs), , drop = FALSE])
+
+  if (nrow(conflicts)) {
+    .amrAbort(
+      "phenotype_conflict",
+      c(
+        "Genomes are recorded as both Resistant and Susceptible for a drug.",
+        .bullets(paste(conflicts$genome_id, conflicts$drug_abbr))
+      ),
+      observed = list(conflicts = conflicts),
+      call = call
+    )
+  }
+
+  phenotypes$class_abbr <- metadata$class_abbr[match(phenotypes$drug_abbr, metadata$drug_abbr)]
+  phenotypes
 }
 
 # One row per genome and drug class: Resistant if any member drug is Resistant,
-# Susceptible if every member drug is. A contradictory member drug might have
-# been Resistant, so its class can't be Susceptible.
+# otherwise Susceptible.
 .classPhenotypes <- function(drug_phenotypes) {
-  phenotypes <- dplyr::summarise(
+  dplyr::summarise(
     dplyr::group_by(
       drug_phenotypes[!is.na(drug_phenotypes$class_abbr), , drop = FALSE],
       .data$genome_id, .data$class_abbr
     ),
-    phenotype = dplyr::case_when(
-      any(.data$phenotype %in% "Resistant") ~ "Resistant",
-      all(.data$phenotype %in% "Susceptible") ~ "Susceptible"
-    ),
+    phenotype = if (any(.data$phenotype == "Resistant")) "Resistant" else "Susceptible",
     .groups = "drop"
   )
-
-  phenotypes[!is.na(phenotypes$phenotype), , drop = FALSE]
 }
 
 # One row per genome with its strata, which must have one value per genome.
@@ -158,20 +160,20 @@
 #'
 #' @details
 #' A genome is excluded, and listed with the reason, if it has no Resistant or
-#' Susceptible row, is missing from a feature table, or has only contradictory
-#' phenotypes. A genome recorded as both Resistant and Susceptible for a drug
-#' gets no phenotype for it, and is listed in `conflicts` either way. A class is
-#' Resistant if any member drug is, and Susceptible if every member drug with a
-#' phenotype is and none is contradictory.
+#' Susceptible row or is missing from a feature table. A class is Resistant if
+#' any member drug is, and otherwise Susceptible. Repeated rows for a genome and
+#' drug count once if they agree; if they disagree, profiling stops.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus one of:
 #'
 #' * `amrml_invalid_argument`: `orb` is not from [readORB()].
 #' * `amrml_metadata_columns_missing`: the metadata lacks a needed column.
-#' * `amrml_stratum_inconsistent`: a genome has two values for a stratum.
+#' * `amrml_phenotype_conflict`: a genome is recorded as both Resistant and
+#'   Susceptible for a drug.
 #' * `amrml_no_labelled_genomes`: no genome in every feature table has a
 #'   usable phenotype.
+#' * `amrml_stratum_inconsistent`: a genome has two values for a stratum.
 #'
 #' @param orb An `amr_orb` from [readORB()].
 #'
@@ -182,11 +184,9 @@
 #'     `target`.
 #'   * `targets`: genome counts per target and stratum value; `stratum` is NA
 #'     for the whole dataset.
-#'   * `conflicts`: genome and drug pairs recorded as both phenotypes, including
-#'     for excluded genomes.
 #'   * `excluded_genomes`: each excluded genome and its `reason`
-#'     (`"no_usable_phenotype"`, `"missing_features"` or `"contradictory"`), with the
-#'     feature types it is `missing_from`.
+#'     (`"no_usable_phenotype"` or `"missing_features"`), with the feature types
+#'     it is `missing_from`.
 #'
 #' @examples
 #' \dontrun{
@@ -207,18 +207,12 @@ profileORB <- function(orb) {
   no_usable_phenotype <- setdiff(metadata$genome_id, c(NA, metadata$genome_id[usable]))
   metadata <- metadata[usable, , drop = FALSE]
 
-  # Each genome's phenotype per drug; contradictory pairs get none, and are recorded
-  # before any genome is dropped.
-  drug_phenotypes <- .drugPhenotypes(metadata)
-  conflicts <- drug_phenotypes[is.na(drug_phenotypes$phenotype), c("genome_id", "drug_abbr")]
+  # Each genome's phenotype per drug.
+  drug_phenotypes <- .drugPhenotypes(metadata, call = call)
 
   # Drop genomes that aren't in every feature table.
   missing <- .missingFeatures(metadata, orb$feature_tables)
   drug_phenotypes <- drug_phenotypes[!drug_phenotypes$genome_id %in% missing$genome_id, ]
-
-  # Each genome's phenotype per drug class, then keep only drugs with a phenotype.
-  class_phenotypes <- .classPhenotypes(drug_phenotypes)
-  drug_phenotypes <- drug_phenotypes[!is.na(drug_phenotypes$phenotype), , drop = FALSE]
 
   # Record every genome left out, and why.
   excluded <- dplyr::bind_rows(
@@ -227,10 +221,6 @@ profileORB <- function(orb) {
       genome_id = missing$genome_id,
       reason = "missing_features",
       missing_from = as.character(missing$missing_from)
-    ),
-    tibble::tibble(
-      genome_id = setdiff(conflicts$genome_id, c(drug_phenotypes$genome_id, missing$genome_id)),
-      reason = "contradictory"
     )
   )
   excluded <- excluded[order(excluded$genome_id), , drop = FALSE]
@@ -249,19 +239,14 @@ profileORB <- function(orb) {
     )
   }
 
-  if (nrow(conflicts)) {
-    rlang::inform(paste0(
-      nrow(conflicts), " genome-drug pairs are recorded as both Resistant and ",
-      "Susceptible and given no phenotype; see `$conflicts`."
-    ))
-  }
-
   if (nrow(excluded)) {
     rlang::inform(paste0(
       nrow(excluded), " genomes are excluded (", reasons, "); see `$excluded_genomes`."
     ))
   }
 
+  # Each genome's phenotype per drug class.
+  class_phenotypes <- .classPhenotypes(drug_phenotypes)
   phenotypes <- dplyr::bind_rows(
     tibble::tibble(
       genome_id = drug_phenotypes$genome_id,
@@ -290,7 +275,6 @@ profileORB <- function(orb) {
       genomes = genomes,
       phenotypes = phenotypes,
       targets = targets,
-      conflicts = conflicts,
       excluded_genomes = excluded
     ),
     class = "amr_orb_profile"
@@ -318,7 +302,6 @@ print.amr_orb_profile <- function(x, ...) {
 
   cat("<amr_orb_profile>", x$orb$dataset_id, "-", x$orb$dataset_label, "\n")
   cat("  genomes   :", nrow(x$genomes), "profiled,", nrow(x$excluded_genomes), "excluded\n")
-  cat("  conflicts :", nrow(x$conflicts), "genome-drug pairs\n")
   cat("  strata    :", paste(strata, collapse = "; "), "\n")
   cat("  Resistant/Susceptible genomes per drug:\n")
   cat(counts("drug"), sep = "\n")

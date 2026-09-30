@@ -18,11 +18,9 @@ An \code{amr_orb_profile} list:
 \code{target}.
 \item \code{targets}: genome counts per target and stratum value; \code{stratum} is NA
 for the whole dataset.
-\item \code{conflicts}: genome and drug pairs recorded as both phenotypes, including
-for excluded genomes.
 \item \code{excluded_genomes}: each excluded genome and its \code{reason}
-(\code{"no_usable_phenotype"}, \code{"missing_features"} or \code{"contradictory"}), with the
-feature types it is \code{missing_from}.
+(\code{"no_usable_phenotype"} or \code{"missing_features"}), with the feature types
+it is \code{missing_from}.
 }
 }
 \description{
@@ -32,11 +30,9 @@ value of each stratum (year and country).
 }
 \details{
 A genome is excluded, and listed with the reason, if it has no Resistant or
-Susceptible row, is missing from a feature table, or has only contradictory
-phenotypes. A genome recorded as both Resistant and Susceptible for a drug
-gets no phenotype for it, and is listed in \code{conflicts} either way. A class is
-Resistant if any member drug is, and Susceptible if every member drug with a
-phenotype is and none is contradictory.
+Susceptible row or is missing from a feature table. A class is Resistant if
+any member drug is, and otherwise Susceptible. Repeated rows for a genome and
+drug count once if they agree; if they disagree, profiling stops.
 }
 \section{Errors}{
 
@@ -44,9 +40,11 @@ All errors have class \code{amrml_error}, plus one of:
 \itemize{
 \item \code{amrml_invalid_argument}: \code{orb} is not from \code{\link[=readORB]{readORB()}}.
 \item \code{amrml_metadata_columns_missing}: the metadata lacks a needed column.
-\item \code{amrml_stratum_inconsistent}: a genome has two values for a stratum.
+\item \code{amrml_phenotype_conflict}: a genome is recorded as both Resistant and
+Susceptible for a drug.
 \item \code{amrml_no_labelled_genomes}: no genome in every feature table has a
 usable phenotype.
+\item \code{amrml_stratum_inconsistent}: a genome has two values for a stratum.
 }
 }
 

@@ -49,7 +49,7 @@ test_that("only Resistant and Susceptible rows count; genomes without one are ex
   expect_equal(unique(profile$excluded_genomes$reason), "no_usable_phenotype")
 })
 
-# Drug phenotypes and conflicts
+# Drug phenotypes
 
 test_that("each genome gets its own phenotype per drug", {
   metadata <- fxMetadataRows(
@@ -68,17 +68,27 @@ test_that("each genome gets its own phenotype per drug", {
   ))
 })
 
-test_that("a genome recorded as both Resistant and Susceptible to a drug gets no phenotype", {
+test_that("repeated rows for a genome and drug count once if they agree", {
   metadata <- fxMetadataRows(
-    genome = c("g1", "g1", "g1", "g2"),
-    drug = c("DRA", "DRA", "DRB", "DRA"),
-    phenotype = c("Resistant", "Susceptible", "Susceptible", "Susceptible")
+    genome = c("g1", "g1", "g2"),
+    drug = "DRA",
+    phenotype = c("Resistant", "Resistant", "Susceptible")
   )
-  expect_message(profile <- fxProfile(metadata), "1 genome-drug pairs")
+  profile <- fxProfile(metadata)
 
-  expect_equal(profile$conflicts, tibble::tibble(genome_id = "g1", drug_abbr = "DRA"))
-  expect_equal(fxTarget(profile, "drug", "DRA")$n_genomes, 1)
-  expect_equal(fxTarget(profile, "drug", "DRB")$n_genomes, 1)
+  expect_equal(fxTarget(profile, "drug", "DRA")$n_genomes, 2)
+  expect_equal(fxTarget(profile, "drug", "DRA")$n_resistant, 1)
+})
+
+test_that("a genome recorded as both Resistant and Susceptible for a drug is an error", {
+  metadata <- fxMetadataRows(
+    genome = c("g1", "g1", "g2"),
+    drug = "DRA",
+    phenotype = c("Resistant", "Susceptible", "Susceptible")
+  )
+
+  err <- expect_error(fxProfile(metadata), class = "amrml_phenotype_conflict")
+  expect_equal(err$observed$conflicts, tibble::tibble(genome_id = "g1", drug_abbr = "DRA"))
 })
 
 # Genomes missing from a feature table
@@ -95,18 +105,32 @@ test_that("genomes missing from a feature table are excluded, with the tables la
   expect_equal(profile$excluded_genomes$missing_from, "gene")
 })
 
-test_that("conflicts are recorded for genomes excluded for missing features", {
+# Excluded genomes
+
+test_that("every genome is either profiled or excluded with one reason", {
   metadata <- fxMetadataRows(
-    genome = c("g1", "g2", "g2"),
+    genome = c("g1", "g2", "g3"),
     drug = "DRA",
-    phenotype = c("Resistant", "Resistant", "Susceptible")
+    phenotype = c("Resistant", "Intermediate", "Susceptible")
   )
 
   expect_message(
-    expect_message(profile <- fxProfile(metadata, fxParquetsFor("g1")), "missing_features: 1"),
-    "1 genome-drug pairs"
+    profile <- fxProfile(metadata, fxParquetsFor(c("g1", "g2"))),
+    "2 genomes are excluded"
   )
-  expect_equal(profile$conflicts$genome_id, "g2")
+
+  excluded <- profile$excluded_genomes
+  expect_equal(profile$genomes$genome_id, "g1")
+  expect_equal(excluded$genome_id, c("g2", "g3"))
+  expect_equal(excluded$reason, c("no_usable_phenotype", "missing_features"))
+  expect_equal(excluded$missing_from, c(NA, "gene, widget"))
+})
+
+test_that("an ORB with no genome left to profile is an error that lists the reasons", {
+  metadata <- fxMetadataRows(genome = "g1", drug = "DRA", phenotype = "Intermediate")
+
+  err <- expect_error(fxProfile(metadata), class = "amrml_no_labelled_genomes")
+  expect_equal(err$observed$excluded$reason, "no_usable_phenotype")
 })
 
 # Class phenotypes
@@ -124,23 +148,6 @@ test_that("a class is Resistant if any member drug is, Susceptible only if all a
   expect_equal(classes$phenotype, c("Resistant", "Susceptible", "Susceptible"))
 })
 
-test_that("a contradictory member drug stops a class being Susceptible", {
-  # g1's DRA might have been Resistant; g2 is Resistant through DRB whatever DRA was.
-  metadata <- fxMetadataRows(
-    genome = c("g1", "g1", "g1", "g2", "g2", "g2"),
-    drug = c("DRA", "DRA", "DRB", "DRA", "DRA", "DRB"),
-    phenotype = c(
-      "Resistant", "Susceptible", "Susceptible",
-      "Resistant", "Susceptible", "Resistant"
-    )
-  )
-  expect_message(profile <- fxProfile(metadata), "2 genome-drug pairs")
-  classes <- profile$phenotypes[profile$phenotypes$unit == "drug_class", ]
-
-  expect_equal(classes$genome_id, "g2")
-  expect_equal(classes$phenotype, "Resistant")
-})
-
 test_that("a drug with no class keeps its drug phenotype but adds no class phenotype", {
   metadata <- fxMetadataRows(
     genome = c("g1", "g1"),
@@ -152,42 +159,6 @@ test_that("a drug with no class keeps its drug phenotype but adds no class pheno
 
   expect_equal(fxTarget(profile, "drug", "DRZ")$n_resistant, 1)
   expect_equal(unique(profile$targets$target[profile$targets$unit == "drug_class"]), "CLX")
-})
-
-# Excluded genomes
-
-test_that("every genome is either profiled or excluded with one reason", {
-  metadata <- fxMetadataRows(
-    genome = c("g1", "g2", "g3", "g3", "g4"),
-    drug = "DRA",
-    phenotype = c("Resistant", "Intermediate", "Resistant", "Susceptible", "Susceptible")
-  )
-
-  expect_message(
-    expect_message(
-      profile <- fxProfile(metadata, fxParquetsFor(c("g1", "g2", "g3"))),
-      "3 genomes are excluded"
-    ),
-    "both Resistant and Susceptible"
-  )
-
-  excluded <- profile$excluded_genomes
-  expect_equal(profile$genomes$genome_id, "g1")
-  expect_equal(excluded$genome_id, c("g2", "g3", "g4"))
-  expect_equal(excluded$reason, c("no_usable_phenotype", "contradictory", "missing_features"))
-  expect_equal(excluded$missing_from, c(NA, NA, "gene, widget"))
-})
-
-test_that("an ORB with no genome left to profile is an error that lists the reasons", {
-  only_intermediate <- fxMetadataRows(genome = "g1", drug = "DRA", phenotype = "Intermediate")
-  err <- expect_error(fxProfile(only_intermediate), class = "amrml_no_labelled_genomes")
-  expect_equal(err$observed$excluded$reason, "no_usable_phenotype")
-
-  only_contradictory <- fxMetadataRows(
-    genome = "g1", drug = "DRA", phenotype = c("Resistant", "Susceptible")
-  )
-  err <- expect_error(fxProfile(only_contradictory), class = "amrml_no_labelled_genomes")
-  expect_equal(err$observed$excluded$reason, "contradictory")
 })
 
 # Genomes and strata
@@ -253,7 +224,7 @@ test_that("the profile has its parts and prints a summary", {
   expect_s3_class(profile, "amr_orb_profile")
   expect_named(
     profile,
-    c("orb", "genomes", "phenotypes", "targets", "conflicts", "excluded_genomes")
+    c("orb", "genomes", "phenotypes", "targets", "excluded_genomes")
   )
   expect_output(print(profile), "5 profiled, 0 excluded")
   expect_output(print(profile), "country \\(values: 1, missing: 0\\)")
