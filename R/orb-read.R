@@ -15,18 +15,20 @@
 .FEATURE_TABLE_COLUMNS <- c("genome_id", "value")
 
 
-# Tibble of the files the producer run's export stage lists.
+# Tibble of the files the producer run's export stage lists. Manifest fields are
+# read with `[[`, since `$` also matches a longer name that starts the same way.
 .declaredFiles <- function(run) {
-  stage <- Find(function(s) identical(s$name, .AMRDATA_EXPORT_STAGE), run$stages)
+  stage <- Find(function(s) identical(s[["name"]], .AMRDATA_EXPORT_STAGE), run[["stages"]])
 
   if (is.null(stage)) {
     rlang::abort(paste0("The producer run has no '", .AMRDATA_EXPORT_STAGE, "' stage."))
   }
 
-  outputs <- stage$outputs
-  path <- vapply(outputs, function(o) o$path %||% NA_character_, character(1))
+  outputs <- stage[["outputs"]]
+  path <- vapply(outputs, function(o) o[["path"]] %||% NA_character_, character(1))
   size_bytes <- vapply(outputs, function(o) {
-    if (is.numeric(o$size_bytes) && length(o$size_bytes) == 1L) o$size_bytes else NA_real_
+    size <- o[["size_bytes"]]
+    if (is.numeric(size) && length(size) == 1L) size else NA_real_
   }, numeric(1))
 
   invalid <- is.na(path) | !nzchar(path) | !is.finite(size_bytes) | size_bytes < 0
@@ -40,7 +42,7 @@
     path = path,
     name = basename(path),
     size_bytes = size_bytes,
-    modified_at = vapply(outputs, function(o) o$modified_at %||% NA_character_, character(1))
+    modified_at = vapply(outputs, function(o) o[["modified_at"]] %||% NA_character_, character(1))
   )
 }
 
@@ -56,8 +58,8 @@
   }
 
   supported <- is.list(json) &&
-    identical(json$schema_version, .AMRDATA_SCHEMA_VERSION) &&
-    identical(json$manifest_type, .AMRDATA_MANIFEST_TYPE)
+    identical(json[["schema_version"]], .AMRDATA_SCHEMA_VERSION) &&
+    identical(json[["manifest_type"]], .AMRDATA_MANIFEST_TYPE)
 
   if (!supported) {
     rlang::abort(paste0(
@@ -65,8 +67,8 @@
     ))
   }
 
-  artifact <- json$artifacts[[.AMRDATA_ML_ARTIFACT]]
-  status <- artifact$status %||% "absent"
+  artifact <- json[["artifacts"]][[.AMRDATA_ML_ARTIFACT]]
+  status <- artifact[["status"]] %||% "absent"
 
   if (!identical(status, "ready")) {
     return(.amrError(
@@ -76,9 +78,9 @@
     ))
   }
 
-  producer_run_id <- string(artifact$producer_run_id, "producer_run_id")
-  run <- Find(function(r) identical(r$run_id, producer_run_id), json$runs)
-  run_status <- run$status %||% "missing"
+  producer_run_id <- string(artifact[["producer_run_id"]], "producer_run_id")
+  run <- Find(function(r) identical(r[["run_id"]], producer_run_id), json[["runs"]])
+  run_status <- run[["status"]] %||% "missing"
 
   if (!identical(run_status, "success")) {
     return(.amrError(
@@ -88,7 +90,7 @@
     ))
   }
 
-  finished_at <- string(run$finished_at, "finished_at")
+  finished_at <- string(run[["finished_at"]], "finished_at")
 
   if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}", finished_at)) {
     rlang::abort(paste0("`finished_at` is not a timestamp: ", finished_at))
@@ -96,7 +98,7 @@
 
   # The metadata file must be declared, so the file checks cover it.
   files <- .declaredFiles(run)
-  metadata_parquet <- string(artifact$metadata_parquet, "metadata_parquet")
+  metadata_parquet <- string(artifact[["metadata_parquet"]], "metadata_parquet")
 
   if (!metadata_parquet %in% files$path) {
     rlang::abort(paste0(
@@ -104,17 +106,17 @@
     ))
   }
 
-  dataset_id <- string(json$dataset_id, "dataset_id")
+  dataset_id <- string(json[["dataset_id"]], "dataset_id")
   # What amRdata was asked for: species names or taxon IDs.
-  requested <- unlist(json$dataset$selection$user_bacs, use.names = FALSE)
+  requested <- unlist(json[["dataset"]][["selection"]][["user_bacs"]], use.names = FALSE)
 
   list(
     dataset_id = dataset_id,
     label = if (length(requested)) paste(requested, collapse = ", ") else dataset_id,
-    directory = string(artifact$directory, "directory"),
+    directory = string(artifact[["directory"]], "directory"),
     manifest_path = manifest_path,
     metadata_parquet = metadata_parquet,
-    producer = string(artifact$producer, "producer"),
+    producer = string(artifact[["producer"]], "producer"),
     producer_run_id = producer_run_id,
     finished_at = finished_at,
     files = files
@@ -226,7 +228,7 @@
       arrow::open_dataset(f, format = "parquet")$schema$names,
       error = function(e) {
         .amrAbort(
-          "feature_table_unreadable",
+          "parquet_unreadable",
           c("A declared parquet file could not be read.", x = basename(f)),
           observed = list(file = f, error = conditionMessage(e)),
           call = call
@@ -270,7 +272,8 @@
     )
   }
 
-  tables[order(tables$feature_type), , drop = FALSE]
+  # "radix" sorts the same way in every locale.
+  tables[order(tables$feature_type, method = "radix"), , drop = FALSE]
 }
 
 #' Read an amRdata ORB
@@ -281,8 +284,10 @@
 #' Uses the manifest whose `amRml_input` is ready and whose producer run
 #' finished last, with a message if more than one is ready. The ORB must be
 #' where that manifest says, with every declared file present at its recorded
-#' size. Feature tables are the declared parquet files with the columns
-#' `genome_id`, `value` and one feature ID column such as `gene` or `Pfam`.
+#' size. If it is not, `readORB()` stops with an error; it never falls back to
+#' an older manifest, which would read older data. Feature tables are the
+#' declared parquet files with the columns `genome_id`, `value` and one feature
+#' ID column such as `gene` or `Pfam`.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus one of:
@@ -295,12 +300,14 @@
 #' * `amrml_orb_moved`: the ORB is not where its manifest says it was written.
 #' * `amrml_orb_files_missing`: declared files are missing or unreadable.
 #' * `amrml_orb_file_changed`: a declared file's size has changed.
-#' * `amrml_feature_table_unreadable`: a declared parquet cannot be read.
+#' * `amrml_parquet_unreadable`: a declared parquet cannot be read.
 #' * `amrml_orb_no_feature_tables`: no declared parquet is a feature table.
 #' * `amrml_orb_duplicate_feature_type`: two feature tables share a feature ID
 #'   column.
 #'
-#' @param path Character. The ORB directory amRdata wrote to.
+#' @param path Character. The ORB directory: the folder amRdata wrote its
+#'   output to, containing `manifest_*.json` (e.g.
+#'   `data/Staphylococcus_argenteus`), not its parent.
 #'
 #' @return An `amr_orb` list: `dataset_id`, `label` (what amRdata was asked for,
 #'   species names or taxon IDs, otherwise `dataset_id`), `directory`,

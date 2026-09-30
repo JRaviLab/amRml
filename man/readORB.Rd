@@ -7,7 +7,9 @@
 readORB(path)
 }
 \arguments{
-\item{path}{Character. The ORB directory amRdata wrote to.}
+\item{path}{Character. The ORB directory: the folder amRdata wrote its
+output to, containing \code{manifest_*.json} (e.g.
+\code{data/Staphylococcus_argenteus}), not its parent.}
 }
 \value{
 An \code{amr_orb} list: \code{dataset_id}, \code{label} (what amRdata was asked for,
@@ -23,8 +25,10 @@ Validates the ORB in \code{path} and returns an object describing it.
 Uses the manifest whose \code{amRml_input} is ready and whose producer run
 finished last, with a message if more than one is ready. The ORB must be
 where that manifest says, with every declared file present at its recorded
-size. Feature tables are the declared parquet files with the columns
-\code{genome_id}, \code{value} and one feature ID column such as \code{gene} or \code{Pfam}.
+size. If it is not, \code{readORB()} stops with an error; it never falls back to
+an older manifest, which would read older data. Feature tables are the
+declared parquet files with the columns \code{genome_id}, \code{value} and one feature
+ID column such as \code{gene} or \code{Pfam}.
 }
 \section{Errors}{
 
@@ -38,7 +42,7 @@ each manifest's error.
 \item \code{amrml_orb_moved}: the ORB is not where its manifest says it was written.
 \item \code{amrml_orb_files_missing}: declared files are missing or unreadable.
 \item \code{amrml_orb_file_changed}: a declared file's size has changed.
-\item \code{amrml_feature_table_unreadable}: a declared parquet cannot be read.
+\item \code{amrml_parquet_unreadable}: a declared parquet cannot be read.
 \item \code{amrml_orb_no_feature_tables}: no declared parquet is a feature table.
 \item \code{amrml_orb_duplicate_feature_type}: two feature tables share a feature ID
 column.
