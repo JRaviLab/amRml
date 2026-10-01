@@ -1,0 +1,307 @@
+---
+title: "Introduction to amRml"
+output:
+  BiocStyle::html_document:
+    fig_width: 7
+    fig_height: 5
+vignette: >
+  %\VignetteIndexEntry{Introduction to amRml}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup-opts, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+```
+
+```{r setup}
+library(amRml)
+```
+
+## Overview
+
+`amRml` predicts antimicrobial resistance (AMR) from bacterial genomic features. It consumes a DuckDB produced by `amRdata` and produces ML matrices, tuned logistic regression models, per-genome predictions, feature importances, and Fisher's exact tests as a non-ML baseline.
+
+This vignette uses the *Shigella flexneri* (`Sfl`) DuckDB bundled in `inst/extdata`.
+
+```{r fixture}
+fixture <- system.file("extdata", "Sfl_parquet.duckdb", package = "amRml")
+out_dir <- file.path(tempdir(), "amRml_vignette")
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+## Generating ML input matrices
+
+`generateMLInputs()` reads the bug-level DuckDB (metadata + feature parquets) and writes one long-format sparse parquet per drug × feature × encoding combination into `out_path/matrix/`. With `stratify_by`, it additionally writes year- or country-stratified matrices into `matrix_year/` or `matrix_country/`.
+
+```{r generate-matrices, eval = FALSE}
+generateMLInputs(
+  parquet_duckdb_path = fixture,
+  out_path            = out_dir,
+  n_fold              = 5,
+  split               = c(1, 0),
+  min_n               = 25,
+  verbosity           = "minimal"
+)
+
+list.files(file.path(out_dir, "matrix"))[1:5]
+```
+
+For a classical train/validation/test split instead of cross-validation, set `n_fold = NULL` and pass a length-2 `split` of `c(train_prop, val_prop)`; the test proportion is the remainder.
+
+```{r generate-splits, eval = FALSE}
+generateMLInputs(
+  parquet_duckdb_path = fixture,
+  out_path            = out_dir,
+  n_fold              = NULL,
+  split               = c(0.7, 0.15),
+  verbosity           = "debug"
+)
+```
+
+## Loading a single matrix
+
+The generated parquets are long-format sparse tibbles with these columns:
+
+| Column | Description |
+|--------|-------------|
+| `genome_id` | Unique identifier for each isolate |
+| `feature_id` | Feature name (gene, protein, domain, or struct) |
+| `value` | Binary presence/absence (0/1) or count |
+| `genome_drug.resistant_phenotype` | `"Resistant"` or `"Susceptible"` |
+
+`loadMLInputTibble()` converts one of them to wide format (one row per genome, one column per feature) ready for ML.
+
+```{r load-data, eval = FALSE}
+matrix_path <- file.path(
+  out_dir, "matrix", "Sfl_drug_AMP_genes_binary_sparse.parquet"
+)
+
+ml_tibble <- loadMLInputTibble(matrix_path)
+n_features <- getNumFeat(ml_tibble)
+target_var <- .getTargetVarName(ml_tibble)
+
+c(n_features = n_features, target_var = target_var)
+```
+
+## Per-matrix pipeline
+
+`runMLPipeline()` runs the train/tune/fit/predict pipeline on a single matrix in memory. Use it to iterate on one drug-feature combo before scaling to all of them.
+
+```{r run-pipeline, eval = FALSE}
+results <- runMLPipeline(
+  ml_input_tibble    = ml_tibble,
+  model              = "LR",
+  split              = c(1, 0),
+  n_fold             = 2,
+  n_top_feats        = 20,
+  penalty_vec        = 10^c(-3, -1),
+  mix_vec            = c(0, 0.5, 1),
+  select_best_metric = "mcc",
+  return_fit         = TRUE,
+  return_pred        = TRUE,
+  verbose            = FALSE
+)
+
+results$performance_tibble
+head(results$top_feat_tibble)
+```
+
+### Output structure
+
+`runMLPipeline()` returns a named list:
+
+**`performance_tibble`** — one row of model performance metrics:
+
+| Column | Description |
+|--------|-------------|
+| `num_obs` | Number of observations |
+| `res_prop` | Proportion of resistant samples |
+| `n_feat` | Number of features |
+| `model` | Model type (`"LR"`) |
+| `train_prop`, `val_prop` | Train/validation split proportions |
+| `fit_penalty`, `fit_mixture` | Fitted hyperparameters |
+| `mcc`, `nmcc`, `f1`, `bal_acc`, `log2_apop` | Performance metrics |
+| `run_time_sec` | Runtime in seconds |
+
+**`top_feat_tibble`** — ranked feature importance:
+
+| Column | Description |
+|--------|-------------|
+| `Variable` | Feature name |
+| `Importance` | Variable importance score |
+| `Sign` | Direction of effect (`POS` = associated with resistance, `NEG` = with susceptibility) |
+
+**Optional outputs** (when `return_*` = TRUE):
+
+- `tune_res` — tuning results from grid search
+- `fit` — the fitted workflow object
+- `pred` — predictions with `.pred_class`, `.pred_Resistant`, `.pred_Susceptible`
+
+## Step-by-step model building
+
+The builders below are what `runMLPipeline()` chains internally. Call them directly when you need control over any individual step.
+
+```{r split-data, eval = FALSE}
+data_split <- splitMLInputTibble(ml_tibble, split = c(0.6, 0.2), seed = 123)
+train_data <- rsample::training(data_split)
+test_data <- rsample::testing(data_split)
+```
+
+```{r build-model, eval = FALSE}
+recipe <- buildRecipe(train_data, use_pca = FALSE)
+lr_mod <- buildLRModel(multi_class = FALSE)
+wflow <- buildWflow(lr_mod, recipe)
+
+grid <- buildTuningGrid(
+  model       = "LR",
+  penalty_vec = 10^c(-3, -1),
+  mix_vec     = c(0, 0.5, 1)
+)
+```
+
+```{r tune-fit, eval = FALSE}
+tune_res <- tuneGrid(wflow, data_split, grid, n_fold = 2)
+best_wflow <- selectBestModel(tune_res, wflow, select_best_metric = "mcc")
+fit <- fitBestModel(best_wflow, train_data)
+
+preds <- predictML(fit, test_data)
+```
+
+## Performance metrics
+
+`calculateEvalMets()` returns all of nMCC, F1, balanced accuracy, AUPRC, log2(AUPRC/prior), sensitivity, and specificity from a tibble of predictions + truth.
+
+```{r metrics, eval = FALSE}
+calculateEvalMets(preds)
+getConfusionMatrix(preds)
+```
+
+## Feature importance
+
+`extractTopFeats()` ranks features by absolute coefficient (for LR). Use `n_top_feats` for a fixed count or `prop_vi_top_feats` for a percentile range.
+
+```{r feature-importance, eval = FALSE}
+top_features <- extractTopFeats(fit, n_top_feats = 20)
+head(top_features)
+```
+
+## Visualization
+
+```{r plot-prc, eval = FALSE, fig.width = 5, fig.height = 4}
+plotPRC(results$pred)
+```
+
+```{r plot-vi, eval = FALSE, fig.width = 5, fig.height = 4}
+plotTopFeatsVI(results$top_feat_tibble, n_top_feats = 10)
+```
+
+For a baseline comparison against random labels, fit a shuffled-label pipeline and compare:
+
+```{r plot-baseline, eval = FALSE}
+shuffled <- runMLPipeline(
+  ml_input_tibble = ml_tibble,
+  model           = "LR",
+  split           = c(1, 0),
+  n_fold          = 2,
+  shuffle_labels  = TRUE,
+  return_pred     = TRUE
+)
+
+plotBaselineComparison(
+  non_shuffled_label_results = results$performance_tibble,
+  shuffled_label_results     = shuffled$performance_tibble
+)
+```
+
+## Iterative feature elimination
+
+`runIFE()` retrains the model after iteratively removing top-ranked features, helping identify the minimal predictive subset. It runs the pipeline once per percentile in `percent_removal_vec`
+
+```{r ife, eval = FALSE}
+ife_results <- runIFE(
+  ml_tibble,
+  by_num              = TRUE,
+  by_vi               = FALSE,
+  percent_removal_vec = 10 * 1:9,
+  mix_vec             = 0,
+  return_feats        = TRUE,
+  verbose             = FALSE
+)
+
+ife_results$ife_performance_tibble
+ife_results$feats_removed
+```
+
+`removeTopFeats()` strips a given set of features from a matrix tibble if you want to do this manually:
+
+```{r remove-feats, eval = FALSE}
+trimmed <- removeTopFeats(ml_tibble, head(top_features, 5))
+ncol(ml_tibble) - ncol(trimmed)
+```
+
+## Fisher's exact tests (non-ML baseline)
+
+`runFishers()` runs a Fisher's exact test of feature presence vs. phenotype for each feature, applies Benjamini–Hochberg correction, and computes per-class frequencies.
+
+```{r fisher, eval = FALSE}
+fisher_results <- runFishers(
+  matrix_path       = matrix_path,
+  Q                 = 0.05,
+  alternative       = "two.sided",
+  susceptible_label = "Susceptible",
+  resistant_label   = "Resistant"
+)
+
+head(fisher_results)
+```
+
+```{r plot-fishers, eval = FALSE, fig.width = 5, fig.height = 4}
+plotFishers(fisher_results, alpha = 0.05, label_top_n = 5)
+```
+
+## Training all models with `runMLmodels`
+
+`runMLmodels()` trains a model on every matrix produced by `generateMLInputs()` and writes performance TSVs into `out_path/ML_performance/`, predictions into `ML_pred/`, and top features into `ML_top_features/`. Takes over an hour on Sfl with default settings.
+
+```{r run-all-models, eval = FALSE}
+runMLmodels(
+  path            = out_dir,
+  stratify_by     = NULL,
+  LOO             = FALSE,
+  cross_test      = FALSE,
+  threads         = max(1L, parallel::detectCores() - 1L),
+  split           = c(1, 0),
+  n_fold          = 5,
+  verbose         = TRUE,
+  return_pred     = TRUE,
+  use_saved_split = TRUE
+)
+```
+
+## End-to-end: `runModelingPipeline`
+
+For the full pipeline from a DuckDB to all outputs in one call:
+
+```{r run-modeling-pipeline, eval = FALSE}
+runModelingPipeline(
+  parquet_duckdb_path = fixture,
+  threads             = max(1L, parallel::detectCores() - 1L),
+  n_fold              = 5,
+  split               = c(1, 0),
+  min_n               = 25,
+  prop_vi_top_feats   = c(0, 1),
+  pca_threshold       = 0.99,
+  verbose             = TRUE,
+  use_saved_split     = TRUE
+)
+```
+
+## Session info
+
+```{r session-info}
+sessionInfo()
+```
