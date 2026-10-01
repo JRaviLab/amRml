@@ -198,7 +198,7 @@ profileORB <- function(orb) {
   call <- rlang::current_env()
 
   # Check the argument is an ORB from readORB().
-  .checkArgORB(orb, call = call)
+  .checkArgClass(orb, "orb", "amr_orb", "readORB()", call = call)
 
   # Read the metadata and keep its Resistant and Susceptible rows.
   metadata <- .readMetadata(orb$metadata_parquet, call = call)
