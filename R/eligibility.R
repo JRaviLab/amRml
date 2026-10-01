@@ -294,7 +294,8 @@
 #'
 #' @return An `amr_eligibility` list:
 #'   * `profile` and `settings` (the thresholds, and the `holdout` share).
-#'   * `modes`: per mode, `feasible`, `rule_id` and `n_groups`.
+#'   * `modes`: per mode, `feasible`, `rule_id`, `n_groups`, and how many
+#'     scopes it has and how many are eligible (`n_scopes`, `n_eligible`).
 #'   * `scopes`: per scope, training and test counts (`NA` without a test set),
 #'     `eligible` and `rule_id`.
 #'   * `members`: each eligible scope's genomes, by `role` (train or test).
@@ -369,6 +370,12 @@ eligibleScopes <- function(profile,
     )
   }
 
+  # Each mode's scope counts, so a mode that ran with nothing eligible is visible; NA if not run.
+  per_mode <- match(scopes$mode_id, feasibility$mode_id)
+  feasibility$n_scopes <- tabulate(per_mode, nrow(feasibility))
+  feasibility$n_eligible <- tabulate(per_mode[scopes$eligible], nrow(feasibility))
+  feasibility[!feasibility$feasible, c("n_scopes", "n_eligible")] <- NA_integer_
+
   structure(
     list(
       profile = profile,
@@ -402,10 +409,9 @@ print.amr_eligibility <- function(x, ...) {
       next
     }
 
-    scopes <- x$scopes[x$scopes$mode_id == mode$mode_id, , drop = FALSE]
-    reasons <- table(scopes$rule_id)
+    reasons <- table(x$scopes$rule_id[x$scopes$mode_id == mode$mode_id])
     cat(
-      "  ", labels[[i]], " : ", sum(scopes$eligible), " of ", nrow(scopes), " eligible",
+      "  ", labels[[i]], " : ", mode$n_eligible, " of ", mode$n_scopes, " eligible",
       if (length(reasons)) paste0("; ", paste(names(reasons), reasons, collapse = ", ")),
       "\n",
       sep = ""
