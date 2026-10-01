@@ -122,9 +122,10 @@
   .asMembers(train, test)
 }
 
-# Each target tested in fewer of the mode's groups than it needs, with its genome counts.
-.targetsInTooFewGroups <- function(grouped, loo) {
-  targets <- dplyr::summarise(
+# Each target tested in fewer of the mode's groups than it needs, with its genome counts in
+# them. A target whose genomes all lack a group has none, and is listed too.
+.targetsInTooFewGroups <- function(phenotypes, grouped, loo) {
+  counts <- dplyr::summarise(
     dplyr::group_by(grouped, .data$unit, .data$target),
     n_groups = dplyr::n_distinct(.data$group),
     n_genomes = dplyr::n(),
@@ -132,6 +133,12 @@
     n_susceptible = sum(.data$phenotype == "Susceptible"),
     .groups = "drop"
   )
+  targets <- dplyr::left_join(
+    dplyr::distinct(phenotypes[c("unit", "target")]), counts,
+    by = c("unit", "target")
+  )
+  columns <- c("n_groups", "n_genomes", "n_resistant", "n_susceptible")
+  targets[columns] <- lapply(targets[columns], function(n) replace(n, is.na(n), 0L))
 
   targets[targets$n_groups < .groupsNeeded(loo), , drop = FALSE]
 }
@@ -152,7 +159,7 @@
   too_few <- NULL
 
   if (mode$grouping != "none") {
-    too_few <- .targetsInTooFewGroups(grouped, mode$LOO)
+    too_few <- .targetsInTooFewGroups(profile$phenotypes, grouped, mode$LOO)
     grouped <- dplyr::anti_join(grouped, too_few, by = c("unit", "target"))
   }
 
