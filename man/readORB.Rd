@@ -12,7 +12,7 @@ output to, containing \code{manifest_*.json} (e.g.
 \code{data/Staphylococcus_argenteus}), not its parent.}
 }
 \value{
-An \code{amr_orb} list: \code{dataset_id}, \code{label} (what amRdata was asked for,
+An \code{amr_orb} list: \code{dataset_id}, \code{dataset_label} (what amRdata was asked for,
 species names or taxon IDs, otherwise \code{dataset_id}), \code{directory},
 \code{manifest_path}, \code{metadata_parquet}, \code{producer}, \code{producer_run_id},
 \code{finished_at}, \code{files} (the producer run's declared outputs) and
