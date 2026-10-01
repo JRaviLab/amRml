@@ -167,19 +167,17 @@
   list(members = members, too_few = too_few)
 }
 
-# Per scope, the training and test genome counts, and a signature of each side's genomes.
+# Per scope, the training and test genome counts.
 .scopeCounts <- function(members, has_test) {
   counts <- dplyr::summarise(
     dplyr::group_by(members, dplyr::across(dplyr::all_of(c(.SCOPE_KEYS, "role")))),
     n_genomes = dplyr::n(),
     n_resistant = sum(.data$phenotype == "Resistant"),
     n_susceptible = sum(.data$phenotype == "Susceptible"),
-    # Two scopes with the same signature hold the same genomes with the same phenotypes.
-    signature = paste(sort(paste(.data$genome_id, .data$phenotype)), collapse = ";"),
     .groups = "drop"
   )
 
-  sides <- c("n_genomes", "n_resistant", "n_susceptible", "signature")
+  sides <- c("n_genomes", "n_resistant", "n_susceptible")
   train <- counts[counts$role == "train", c(.SCOPE_KEYS, sides)]
   test <- counts[counts$role == "test", c(.SCOPE_KEYS, sides)]
   names(test) <- c(.SCOPE_KEYS, paste0("test_", sides))
@@ -187,20 +185,37 @@
 
   # A cross-drug test set is empty when the training drug saw all the test drug's genomes.
   if (has_test) {
-    test_counts <- paste0("test_", sides[1:3])
+    test_counts <- paste0("test_", sides)
     scopes[test_counts] <- lapply(scopes[test_counts], function(n) replace(n, is.na(n), 0L))
   }
 
   scopes
 }
 
+# For each class scope, how many of the class's drugs have data among its genomes.
+.classDrugCounts <- function(members, profile) {
+  drugs <- profile$phenotypes[profile$phenotypes$unit == "drug", , drop = FALSE]
+  drugs <- tibble::tibble(
+    genome_id = drugs$genome_id,
+    drug = drugs$target,
+    class = profile$drug_classes$class[match(drugs$target, profile$drug_classes$drug)]
+  )
+
+  tested <- dplyr::inner_join(
+    members[members$unit == "drug_class", c(.SCOPE_KEYS, "genome_id")], drugs,
+    by = c(target = "class", "genome_id"), relationship = "many-to-many"
+  )
+  dplyr::summarise(
+    dplyr::group_by(tested, dplyr::across(dplyr::all_of(.SCOPE_KEYS))),
+    n_drugs = dplyr::n_distinct(.data$drug),
+    .groups = "drop"
+  )
+}
+
 # Each scope's first failed rule, or NA if it passes them all.
 .firstFailedRule <- function(scopes, mode, settings, has_test) {
-  # A class whose genomes and phenotypes match one of the mode's drug scopes repeats it.
-  drugs <- scopes[scopes$unit == "drug", , drop = FALSE]
-  duplicate <- scopes$unit == "drug_class" &
-    paste(scopes$train_group, scopes$test_group, scopes$signature, scopes$test_signature) %in%
-      paste(drugs$train_group, drugs$test_group, drugs$signature, drugs$test_signature)
+  # A class with data for only one of its drugs is that drug's model again.
+  duplicate <- scopes$unit == "drug_class" & scopes$n_drugs %in% 1
 
   rarer <- pmin(scopes$n_resistant, scopes$n_susceptible)
   enough_for_cv <- if (has_test) {
@@ -239,13 +254,14 @@
 
 # One decision per scope: its genome counts, and the first rule it fails. Targets tested
 # in too few groups get one decision each.
-.judgeScopes <- function(built, mode, settings) {
+.judgeScopes <- function(built, mode, profile, settings) {
   counts <- c(
     "n_genomes", "n_resistant", "n_susceptible",
     "test_n_genomes", "test_n_resistant", "test_n_susceptible"
   )
   has_test <- mode$LOO || mode$cross_test
   scopes <- .scopeCounts(built$members, has_test)
+  scopes <- dplyr::left_join(scopes, .classDrugCounts(built$members, profile), by = .SCOPE_KEYS)
   scopes$rule_id <- .firstFailedRule(scopes, mode, settings, has_test)
   decisions <- scopes[c(.SCOPE_KEYS, counts, "rule_id")]
 
@@ -275,10 +291,10 @@
 #' @details
 #' Counts are of genomes, each with one phenotype. A drug or class needs 2 of a
 #' mode's groups (3 for leave-one-out) to get scopes, and a stratified one needs
-#' 2 eligible groups. A scope fails, in order, if it repeats one of its drugs, has
-#' one phenotype, has fewer than `min_genomes` genomes, can't fill `n_fold` folds
-#' with its rarer phenotype (after a 20% holdout when there's no test set), or has
-#' too small a test set.
+#' 2 eligible groups. A scope fails, in order, if it's a class with data for only
+#' one of its drugs, has one phenotype, has fewer than `min_genomes` genomes,
+#' can't fill `n_fold` folds with its rarer phenotype (after a 20% holdout when
+#' there's no test set), or has too small a test set.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument`:
@@ -341,7 +357,7 @@ eligibleScopes <- function(profile,
   judged <- lapply(seq_len(nrow(runnable)), function(i) {
     mode <- runnable[i, , drop = FALSE]
     built <- .buildScopes(mode, profile)
-    decisions <- .judgeScopes(built, mode, settings)
+    decisions <- .judgeScopes(built, mode, profile, settings)
     eligible <- decisions[decisions$eligible, .SCOPE_KEYS]
     list(
       decisions = decisions,

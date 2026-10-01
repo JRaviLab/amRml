@@ -66,7 +66,7 @@
   "too_few_groups_tested",      "eligibility", "scope",
   "The drug or class was tested in too few of the mode's groups.",
   "duplicate_class",            "eligibility", "scope",
-  "A class model would repeat one of its drugs.",
+  "The class has data for only one of its drugs.",
   "single_phenotype",           "eligibility", "scope",
   "Training genomes have one phenotype only.",
   "too_few_genomes",            "eligibility", "scope",

@@ -182,6 +182,7 @@
 #'   * `genomes`: each profiled genome and its strata values.
 #'   * `phenotypes`: each genome's phenotype per `unit` (drug or drug class) and
 #'     `target`.
+#'   * `drug_classes`: each profiled drug and its `class`.
 #'   * `targets`: genome counts per target and stratum value; `stratum` is NA
 #'     for the whole dataset.
 #'   * `excluded_genomes`: each excluded genome and its `reason`
@@ -262,6 +263,14 @@ profileORB <- function(orb) {
     )
   )
 
+  # Each profiled drug's class, so later stages can tell which drugs a class combines.
+  drug_classes <- dplyr::distinct(tibble::tibble(
+    drug = drug_phenotypes$drug_abbr,
+    class = drug_phenotypes$class_abbr
+  ))
+  drug_classes <- drug_classes[!is.na(drug_classes$class), , drop = FALSE]
+  drug_classes <- drug_classes[order(drug_classes$class, drug_classes$drug, method = "radix"), ]
+
   # Collect the strata of each genome with a phenotype.
   profiled <- metadata[metadata$genome_id %in% phenotypes$genome_id, , drop = FALSE]
   genomes <- .genomeTable(profiled, call = call)
@@ -274,6 +283,7 @@ profileORB <- function(orb) {
       orb = orb,
       genomes = genomes,
       phenotypes = phenotypes,
+      drug_classes = drug_classes,
       targets = targets,
       excluded_genomes = excluded
     ),
