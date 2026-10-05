@@ -1,7 +1,7 @@
 # amRml's error codes, and the functions that build and throw its errors.
 
 # `stage` is the pipeline stage; `grain` says what the error is about: the whole call,
-# one manifest file, one mode, or one scope.
+# one manifest file, one mode, one scope, one matrix, or one task.
 .RULES <- tibble::tribble(
   ~rule_id,                     ~stage,        ~grain,
   ~description,
@@ -77,6 +77,16 @@
   "A test set has too few genomes, or too few of its rarer phenotype.",
   "too_few_eligible_groups",    "eligibility", "scope",
   "Fewer than two of the stratified groups have enough data.",
+
+  # Building matrices: buildMatrices()
+  "feature_rows_repeated",      "matrix",      "call",
+  "A feature table has two rows for one genome and feature.",
+  "no_variable_features",       "matrix",      "matrix",
+  "No feature varies across the matrix's training genomes.",
+
+  # Fitting models: fitModels()
+  "fit_failed",                 "fit",         "task",
+  "Fitting the task's model stopped with an error.",
 )
 
 # Build an error of class `amrml_<rule_id>` without throwing it. `message` is a
