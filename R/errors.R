@@ -81,6 +81,8 @@
   # Building matrices: buildMatrices()
   "feature_rows_repeated",      "matrix",      "call",
   "A feature table has two rows for one genome and feature.",
+  "feature_values_invalid",     "matrix",      "call",
+  "A feature table has missing or negative values.",
   "no_variable_features",       "matrix",      "matrix",
   "No feature varies across the matrix's training genomes.",
 
