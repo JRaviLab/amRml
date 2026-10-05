@@ -112,7 +112,7 @@
 
   list(
     dataset_id = dataset_id,
-    label = if (length(requested)) paste(requested, collapse = ", ") else dataset_id,
+    dataset_label = if (length(requested)) paste(requested, collapse = ", ") else dataset_id,
     directory = string(artifact[["directory"]], "directory"),
     manifest_path = manifest_path,
     metadata_parquet = metadata_parquet,
@@ -309,7 +309,7 @@
 #'   output to, containing `manifest_*.json` (e.g.
 #'   `data/Staphylococcus_argenteus`), not its parent.
 #'
-#' @return An `amr_orb` list: `dataset_id`, `label` (what amRdata was asked for,
+#' @return An `amr_orb` list: `dataset_id`, `dataset_label` (what amRdata was asked for,
 #'   species names or taxon IDs, otherwise `dataset_id`), `directory`,
 #'   `manifest_path`, `metadata_parquet`, `producer`, `producer_run_id`,
 #'   `finished_at`, `files` (the producer run's declared outputs) and
@@ -395,7 +395,7 @@ readORB <- function(path) {
 
 #' @export
 print.amr_orb <- function(x, ...) {
-  cat("<amr_orb>", x$dataset_id, "-", x$label, "\n")
+  cat("<amr_orb>", x$dataset_id, "-", x$dataset_label, "\n")
   cat("  directory :", x$directory, "\n")
   cat("  manifest  :", basename(x$manifest_path), "\n")
   cat("  finished  :", x$finished_at, "\n")
