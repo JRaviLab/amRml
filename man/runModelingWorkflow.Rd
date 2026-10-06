@@ -2,7 +2,7 @@
 % Please edit documentation in R/workflow.R
 \name{runModelingWorkflow}
 \alias{runModelingWorkflow}
-\title{Run the modelling workflow}
+\title{Run the modeling workflow}
 \usage{
 runModelingWorkflow(
   orb_dir,
@@ -30,7 +30,9 @@ runModelingWorkflow(
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
-\item{overwrite}{Replace matrices and results already in \code{out_dir}.}
+\item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
+if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
+folder is always new.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
@@ -39,8 +41,8 @@ reached from it (\verb{$built}, \verb{$built$eligibility}, ...).
 \description{
 Runs every stage on an ORB: \code{\link[=readORB]{readORB()}}, \code{\link[=profileORB]{profileORB()}}, \code{\link[=eligibleScopes]{eligibleScopes()}},
 \code{\link[=planMatrices]{planMatrices()}}, \code{\link[=buildMatrices]{buildMatrices()}}, \code{\link[=expandTasks]{expandTasks()}} and \code{\link[=fitModels]{fitModels()}}. Each
-can also be called on its own. An "intense" run is the same call with more
-\code{seeds}; a narrower run is the same call with fewer \code{modes}.
+can also be called on its own. Old amRml's standard run is a choice of
+\code{modes}; its intense run adds \code{seeds} and \code{labels}.
 }
 \details{
 Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},

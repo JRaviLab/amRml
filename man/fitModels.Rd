@@ -15,7 +15,7 @@ fitModels(tasks, overwrite = FALSE)
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
 \code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), and \code{performance},
 \code{importance} and \code{predictions} (\verb{results/}), plus the \code{built} matrices. \code{performance}
-keeps old amRml's columns and rounding, adding \code{auprc} and \code{auroc};
+keeps old amRml's columns and rounding, adding \code{auprc};
 \code{n_feat} counts the matrix's features (the recipe may drop more).
 \code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
 points to Susceptible).

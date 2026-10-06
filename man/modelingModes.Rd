@@ -2,7 +2,7 @@
 % Please edit documentation in R/registry.R
 \name{modelingModes}
 \alias{modelingModes}
-\title{Modelling modes}
+\title{Modeling modes}
 \usage{
 modelingModes()
 }
