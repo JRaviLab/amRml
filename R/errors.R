@@ -89,6 +89,8 @@
   # Fitting models: fitModels()
   "fit_failed",                 "fit",         "task",
   "Fitting the task's model stopped with an error.",
+  "metrics_undefined",          "fit",         "task",
+  "Some test metrics are undefined, e.g. when one class is predicted for every genome.",
 )
 
 # Build an error of class `amrml_<rule_id>` without throwing it. `message` is a

@@ -11,3 +11,8 @@
   rlang::inform(paste0("Writing to ", out_dir))
   out_dir
 }
+
+# Each task's mode, looked up through its matrix.
+.taskModes <- function(tasks, matrices) {
+  matrices$mode_id[match(tasks$matrix_id, matrices$matrix_id)]
+}

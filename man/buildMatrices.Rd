@@ -33,7 +33,8 @@ All errors have class \code{amrml_error}, plus one of:
 \itemize{
 \item \code{amrml_invalid_argument}: \code{plan} is not from \code{\link[=planMatrices]{planMatrices()}}, \code{out_dir}
 is not one writable path outside the ORB or in its \verb{amRml/} folder, or it
-already has matrices and \code{overwrite} is \code{FALSE}.
+already has output (eligibility, matrices, tasks or results) and
+\code{overwrite} is \code{FALSE}.
 \item \code{amrml_feature_rows_repeated}: a feature table has two rows for one genome
 and feature.
 \item \code{amrml_feature_values_invalid}: a feature table has missing or negative

@@ -17,6 +17,15 @@
   invisible(TRUE)
 }
 
+# Throw an error unless `value` is TRUE or FALSE.
+.checkArgFlag <- function(value, name, call = rlang::caller_env()) {
+  if (!rlang::is_bool(value)) {
+    .amrAbort("invalid_argument", paste0("`", name, "` must be TRUE or FALSE."), call = call)
+  }
+
+  invisible(TRUE)
+}
+
 # Throw an error unless `value` is a single finite whole number of at least `min`.
 .checkArgCount <- function(value, name, min = 1, call = rlang::caller_env()) {
   ok <- is.numeric(value) && length(value) == 1L && is.finite(value) &&
@@ -72,14 +81,12 @@
 }
 
 # Throw an error unless `out_dir` is one writable path outside the ORB at `orb_dir`, or in
-# its amRml/ folder, and holds no matrices unless `overwrite` is TRUE.
+# its amRml/ folder, and holds no earlier output unless `overwrite` is TRUE.
 .checkArgOutDir <- function(out_dir, orb_dir, overwrite, call = rlang::caller_env()) {
   if (!rlang::is_string(out_dir) || !nzchar(out_dir)) {
     .amrAbort("invalid_argument", "`out_dir` must be a single directory path.", call = call)
   }
-  if (!rlang::is_bool(overwrite)) {
-    .amrAbort("invalid_argument", "`overwrite` must be TRUE or FALSE.", call = call)
-  }
+  .checkArgFlag(overwrite, "overwrite", call = call)
 
   # The nearest folder that exists must be writable, or nothing can be created in it.
   existing <- path.expand(out_dir)
@@ -112,11 +119,13 @@
     )
   }
 
-  existing <- file.exists(file.path(out_dir, c("matrices", "matrices.parquet")))
+  # Every stage's output, so a run never mixes new matrices with earlier results.
+  outputs <- c("eligibility.parquet", "matrices", "matrices.parquet", "tasks.parquet", "results")
+  existing <- file.exists(file.path(out_dir, outputs))
   if (any(existing) && !overwrite) {
     .amrAbort(
       "invalid_argument",
-      "`out_dir` already has matrices; set `overwrite = TRUE` to replace them.",
+      "`out_dir` already has output; set `overwrite = TRUE` to replace it.",
       observed = list(out_dir = out),
       call = call
     )

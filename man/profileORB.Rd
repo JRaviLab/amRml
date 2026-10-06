@@ -16,6 +16,7 @@ An \code{amr_orb_profile} list:
 \item \code{genomes}: each profiled genome and its strata values.
 \item \code{phenotypes}: each genome's phenotype per \code{unit} (drug or drug class) and
 \code{target}.
+\item \code{drug_classes}: each profiled drug and its \code{class}.
 \item \code{targets}: genome counts per target and stratum value; \code{stratum} is NA
 for the whole dataset.
 \item \code{excluded_genomes}: each excluded genome and its \code{reason}

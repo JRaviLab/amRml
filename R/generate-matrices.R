@@ -174,7 +174,8 @@ planMatrices <- function(eligibility) {
 #'
 #' * `amrml_invalid_argument`: `plan` is not from [planMatrices()], `out_dir`
 #'   is not one writable path outside the ORB or in its `amRml/` folder, or it
-#'   already has matrices and `overwrite` is `FALSE`.
+#'   already has output (eligibility, matrices, tasks or results) and
+#'   `overwrite` is `FALSE`.
 #' * `amrml_feature_rows_repeated`: a feature table has two rows for one genome
 #'   and feature.
 #' * `amrml_feature_values_invalid`: a feature table has missing or negative
