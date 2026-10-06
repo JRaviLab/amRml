@@ -1,11 +1,11 @@
 # The single entry point: every stage, from the ORB to fitted models.
 
-#' Run the modelling workflow
+#' Run the modeling workflow
 #'
 #' Runs every stage on an ORB: [readORB()], [profileORB()], [eligibleScopes()],
 #' [planMatrices()], [buildMatrices()], [expandTasks()] and [fitModels()]. Each
-#' can also be called on its own. An "intense" run is the same call with more
-#' `seeds`; a narrower run is the same call with fewer `modes`.
+#' can also be called on its own. Old amRml's standard run is a choice of
+#' `modes`; its intense run adds `seeds` and `labels`.
 #'
 #' @details
 #' Everything goes to `out_dir`: `eligibility.parquet`, `matrices.parquet`,
@@ -18,7 +18,9 @@
 #' @param seeds,labels Passed to [expandTasks()].
 #' @param min_genomes,n_fold,min_test_genomes,min_test_minority Passed to
 #'   [eligibleScopes()].
-#' @param overwrite Replace matrices and results already in `out_dir`.
+#' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
+#'   if `FALSE`, an `out_dir` holding earlier output is refused. The default run
+#'   folder is always new.
 #'
 #' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...).

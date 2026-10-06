@@ -55,7 +55,7 @@
   "stratum_inconsistent",       "profile",     "call",
   "A genome has two values for a stratum.",
 
-  # Deciding what can be modelled: eligibleScopes()
+  # Deciding what can be modeled: eligibleScopes()
   # Whether a mode can run on this ORB
   "mode_not_supported",         "feasibility", "mode",
   "The mode can't run yet.",

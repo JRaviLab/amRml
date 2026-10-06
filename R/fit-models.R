@@ -121,7 +121,7 @@
   )
 }
 
-# Ported from old amRml's .calculate*() helpers, with auROC added. Resistant is the event.
+# Ported from old amRml's .calculate*() helpers, keeping AUPRC. Resistant is the event.
 # Each metric is rounded to 2, and nMCC and log2(AUPRC / prior) use the rounded values.
 .taskMetrics <- function(scored) {
   estimate <- function(metric, ...) {
@@ -138,8 +138,7 @@
     log2_apop = round(log2(auprc / mean(scored$phenotype == "Resistant")), 2),
     f1 = estimate(yardstick::f_meas, estimate = ".pred_class"),
     bal_acc = estimate(yardstick::bal_accuracy, estimate = ".pred_class"),
-    auprc = auprc,
-    auroc = estimate(yardstick::roc_auc, ".pred_Resistant")
+    auprc = auprc
   )
 }
 
@@ -236,7 +235,7 @@
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
 #'   `status`, `rule_id` and `message`; `tasks.parquet`), and `performance`,
 #'   `importance` and `predictions` (`results/`), plus the `built` matrices. `performance`
-#'   keeps old amRml's columns and rounding, adding `auprc` and `auroc`;
+#'   keeps old amRml's columns and rounding, adding `auprc`;
 #'   `n_feat` counts the matrix's features (the recipe may drop more).
 #'   `importance` has old amRml's `Variable`, `Importance` and `Sign` ("POS"
 #'   points to Susceptible).
@@ -315,7 +314,7 @@ fitModels <- function(tasks, overwrite = FALSE) {
       model = character(), n_feats_returned = integer(), n_fold = integer(),
       fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
       spec = numeric(), sens = numeric(), log2_apop = numeric(), f1 = numeric(),
-      bal_acc = numeric(), auprc = numeric(), auroc = numeric(), run_time_sec = numeric(),
+      bal_acc = numeric(), auprc = numeric(), run_time_sec = numeric(),
       seed = integer(), date = character()
     )
     fit$importance <- tibble::tibble(

@@ -288,9 +288,9 @@
   )
 }
 
-#' Decide what can be modelled
+#' Decide what can be modeled
 #'
-#' Compares the modelling modes with a profiled ORB. For each mode, records
+#' Compares the modeling modes with a profiled ORB. For each mode, records
 #' whether it can run on this ORB at all; for each drug or class in a mode that
 #' can, records whether it has enough data to model, or why not. Nothing is
 #' built or fitted.

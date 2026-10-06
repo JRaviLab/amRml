@@ -1,9 +1,9 @@
-# The registry of what amRml can model: the strata, and the modelling modes.
+# The registry of what amRml can model: the strata, and the modeling modes.
 
 # Strata, as amRml names them, and the genome-level amRdata column holding each.
 .STRATA <- c(year = "year_bin", country = "country_abbr")
 
-# The modelling modes of the amRml v1 design. `grouping` is what a mode splits genomes
+# The modeling modes of the amRml v1 design. `grouping` is what a mode splits genomes
 # by: a stratum, drugs, or nothing.
 .MODES <- tibble::tribble(
   ~mode_id,             ~grouping, ~LOO,  ~cross_test, ~supported,
@@ -28,7 +28,7 @@
   "Trained on all drugs but one, tested on the held-out drug."
 )
 
-#' Modelling modes
+#' Modeling modes
 #'
 #' The kinds of model amRml can build, from the amRml v1 design. `LOO` modes
 #' train on every group but one and test on the held-out group; `cross_test`
