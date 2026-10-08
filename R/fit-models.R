@@ -271,7 +271,7 @@
 
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes. `multi` says
 # whether the task's target is multi-class.
-.fitTask <- function(task, path, rows, columns, encoding, cache,
+.fitTask <- function(task, path, species, rows, columns, encoding, cache,
                      fitted = NULL, return_fitted = FALSE, multi = FALSE) {
   started <- Sys.time()
   matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
@@ -308,6 +308,7 @@
 
   performance <- tibble::tibble(
     task_id = task$task_id,
+    species = species,
     num_obs = sum(input),
     res_prop = if (multi) NA_real_ else round(mean(rows$phenotype[input] == "Resistant"), 2),
     n_test = length(split$test),
@@ -326,6 +327,7 @@
   )
   predictions <- tibble::tibble(
     task_id = task$task_id,
+    species = species,
     genome_id = rows$genome_id[split$test],
     truth = as.character(scored$phenotype),
     predicted = as.character(scored$.pred_class),
@@ -344,12 +346,45 @@
 
   result <- list(
     performance = performance,
-    importance = tibble::tibble(task_id = rep(task$task_id, nrow(importance)), importance),
+    importance = tibble::tibble(task_id = rep(task$task_id, nrow(importance)),
+                               species = rep(species, nrow(importance)), importance),
     predictions = predictions,
+    model = list(fit = fitted$fit, features = matrix$features),
     undefined = if (length(undefined)) toString(undefined) else NA_character_
   )
   if (return_fitted) result$fitted <- fitted
   result
+}
+
+# The run's settings and outcome, as written to run.json; vectors stay arrays (I()).
+.runRecord <- function(tasks, listed, started, save_fits) {
+  eligibility <- tasks$built$eligibility
+  orb <- eligibility$profile$orb
+  stamp <- function(time) format(time, "%Y-%m-%d %H:%M:%S")
+
+  list(
+    amRml_version = as.character(utils::packageVersion("amRml")),
+    R_version = paste(R.version$major, R.version$minor, sep = "."),
+    started_at = stamp(started),
+    finished_at = stamp(Sys.time()),
+    orb = list(
+      directory = orb$directory,
+      dataset_id = orb$dataset_id,
+      dataset_label = orb$dataset_label,
+      manifest = basename(orb$manifest_path),
+      producer_run_id = orb$producer_run_id,
+      finished_at = orb$finished_at
+    ),
+    species = orb$dataset_id,
+    modes = I(eligibility$modes$mode_id),
+    eligibility = eligibility$settings,
+    seeds = I(tasks$settings$seeds),
+    labels = I(tasks$settings$labels),
+    save_fits = save_fits,
+    n_tasks = nrow(listed),
+    n_fitted = sum(listed$status == "fitted"),
+    n_failed = sum(listed$status == "failed")
+  )
 }
 
 #' @export

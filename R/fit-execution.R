@@ -1,7 +1,7 @@
 # Validate and write resumable fits
 
 # An explicit worker receives one group and reads its feature stores locally.
-.runTaskGroup <- function(job, cache) {
+.runTaskGroup <- function(job, cache, species, model_dir, save_fits) {
   shared_fit <- NULL
   outcomes <- vector("list", nrow(job$tasks))
   for (j in seq_len(nrow(job$tasks))) {
@@ -11,7 +11,7 @@
       withr::with_seed(
         task$seed,
         .fitTask(
-          task = task, path = job$paths[[j]],
+          task = task, path = job$paths[[j]], species = species,
           rows = job$rows[[j]], columns = job$columns[[j]],
           encoding = job$encoding[[j]], cache = cache,
           fitted = shared_fit, return_fitted = keep_fit, multi = job$multi[[j]]
@@ -24,6 +24,8 @@
     if (is.null(outcome[["error"]])) {
       if (keep_fit) shared_fit <- outcome$fitted
       outcome$fitted <- NULL
+      if (save_fits) .saveFitCheckpoint(outcome$model, file.path(model_dir, paste0(task$task_id, ".rds")))
+      outcome$model <- NULL
     }
     outcomes[[j]] <- outcome
   }
@@ -49,7 +51,7 @@
 # completed fits from being mixed with changed training inputs when resuming.
 ## This is draft functionality, and should be replaced with proper ORB manifest
 ## logging after verification, but modeling resume functionality is badly needed.
-.fitCheckpointManifest <- function(tasks, groups, reuse_fits) {
+.fitCheckpointManifest <- function(tasks, groups, reuse_fits, save_fits) {
   files <- tasks$built$matrices$file[
     match(tasks$tasks$matrix_id, tasks$built$matrices$matrix_id)
   ]
@@ -65,7 +67,7 @@
     tasks = tasks$tasks,
     matrices = tasks$built$matrices,
     groups = groups,
-    reuse_fits = reuse_fits,
+    reuse_fits = reuse_fits, save_fits = save_fits,
     input_checksums = checksums
   )
 }
@@ -108,7 +110,7 @@
 .emptyFitResults <- function() {
   list(
     performance = tibble::tibble(
-      task_id = character(), num_obs = integer(), res_prop = numeric(),
+      task_id = character(), species = character(), num_obs = integer(), res_prop = numeric(),
       n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
       n_labels = integer(), model = character(), n_feats_returned = integer(),
       n_fold = integer(),
@@ -118,11 +120,11 @@
       seed = integer(), date = character()
     ),
     importance = tibble::tibble(
-      task_id = character(), label = character(), Variable = character(),
+      task_id = character(), species = character(), label = character(), Variable = character(),
       Importance = numeric(), Sign = character()
     ),
     predictions = tibble::tibble(
-      task_id = character(), genome_id = character(), truth = character(),
+      task_id = character(), species = character(), genome_id = character(), truth = character(),
       predicted = character(), prob_resistant = numeric(), prob_predicted = numeric()
     )
   )
@@ -247,10 +249,12 @@
 #' fit$performance
 #' }
 #' @export
-fitModels <- function(tasks, overwrite = FALSE,
+fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
                       BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
                       reuse_fits = TRUE, resume = FALSE) {
   call <- rlang::current_env()
+  started <- Sys.time()
+  .checkArgFlag(save_fits, "save_fits", call = call)
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
   .checkArgFlag(overwrite, "overwrite", call = call)
@@ -260,7 +264,7 @@ fitModels <- function(tasks, overwrite = FALSE,
     .amrAbort("invalid_argument", "`resume` and `overwrite` cannot both be TRUE.", call = call)
   }
   out_dir <- tasks$built$out_dir
-  produced <- c("tasks.parquet", "results")
+  produced <- c("tasks.parquet", "results", "run.json")
   if (any(file.exists(file.path(out_dir, produced))) && !overwrite && !resume) {
     .amrAbort("invalid_argument",
               "The output folder already has results; set `overwrite = TRUE` to replace them.",
@@ -277,7 +281,7 @@ fitModels <- function(tasks, overwrite = FALSE,
   } else {
     as.list(seq_len(nrow(listed)))
   }
-  manifest <- .fitCheckpointManifest(tasks, groups, reuse_fits)
+  manifest <- .fitCheckpointManifest(tasks, groups, reuse_fits, save_fits)
   checkpoint_dir <- file.path(out_dir, "fit-checkpoints")
   manifest_path <- file.path(checkpoint_dir, "manifest.rds")
   if (resume) {
@@ -296,6 +300,9 @@ fitModels <- function(tasks, overwrite = FALSE,
     dir.create(checkpoint_dir, recursive = TRUE)
     .saveFitCheckpoint(manifest, manifest_path)
   }
+  model_dir <- file.path(checkpoint_dir, "models")
+  if (save_fits) dir.create(model_dir, recursive = TRUE, showWarnings = FALSE)
+  species <- tasks$built$eligibility$profile$orb$dataset_id
   group_paths <- file.path(checkpoint_dir, sprintf("group-%06d.rds", seq_along(groups)))
   recovered <- which(file.exists(group_paths))
   # Validate recovered groups before scheduling more work.
@@ -311,7 +318,8 @@ fitModels <- function(tasks, overwrite = FALSE,
   # An empty cache is sent once; each worker populates its own copy across groups.
   cache <- new.env(parent = emptyenv())
   if (length(jobs)) BiocParallel::bplapply(
-    jobs, .runTaskGroup, cache = cache, BPPARAM = BPPARAM
+    jobs, .runTaskGroup, cache = cache, species = species, model_dir = model_dir,
+    save_fits = save_fits, BPPARAM = BPPARAM
   )
 
   outcomes <- vector("list", nrow(listed))
@@ -346,6 +354,17 @@ fitModels <- function(tasks, overwrite = FALSE,
   for (name in names(empty)) {
     arrow::write_parquet(fit[[name]], file.path(staging, "results", paste0(name, ".parquet")))
   }
+  if (save_fits) {
+    dir.create(file.path(staging, "results", "models"))
+    for (task_id in listed$task_id[listed$status == "fitted"]) {
+      if (!file.copy(file.path(model_dir, paste0(task_id, ".rds")),
+                     file.path(staging, "results", "models", paste0(task_id, ".rds")))) {
+        stop("Could not retain fitted model: ", task_id)
+      }
+    }
+  }
+  jsonlite::write_json(.runRecord(tasks, listed, started, save_fits),
+                       file.path(staging, "run.json"), pretty = TRUE, auto_unbox = TRUE)
   files <- list.files(staging, recursive = TRUE, full.names = FALSE)
   checksums <- tools::md5sum(file.path(staging, files))
   names(checksums) <- files

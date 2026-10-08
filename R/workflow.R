@@ -19,6 +19,7 @@
 #' @param feature_types Feature types to model: `"quick"`, `"standard"` (default),
 #'   `"full"`, or an explicit character vector of ORB feature types.
 #'   Selected before matrices are planned or built; see [planMatrices()].
+#' @param save_fits Retain fitted model files. Passed to [fitModels()].
 #' @param seeds Passed to [expandTasks()].
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
 #'   [expandTasks()]. 
@@ -55,6 +56,7 @@ runModelingWorkflow <- function(orb_dir,
                                 modes = NULL,
                                 seeds = 123L,
                                 labels = c("real", "shuffled"),
+                                save_fits = TRUE,
                                 min_genomes = 40,
                                 n_fold = 5,
                                 min_test_genomes = 5,
@@ -119,7 +121,8 @@ runModelingWorkflow <- function(orb_dir,
 
   fit <- fitModels(
     expandTasks(built, seeds = seeds, labels = labels),
-    overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume
+    save_fits = save_fits, overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume
   )
+  exportMergedResults(fit, overwrite = overwrite || resume)
   fit
 }
