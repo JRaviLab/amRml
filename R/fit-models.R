@@ -357,7 +357,7 @@
 }
 
 # The run's settings and outcome, as written to run.json; vectors stay arrays (I()).
-.runRecord <- function(tasks, listed, started, save_fits) {
+.runRecord <- function(tasks, listed, started, save_fits, BPPARAM) {
   eligibility <- tasks$built$eligibility
   orb <- eligibility$profile$orb
   stamp <- function(time) format(time, "%Y-%m-%d %H:%M:%S")
@@ -381,6 +381,7 @@
     seeds = I(tasks$settings$seeds),
     labels = I(tasks$settings$labels),
     save_fits = save_fits,
+    parallel = list(backend = class(BPPARAM)[[1]], workers = BiocParallel::bpnworkers(BPPARAM)),
     n_tasks = nrow(listed),
     n_fitted = sum(listed$status == "fitted"),
     n_failed = sum(listed$status == "failed")

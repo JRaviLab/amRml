@@ -363,7 +363,7 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
       }
     }
   }
-  jsonlite::write_json(.runRecord(tasks, listed, started, save_fits),
+  jsonlite::write_json(.runRecord(tasks, listed, started, save_fits, BPPARAM),
                        file.path(staging, "run.json"), pretty = TRUE, auto_unbox = TRUE)
   files <- list.files(staging, recursive = TRUE, full.names = FALSE)
   checksums <- tools::md5sum(file.path(staging, files))
