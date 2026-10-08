@@ -9,13 +9,16 @@
 #'
 #' @details
 #' Everything goes to `out_dir`: `eligibility.parquet`, `matrices.parquet`,
-#' `matrices/`, `tasks.parquet` and `results/`. amRdata's files are only read.
+#' `matrices/`, `tasks.parquet`, `run.json`, `results/` (with the saved fits in
+#' `results/models/`), and `merged/` from [exportMergedResults()]. amRdata's
+#' files are only read.
 #'
 #' @param orb_dir An amRdata ORB directory.
 #' @param out_dir Folder to write to. By default a new run folder,
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
 #' @param seeds,labels Passed to [expandTasks()].
+#' @param save_fits Passed to [fitModels()].
 #' @param min_genomes,n_fold,min_test_genomes,min_test_minority Passed to
 #'   [eligibleScopes()].
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
@@ -39,6 +42,7 @@ runModelingWorkflow <- function(orb_dir,
                                 modes = NULL,
                                 seeds = 123L,
                                 labels = "real",
+                                save_fits = TRUE,
                                 min_genomes = 40,
                                 n_fold = 5,
                                 min_test_genomes = 5,
@@ -60,5 +64,10 @@ runModelingWorkflow <- function(orb_dir,
   built <- buildMatrices(planMatrices(eligibility), out_dir, overwrite = overwrite)
   arrow::write_parquet(eligibility$scopes, file.path(out_dir, "eligibility.parquet"))
 
-  fitModels(expandTasks(built, seeds = seeds, labels = labels), overwrite = overwrite)
+  fit <- fitModels(
+    expandTasks(built, seeds = seeds, labels = labels),
+    save_fits = save_fits, overwrite = overwrite
+  )
+  exportMergedResults(fit, overwrite = overwrite)
+  fit
 }

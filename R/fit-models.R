@@ -157,7 +157,7 @@
 }
 
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes.
-.fitTask <- function(task, path) {
+.fitTask <- function(task, path, species) {
   started <- Sys.time()
   matrix <- .readMatrixWide(path)
   rows <- matrix$rows
@@ -177,6 +177,7 @@
 
   performance <- tibble::tibble(
     task_id = task$task_id,
+    species = species,
     num_obs = sum(input),
     res_prop = round(mean(rows$phenotype[input] == "Resistant"), 2),
     n_test = length(split$test),
@@ -194,6 +195,7 @@
   )
   predictions <- tibble::tibble(
     task_id = task$task_id,
+    species = species,
     genome_id = rows$genome_id[split$test],
     truth = as.character(scored$phenotype),
     predicted = as.character(scored$.pred_class),
@@ -210,9 +212,42 @@
 
   list(
     performance = performance,
-    importance = tibble::tibble(task_id = task$task_id, importance),
+    importance = tibble::tibble(task_id = task$task_id, species = species, importance),
     predictions = predictions,
-    undefined = if (length(undefined)) toString(undefined) else NA_character_
+    undefined = if (length(undefined)) toString(undefined) else NA_character_,
+    # The model's predictors are x1, x2, ...; `features` names them, in that order.
+    model = list(fit = fitted$fit, features = matrix$features)
+  )
+}
+
+# The run's settings and outcome, as written to run.json; vectors stay arrays (I()).
+.runRecord <- function(tasks, listed, started, save_fits) {
+  eligibility <- tasks$built$eligibility
+  orb <- eligibility$profile$orb
+  stamp <- function(time) format(time, "%Y-%m-%d %H:%M:%S")
+
+  list(
+    amRml_version = as.character(utils::packageVersion("amRml")),
+    R_version = paste(R.version$major, R.version$minor, sep = "."),
+    started_at = stamp(started),
+    finished_at = stamp(Sys.time()),
+    orb = list(
+      directory = orb$directory,
+      dataset_id = orb$dataset_id,
+      dataset_label = orb$dataset_label,
+      manifest = basename(orb$manifest_path),
+      producer_run_id = orb$producer_run_id,
+      finished_at = orb$finished_at
+    ),
+    species = orb$dataset_id,
+    modes = I(eligibility$modes$mode_id),
+    eligibility = eligibility$settings,
+    seeds = I(tasks$settings$seeds),
+    labels = I(tasks$settings$labels),
+    save_fits = save_fits,
+    n_tasks = nrow(listed),
+    n_fitted = sum(listed$status == "fitted"),
+    n_failed = sum(listed$status == "failed")
   )
 }
 
@@ -230,15 +265,20 @@
 #' split.
 #'
 #' @param tasks An `amr_tasks` from [expandTasks()].
+#' @param save_fits Save each fitted model to `results/models/<task_id>.rds`,
+#'   as a list of the fitted workflow (`fit`) and the matrix's `features`, which
+#'   name its predictors `x1`, `x2`, ... in order.
 #' @param overwrite Replace results already in the output folder.
 #'
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
 #'   `status`, `rule_id` and `message`; `tasks.parquet`), and `performance`,
-#'   `importance` and `predictions` (`results/`), plus the `built` matrices. `performance`
+#'   `importance` and `predictions` (`results/`), plus the `built` matrices.
+#'   Each results table has the ORB's `species`. `performance`
 #'   keeps old amRml's columns and rounding, adding `auprc`;
 #'   `n_feat` counts the matrix's features (the recipe may drop more).
 #'   `importance` has old amRml's `Variable`, `Importance` and `Sign` ("POS"
-#'   points to Susceptible).
+#'   points to Susceptible). The run's settings and task counts are written to
+#'   `run.json`.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument`: `tasks`
@@ -251,11 +291,12 @@
 #' fit$performance
 #' }
 #' @export
-fitModels <- function(tasks, overwrite = FALSE) {
+fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE) {
   call <- rlang::current_env()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
+  .checkArgFlag(save_fits, "save_fits", call = call)
   out_dir <- tasks$built$out_dir
-  results <- file.path(out_dir, c("tasks.parquet", "results"))
+  results <- file.path(out_dir, c("tasks.parquet", "run.json", "results"))
   .checkArgFlag(overwrite, "overwrite", call = call)
   if (any(file.exists(results)) && !overwrite) {
     .amrAbort(
@@ -266,6 +307,8 @@ fitModels <- function(tasks, overwrite = FALSE) {
     )
   }
 
+  started <- Sys.time()
+  species <- tasks$built$eligibility$profile$orb$dataset_id
   listed <- tasks$tasks
   files <- tasks$built$matrices$file[match(listed$matrix_id, tasks$built$matrices$matrix_id)]
   listed$status <- "fitted"
@@ -273,12 +316,17 @@ fitModels <- function(tasks, overwrite = FALSE) {
   listed$message <- NA_character_
   fitted <- vector("list", nrow(listed))
 
+  # Fits are saved as they're made, in a staging folder moved into results/ at the end.
+  staging <- tempfile(".results-building-", tmpdir = out_dir)
+  dir.create(file.path(staging, "models"), recursive = TRUE)
+  on.exit(unlink(staging, recursive = TRUE), add = TRUE)
+
   for (i in seq_len(nrow(listed))) {
     task <- listed[i, ]
     result <- tryCatch(
       withr::with_seed(
         task$seed,
-        .fitTask(task, file.path(out_dir, files[[i]])),
+        .fitTask(task, file.path(out_dir, files[[i]]), species),
         .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
         .rng_sample_kind = "Rejection"
       ),
@@ -291,7 +339,10 @@ fitModels <- function(tasks, overwrite = FALSE) {
       listed$message[[i]] <- conditionMessage(result)
       next
     }
-    fitted[[i]] <- result
+    if (save_fits) {
+      saveRDS(result$model, file.path(staging, "models", paste0(task$task_id, ".rds")))
+    }
+    fitted[[i]] <- result[names(result) != "model"]
     if (!is.na(result$undefined)) {
       listed$rule_id[[i]] <- "metrics_undefined"
       listed$message[[i]] <- paste("Undefined:", result$undefined)
@@ -309,7 +360,7 @@ fitModels <- function(tasks, overwrite = FALSE) {
   # If no task was fitted, the results tables still get every column.
   if (!any(listed$status == "fitted")) {
     fit$performance <- tibble::tibble(
-      task_id = character(), num_obs = integer(), res_prop = numeric(),
+      task_id = character(), species = character(), num_obs = integer(), res_prop = numeric(),
       n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
       model = character(), n_feats_returned = integer(), n_fold = integer(),
       fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
@@ -318,11 +369,11 @@ fitModels <- function(tasks, overwrite = FALSE) {
       seed = integer(), date = character()
     )
     fit$importance <- tibble::tibble(
-      task_id = character(), Variable = character(), Importance = numeric(),
+      task_id = character(), species = character(), Variable = character(), Importance = numeric(),
       Sign = character()
     )
     fit$predictions <- tibble::tibble(
-      task_id = character(), genome_id = character(), truth = character(),
+      task_id = character(), species = character(), genome_id = character(), truth = character(),
       predicted = character(), prob_resistant = numeric()
     )
   }
@@ -334,6 +385,19 @@ fitModels <- function(tasks, overwrite = FALSE) {
   for (table in c("performance", "importance", "predictions")) {
     arrow::write_parquet(fit[[table]], file.path(out_dir, "results", paste0(table, ".parquet")))
   }
+  if (save_fits) {
+    moved <- file.rename(file.path(staging, "models"), file.path(out_dir, "results", "models"))
+    if (!moved) {
+      rlang::abort(
+        paste0("Could not move the saved fits into '", out_dir, "'."),
+        class = c("amrml_internal_error", "amrml_error")
+      )
+    }
+  }
+  jsonlite::write_json(
+    .runRecord(tasks, listed, started, save_fits), file.path(out_dir, "run.json"),
+    pretty = TRUE, auto_unbox = TRUE
+  )
 
   structure(fit, class = "amr_fit")
 }
