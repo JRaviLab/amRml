@@ -4,45 +4,48 @@
 \alias{fitModels}
 \title{Fit the listed models}
 \usage{
-fitModels(tasks, save_fits = TRUE, overwrite = FALSE)
+fitModels(
+  tasks,
+  save_fits = TRUE,
+  BPPARAM = BiocParallel::bpparam(),
+  overwrite = FALSE
+)
 }
 \arguments{
 \item{tasks}{An \code{amr_tasks} from \code{\link[=expandTasks]{expandTasks()}}.}
 
-\item{save_fits}{Save each fitted model to \verb{results/models/<task_id>.rds},
-as a list of the fitted workflow (\code{fit}) and the matrix's \code{features}, which
-name its predictors \code{x1}, \code{x2}, ... in order.}
+\item{save_fits}{Save each fitted model to \verb{results/models/<task_id>.rds}:
+the fitted workflow (\code{fit}) and the \code{features} its predictors \code{x1}, \code{x2},
+... stand for.}
+
+\item{BPPARAM}{A \code{BiocParallelParam}, e.g. \code{BiocParallel::MulticoreParam(4)},
+or \code{BiocParallel::SerialParam()} to fit one task at a time.}
 
 \item{overwrite}{Replace results already in the output folder.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
-\code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), and \code{performance},
-\code{importance} and \code{predictions} (\verb{results/}), plus the \code{built} matrices.
-Each results table has the ORB's \code{species}. \code{performance}
-keeps old amRml's columns and rounding, adding \code{auprc};
-\code{n_feat} counts the matrix's features (the recipe may drop more).
-\code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
-points to Susceptible). The run's settings and task counts are written to
-\code{run.json}.
+\code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), \code{performance},
+\code{importance} and \code{predictions} (\verb{results/}), and the \code{built} matrices. In
+\code{importance}, \code{Sign} "POS" points to Susceptible and "NEG" to Resistant. The
+run's settings and task counts go to \code{run.json}.
 }
 \description{
-Fits every task from \code{\link[=expandTasks]{expandTasks()}}, one at a time, with old amRml's method:
-glmnet logistic regression over 10 penalties and 6 mixtures, tuned by
-stratified \code{n_fold} cross-validation and chosen by MCC, then scored on the
-task's test genomes.
+Fits every task from \code{\link[=expandTasks]{expandTasks()}}: glmnet logistic regression over 10
+penalties and 6 mixtures, tuned by stratified \code{n_fold} cross-validation and
+chosen by MCC, then scored on the task's test genomes.
 }
 \details{
-Each task runs under its own seed. A task that errors is recorded as
-\code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
-carry on. A shuffled task permutes the training matrix's labels before the
-split.
+Each task runs under its own seed, so results are the same in serial and in
+parallel. A task that errors is recorded as \code{fit_failed}, and one with
+undefined metrics as \code{metrics_undefined}; the rest carry on.
 }
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument}: \code{tasks}
-is not from \code{\link[=expandTasks]{expandTasks()}}, or results already exist and \code{overwrite} is
-\code{FALSE}.
+is not from \code{\link[=expandTasks]{expandTasks()}}, \code{save_fits} or \code{overwrite} is not \code{TRUE} or
+\code{FALSE}, \code{BPPARAM} is not a \code{BiocParallelParam}, or results already exist
+and \code{overwrite} is \code{FALSE}.
 }
 
 \examples{

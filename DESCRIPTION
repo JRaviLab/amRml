@@ -37,6 +37,7 @@ VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
     arrow,
+    BiocParallel,
     dplyr,
     glmnet,
     jsonlite,

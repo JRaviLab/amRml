@@ -11,6 +11,7 @@ runModelingWorkflow(
   seeds = 123L,
   labels = "real",
   save_fits = TRUE,
+  BPPARAM = BiocParallel::bpparam(),
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
@@ -28,7 +29,7 @@ runModelingWorkflow(
 
 \item{seeds, labels}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
 
-\item{save_fits}{Passed to \code{\link[=fitModels]{fitModels()}}.}
+\item{save_fits, BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}.}
 
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
