@@ -10,6 +10,7 @@ runModelingWorkflow(
   modes = NULL,
   seeds = 123L,
   labels = c("real", "shuffled"),
+  save_fits = TRUE,
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
@@ -35,6 +36,8 @@ runModelingWorkflow(
 
 \item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
 \code{\link[=expandTasks]{expandTasks()}}.}
+
+\item{save_fits}{Retain fitted model files. Passed to \code{\link[=fitModels]{fitModels()}}.}
 
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_mdr_label_genomes}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}

@@ -6,6 +6,7 @@
 \usage{
 fitModels(
   tasks,
+  save_fits = TRUE,
   overwrite = FALSE,
   BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
   reuse_fits = TRUE,

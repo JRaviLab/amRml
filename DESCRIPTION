@@ -50,6 +50,7 @@ Imports:
     sparsevctrs,
     tibble,
     tidyselect,
+    tidyr,
     tune,
     withr,
     workflows,
