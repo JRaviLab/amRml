@@ -18,7 +18,7 @@
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
 #' @param seeds,labels Passed to [expandTasks()].
-#' @param save_fits Passed to [fitModels()].
+#' @param save_fits,BPPARAM Passed to [fitModels()].
 #' @param min_genomes,n_fold,min_test_genomes,min_test_minority Passed to
 #'   [eligibleScopes()].
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
@@ -43,6 +43,7 @@ runModelingWorkflow <- function(orb_dir,
                                 seeds = 123L,
                                 labels = "real",
                                 save_fits = TRUE,
+                                BPPARAM = BiocParallel::bpparam(),
                                 min_genomes = 40,
                                 n_fold = 5,
                                 min_test_genomes = 5,
@@ -66,7 +67,7 @@ runModelingWorkflow <- function(orb_dir,
 
   fit <- fitModels(
     expandTasks(built, seeds = seeds, labels = labels),
-    save_fits = save_fits, overwrite = overwrite
+    save_fits = save_fits, BPPARAM = BPPARAM, overwrite = overwrite
   )
   exportMergedResults(fit, overwrite = overwrite)
   fit

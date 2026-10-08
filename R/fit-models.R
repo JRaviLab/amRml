@@ -1,12 +1,10 @@
-# Fitting a model for each task, with old amRml's method: glmnet logistic regression,
-# tuned by stratified cross-validation and chosen by MCC.
+# Fitting each task's model: glmnet logistic regression, tuned by cross-validation on MCC.
 
 # The phenotypes, with Resistant first so it is the event yardstick scores.
 .PHENOTYPES <- c("Resistant", "Susceptible")
 
 
-# A matrix file as its genomes (`rows`: genome_id, role, phenotype) and a genomes x
-# features matrix. Files are complete grids sorted by genome then feature.
+# A matrix file (a complete grid, sorted by genome then feature) as its rows and its values.
 .readMatrixWide <- function(path) {
   long <- arrow::read_parquet(path)
   features <- long$feature_id[long$genome_id == long$genome_id[[1]]]
@@ -19,31 +17,27 @@
   )
 }
 
-# Ported from old amRml's shuffleLabels(), with the task's seed: the training matrix's labels
-# are permuted before the split. Test rows (cross, leave-one-out) keep their real labels.
+# The training rows' labels permuted; test rows keep their real labels.
 .shuffleLabels <- function(rows) {
   train <- which(rows$role == "train")
   rows$phenotype[train] <- rows$phenotype[train][sample.int(length(train))]
   rows
 }
 
-# Training and test rows. A matrix with test rows uses them; otherwise each phenotype keeps
-# floor((1 - holdout) x n) genomes for training, as rsample's stratified split does.
-# Training rows come grouped by phenotype, in rsample's order: with duplicate features,
-# glmnet's coefficients depend on row order.
+# Training and test rows: the matrix's test rows, or a stratified holdout drawn as rsample does.
 .splitTask <- function(rows, holdout) {
   if (any(rows$role == "test")) {
     return(list(train = which(rows$role == "train"), test = which(rows$role == "test")))
   }
 
+  # Grouped by phenotype in rsample's order, since glmnet's fit depends on row order.
   train <- unlist(lapply(split(seq_len(nrow(rows)), rows$phenotype), function(i) {
     sort(i[sample.int(length(i), floor((1 - holdout) * length(i)))])
   }), use.names = FALSE)
   list(train = train, test = setdiff(seq_len(nrow(rows)), train))
 }
 
-# Each training row's fold, assigned per phenotype as rsample's stratified folds do, but
-# without pooling rare phenotypes (`pool = 0.1`), which can leave a fold without them.
+# Each training row's fold, stratified by phenotype as rsample does, without pooling rare ones.
 .stratifiedFolds <- function(phenotype, n_fold) {
   fold <- integer(length(phenotype))
   for (level in intersect(.PHENOTYPES, phenotype)) {
@@ -53,8 +47,7 @@
   fold
 }
 
-# The training data as a data frame: the label, then features renamed x1, x2, ..., so any
-# feature ID works in a formula.
+# The model's data, with features renamed x1, x2, ... so any feature ID works in a formula.
 .modelData <- function(values, phenotype) {
   data <- as.data.frame(values)
   names(data) <- paste0("x", seq_len(ncol(data)))
@@ -62,20 +55,20 @@
   data
 }
 
-# Ported from old amRml's buildRecipe(): drop constant features, then normalize.
+# Drop constant features, then normalize.
 .buildRecipe <- function(data) {
   recipes::recipe(phenotype ~ ., data = data) |>
     recipes::step_zv(recipes::all_predictors()) |>
     recipes::step_normalize(recipes::all_predictors())
 }
 
-# Ported from old amRml's buildLRModel().
+# Logistic regression with glmnet, its penalty and mixture tuned.
 .modelSpec <- function() {
   parsnip::logistic_reg(penalty = tune::tune(), mixture = tune::tune()) |>
     parsnip::set_engine("glmnet")
 }
 
-# Ported from old amRml's buildTuningGrid(): 10 penalties x 6 mixtures.
+# 10 penalties x 6 mixtures.
 .tuningGrid <- function() {
   penalty_vec <- 10^seq(-4, -1, length.out = 10)
   mix_vec <- 0:5 / 5
@@ -85,8 +78,7 @@
   )
 }
 
-# Ported from old amRml's tuneGrid(), selectBestModel() and fitBestModel(): tune over
-# stratified folds, choose by MCC, and fit on all training rows.
+# Tune over stratified folds, choose by MCC, and fit on all training rows.
 .fitModel <- function(data, n_fold) {
   workflow <- workflows::workflow() |>
     workflows::add_recipe(.buildRecipe(data)) |>
@@ -121,8 +113,7 @@
   )
 }
 
-# Ported from old amRml's .calculate*() helpers, keeping AUPRC. Resistant is the event.
-# Each metric is rounded to 2, and nMCC and log2(AUPRC / prior) use the rounded values.
+# Test metrics with Resistant as the event, rounded to 2; nMCC and log2_apop use rounded values.
 .taskMetrics <- function(scored) {
   estimate <- function(metric, ...) {
     round(as.numeric(metric(scored, truth = "phenotype", ...)$.estimate), 2)
@@ -142,8 +133,7 @@
   )
 }
 
-# Ported from old amRml's .viGlmnet(): the non-zero coefficients at the chosen penalty, on
-# normalized features. glmnet models the second level, so "POS" points to Susceptible.
+# Non-zero coefficients at the chosen penalty; glmnet models Susceptible, so "POS" points to it.
 .taskImportance <- function(fit, penalty, features) {
   coefs <- stats::coef(parsnip::extract_fit_engine(fit), s = penalty)[, 1]
   coefs <- coefs[names(coefs) != "(Intercept)" & coefs != 0]
@@ -220,8 +210,29 @@
   )
 }
 
+# One task on a worker: fit under its seed, save the fit, and return the results or the error.
+.runTask <- function(job, species, staging, save_fits) {
+  result <- tryCatch(
+    withr::with_seed(
+      job$task$seed,
+      .fitTask(job$task, job$path, species),
+      .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+      .rng_sample_kind = "Rejection"
+    ),
+    error = function(e) e
+  )
+
+  if (inherits(result, "error")) {
+    return(list(error = conditionMessage(result)))
+  }
+  if (save_fits) {
+    saveRDS(result$model, file.path(staging, "models", paste0(job$task$task_id, ".rds")))
+  }
+  result[names(result) != "model"]
+}
+
 # The run's settings and outcome, as written to run.json; vectors stay arrays (I()).
-.runRecord <- function(tasks, listed, started, save_fits) {
+.runRecord <- function(tasks, listed, started, save_fits, BPPARAM) {
   eligibility <- tasks$built$eligibility
   orb <- eligibility$profile$orb
   stamp <- function(time) format(time, "%Y-%m-%d %H:%M:%S")
@@ -245,6 +256,10 @@
     seeds = I(tasks$settings$seeds),
     labels = I(tasks$settings$labels),
     save_fits = save_fits,
+    parallel = list(
+      backend = class(BPPARAM)[[1]],
+      workers = BiocParallel::bpnworkers(BPPARAM)
+    ),
     n_tasks = nrow(listed),
     n_fitted = sum(listed$status == "fitted"),
     n_failed = sum(listed$status == "failed")
@@ -253,37 +268,34 @@
 
 #' Fit the listed models
 #'
-#' Fits every task from [expandTasks()], one at a time, with old amRml's method:
-#' glmnet logistic regression over 10 penalties and 6 mixtures, tuned by
-#' stratified `n_fold` cross-validation and chosen by MCC, then scored on the
-#' task's test genomes.
+#' Fits every task from [expandTasks()]: glmnet logistic regression over 10
+#' penalties and 6 mixtures, tuned by stratified `n_fold` cross-validation and
+#' chosen by MCC, then scored on the task's test genomes.
 #'
 #' @details
-#' Each task runs under its own seed. A task that errors is recorded as
-#' `fit_failed`, and one with undefined metrics as `metrics_undefined`; the rest
-#' carry on. A shuffled task permutes the training matrix's labels before the
-#' split.
+#' Each task runs under its own seed, so results are the same in serial and in
+#' parallel. A task that errors is recorded as `fit_failed`, and one with
+#' undefined metrics as `metrics_undefined`; the rest carry on.
 #'
 #' @param tasks An `amr_tasks` from [expandTasks()].
-#' @param save_fits Save each fitted model to `results/models/<task_id>.rds`,
-#'   as a list of the fitted workflow (`fit`) and the matrix's `features`, which
-#'   name its predictors `x1`, `x2`, ... in order.
+#' @param save_fits Save each fitted model to `results/models/<task_id>.rds`:
+#'   the fitted workflow (`fit`) and the `features` its predictors `x1`, `x2`,
+#'   ... stand for.
+#' @param BPPARAM A `BiocParallelParam`, e.g. `BiocParallel::MulticoreParam(4)`,
+#'   or `BiocParallel::SerialParam()` to fit one task at a time.
 #' @param overwrite Replace results already in the output folder.
 #'
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
-#'   `status`, `rule_id` and `message`; `tasks.parquet`), and `performance`,
-#'   `importance` and `predictions` (`results/`), plus the `built` matrices.
-#'   Each results table has the ORB's `species`. `performance`
-#'   keeps old amRml's columns and rounding, adding `auprc`;
-#'   `n_feat` counts the matrix's features (the recipe may drop more).
-#'   `importance` has old amRml's `Variable`, `Importance` and `Sign` ("POS"
-#'   points to Susceptible). The run's settings and task counts are written to
-#'   `run.json`.
+#'   `status`, `rule_id` and `message`; `tasks.parquet`), `performance`,
+#'   `importance` and `predictions` (`results/`), and the `built` matrices. In
+#'   `importance`, `Sign` "POS" points to Susceptible and "NEG" to Resistant. The
+#'   run's settings and task counts go to `run.json`.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument`: `tasks`
-#' is not from [expandTasks()], or results already exist and `overwrite` is
-#' `FALSE`.
+#' is not from [expandTasks()], `save_fits` or `overwrite` is not `TRUE` or
+#' `FALSE`, `BPPARAM` is not a `BiocParallelParam`, or results already exist
+#' and `overwrite` is `FALSE`.
 #'
 #' @examples
 #' \dontrun{
@@ -291,10 +303,14 @@
 #' fit$performance
 #' }
 #' @export
-fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE) {
+fitModels <- function(tasks,
+                      save_fits = TRUE,
+                      BPPARAM = BiocParallel::bpparam(),
+                      overwrite = FALSE) {
   call <- rlang::current_env()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
   .checkArgFlag(save_fits, "save_fits", call = call)
+  .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
   out_dir <- tasks$built$out_dir
   results <- file.path(out_dir, c("tasks.parquet", "run.json", "results"))
   .checkArgFlag(overwrite, "overwrite", call = call)
@@ -321,31 +337,27 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE) {
   dir.create(file.path(staging, "models"), recursive = TRUE)
   on.exit(unlink(staging, recursive = TRUE), add = TRUE)
 
-  for (i in seq_len(nrow(listed))) {
-    task <- listed[i, ]
-    result <- tryCatch(
-      withr::with_seed(
-        task$seed,
-        .fitTask(task, file.path(out_dir, files[[i]]), species),
-        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-        .rng_sample_kind = "Rejection"
-      ),
-      error = function(e) e
-    )
+  # Each worker gets only its task row and matrix path, and reads the matrix itself.
+  jobs <- lapply(seq_len(nrow(listed)), function(i) {
+    list(task = listed[i, ], path = file.path(out_dir, files[[i]]))
+  })
+  outcomes <- BiocParallel::bplapply(
+    jobs, .runTask,
+    species = species, staging = staging, save_fits = save_fits, BPPARAM = BPPARAM
+  )
 
-    if (inherits(result, "error")) {
+  for (i in seq_along(outcomes)) {
+    outcome <- outcomes[[i]]
+    if (!is.null(outcome[["error"]])) {
       listed$status[[i]] <- "failed"
       listed$rule_id[[i]] <- "fit_failed"
-      listed$message[[i]] <- conditionMessage(result)
+      listed$message[[i]] <- outcome[["error"]]
       next
     }
-    if (save_fits) {
-      saveRDS(result$model, file.path(staging, "models", paste0(task$task_id, ".rds")))
-    }
-    fitted[[i]] <- result[names(result) != "model"]
-    if (!is.na(result$undefined)) {
+    fitted[[i]] <- outcome
+    if (!is.na(outcome$undefined)) {
       listed$rule_id[[i]] <- "metrics_undefined"
-      listed$message[[i]] <- paste("Undefined:", result$undefined)
+      listed$message[[i]] <- paste("Undefined:", outcome$undefined)
     }
   }
 
@@ -395,7 +407,7 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE) {
     }
   }
   jsonlite::write_json(
-    .runRecord(tasks, listed, started, save_fits), file.path(out_dir, "run.json"),
+    .runRecord(tasks, listed, started, save_fits, BPPARAM), file.path(out_dir, "run.json"),
     pretty = TRUE, auto_unbox = TRUE
   )
 
