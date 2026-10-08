@@ -17,7 +17,7 @@
 
 # Tibble of the files the producer run's export stage lists. Manifest fields are
 # read with `[[`, since `$` also matches a longer name that starts the same way.
-.declaredFiles <- function(run) {
+.declaredFiles <- function(run, manifest_path) {
   stage <- Find(function(s) identical(s[["name"]], .AMRDATA_EXPORT_STAGE), run[["stages"]])
 
   if (is.null(stage)) {
@@ -38,6 +38,8 @@
     ))
   }
 
+  ## Adding path resolution
+  path <- file.path(dirname(manifest_path), basename(path))
   tibble::tibble(
     path = path,
     name = basename(path),
@@ -97,8 +99,10 @@
   }
 
   # The metadata file must be declared, so the file checks cover it.
-  files <- .declaredFiles(run)
-  metadata_parquet <- string(artifact[["metadata_parquet"]], "metadata_parquet")
+  files <- .declaredFiles(run, manifest_path)
+  metadata_parquet <- file.path(dirname(manifest_path), ## Updating for new dir structure
+                                basename(string(artifact
+                                                [["metadata_parquet"]], "metadata_parquet")))
 
   if (!metadata_parquet %in% files$path) {
     rlang::abort(paste0(
@@ -163,25 +167,26 @@
   ready[[order(finished, files, decreasing = c(TRUE, FALSE), method = "radix")[[1]]]]
 }
 
-# Throw an error unless the ORB is where its manifest says, and its files exist
-# at their recorded size.
-.checkOrbFiles <- function(record, dir, call) {
-  recorded_dir <- record$directory
-
-  # Check this first, since in a moved ORB every declared file would look missing.
-  if (!identical(normalizePath(recorded_dir, mustWork = FALSE), dir)) {
-    .amrAbort(
-      "orb_moved",
-      c(
-        "This ORB is not where its manifest says it was written.",
-        x = paste0("Manifest records: ", recorded_dir),
-        i = "amRdata records absolute paths, so a moved or copied ORB can't be read yet."
-      ),
-      observed = list(recorded = recorded_dir, actual = dir),
-      call = call
-    )
-  }
-
+## Changes in the PR pipe in amRdata mean manifests now record where they are in
+## a polite and more portable relative fashion
+# Throw an error unless the declared files exist at their recorded size.
+.checkOrbFiles <- function(record, call) {
+#  recorded_dir <- record$directory
+#
+#  # Check this first, since in a moved ORB every declared file would look missing.
+#  if (!identical(normalizePath(recorded_dir, mustWork = FALSE), dir)) {
+#    .amrAbort(
+#      "orb_moved",
+#      c(
+#        "This ORB is not where its manifest says it was written.",
+#        x = paste0("Manifest records: ", recorded_dir),
+#        i = "amRdata records absolute paths, so a moved or copied ORB can't be read yet."
+#      ),
+#      observed = list(recorded = recorded_dir, actual = dir),
+#      call = call
+#    )
+#  }
+## ORBs can traverse time and space now -- deprecating
   # A file that can't be read is as unusable as a missing one.
   files <- record$files
   absent <- files$path[file.access(files$path, mode = 4) != 0]
@@ -297,7 +302,6 @@
 #' * `amrml_manifest_not_found`: the directory holds no `manifest_*.json`.
 #' * `amrml_orb_no_usable_manifest`: no manifest is usable. `observed` holds
 #'   each manifest's error.
-#' * `amrml_orb_moved`: the ORB is not where its manifest says it was written.
 #' * `amrml_orb_files_missing`: declared files are missing or unreadable.
 #' * `amrml_orb_file_changed`: a declared file's size has changed.
 #' * `amrml_parquet_unreadable`: a declared parquet cannot be read.
@@ -307,7 +311,7 @@
 #'
 #' @param path Character. The ORB directory: the folder amRdata wrote its
 #'   output to, containing `manifest_*.json` (e.g.
-#'   `data/Staphylococcus_argenteus`), not its parent.
+#'   `data/Staphylococcus_argenteus/orb`), not its parent.
 #'
 #' @return An `amr_orb` list: `dataset_id`, `dataset_label` (what amRdata was asked for,
 #'   species names or taxon IDs, otherwise `dataset_id`), `directory`,
@@ -317,7 +321,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' orb <- readORB("path/to/amRdata/output")
+#' orb <- readORB("path/to/amRdata/output/orb")
 #' orb$feature_tables
 #' }
 #' @export
@@ -379,8 +383,8 @@ readORB <- function(path) {
     ))
   }
 
-  # Check the ORB hasn't moved and its files exist at their recorded size.
-  .checkOrbFiles(chosen, dir, call = call)
+  # Check that the ORB files exist at their recorded size.
+  .checkOrbFiles(chosen, call = call)
 
   # Find the feature tables among the declared files.
   feature_tables <- .featureTables(chosen$files, call = call)

@@ -39,25 +39,29 @@
   metadata
 }
 
+## Deprecated (sorry!) since the sparse matrix representation could now mean genomes
+## with no detected features for one scale could be dropped despite being valid.
+## An absence of rows would be very rare, but if it happened, would not mean a genome
+## had actually failed any sort of processing step.
 # The genomes in `metadata` that a feature table lacks, with the feature types lacking them.
-.missingFeatures <- function(metadata, feature_tables) {
-  genomes <- unique(metadata$genome_id)
-
-  lacking <- lapply(feature_tables$path, function(f) {
-    table <- arrow::read_parquet(f, col_select = "genome_id", as_data_frame = FALSE)
-    setdiff(genomes, as.vector(unique(table$genome_id)))
-  })
-
-  missing <- tibble::tibble(
-    genome_id = unlist(lacking),
-    feature_type = rep(feature_tables$feature_type, lengths(lacking))
-  )
-
-  dplyr::summarise(
-    dplyr::group_by(missing, .data$genome_id),
-    missing_from = toString(.data$feature_type)
-  )
-}
+#.missingFeatures <- function(metadata, feature_tables) {
+#  genomes <- unique(metadata$genome_id)
+#
+#  lacking <- lapply(feature_tables$path, function(f) {
+#    table <- arrow::read_parquet(f, col_select = "genome_id", as_data_frame = FALSE)
+#    setdiff(genomes, as.vector(unique(table$genome_id)))
+#  })
+#
+#  missing <- tibble::tibble(
+#    genome_id = unlist(lacking),
+#    feature_type = rep(feature_tables$feature_type, lengths(lacking))
+#  )
+#
+#  dplyr::summarise(
+#    dplyr::group_by(missing, .data$genome_id),
+#    missing_from = toString(.data$feature_type)
+#  )
+#}
 
 # One row per genome and drug; repeated rows that agree count once. amRdata gives
 # each drug one class, from a lookup table.
@@ -210,19 +214,15 @@ profileORB <- function(orb) {
   # Each genome's phenotype per drug.
   drug_phenotypes <- .drugPhenotypes(metadata, call = call)
 
-  # Drop genomes that aren't in every feature table.
-  missing <- .missingFeatures(metadata, orb$feature_tables)
-  drug_phenotypes <- drug_phenotypes[!drug_phenotypes$genome_id %in% missing$genome_id, ]
+  ## No longer needed with the sparse matrix format
+  #missing <- .missingFeatures(metadata, orb$feature_tables)
+  #drug_phenotypes <- drug_phenotypes[!drug_phenotypes$genome_id %in% missing$genome_id, ]
 
   # Record every genome left out, and why.
-  excluded <- dplyr::bind_rows(
-    tibble::tibble(genome_id = no_usable_phenotype, reason = "no_usable_phenotype"),
-    tibble::tibble(
-      genome_id = missing$genome_id,
-      reason = "missing_features",
-      missing_from = as.character(missing$missing_from)
-    )
-  )
+  excluded <- tibble::tibble(
+    genome_id = no_usable_phenotype,
+    reason = "no_usable_phenotype"
+  ) ## Simplifying since we're not dropping genomes based on sparse matrix stuff
   excluded <- excluded[order(excluded$genome_id), , drop = FALSE]
   reasons <- table(excluded$reason)
   reasons <- paste0(names(reasons), ": ", reasons, collapse = ", ")
@@ -231,7 +231,7 @@ profileORB <- function(orb) {
     .amrAbort(
       "no_labelled_genomes",
       c(
-        "No genome in every feature table has a usable phenotype.",
+        "No genome has a usable phenotype.",
         i = paste0("Excluded: ", reasons)
       ),
       observed = list(excluded = excluded),

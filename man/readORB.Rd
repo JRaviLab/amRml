@@ -9,7 +9,7 @@ readORB(path)
 \arguments{
 \item{path}{Character. The ORB directory: the folder amRdata wrote its
 output to, containing \code{manifest_*.json} (e.g.
-\code{data/Staphylococcus_argenteus}), not its parent.}
+\code{data/Staphylococcus_argenteus/orb}), not its parent.}
 }
 \value{
 An \code{amr_orb} list: \code{dataset_id}, \code{dataset_label} (what amRdata was asked for,
@@ -39,7 +39,6 @@ All errors have class \code{amrml_error}, plus one of:
 \item \code{amrml_manifest_not_found}: the directory holds no \code{manifest_*.json}.
 \item \code{amrml_orb_no_usable_manifest}: no manifest is usable. \code{observed} holds
 each manifest's error.
-\item \code{amrml_orb_moved}: the ORB is not where its manifest says it was written.
 \item \code{amrml_orb_files_missing}: declared files are missing or unreadable.
 \item \code{amrml_orb_file_changed}: a declared file's size has changed.
 \item \code{amrml_parquet_unreadable}: a declared parquet cannot be read.
@@ -51,7 +50,7 @@ column.
 
 \examples{
 \dontrun{
-orb <- readORB("path/to/amRdata/output")
+orb <- readORB("path/to/amRdata/output/orb")
 orb$feature_tables
 }
 }
