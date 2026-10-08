@@ -10,6 +10,7 @@ runModelingWorkflow(
   modes = NULL,
   seeds = 123L,
   labels = "real",
+  save_fits = TRUE,
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
@@ -26,6 +27,8 @@ runModelingWorkflow(
 \item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
 
 \item{seeds, labels}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
+
+\item{save_fits}{Passed to \code{\link[=fitModels]{fitModels()}}.}
 
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
@@ -46,7 +49,9 @@ can also be called on its own. Old amRml's standard run is a choice of
 }
 \details{
 Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},
-\verb{matrices/}, \code{tasks.parquet} and \verb{results/}. amRdata's files are only read.
+\verb{matrices/}, \code{tasks.parquet}, \code{run.json}, \verb{results/} (with the saved fits in
+\verb{results/models/}), and \verb{merged/} from \code{\link[=exportMergedResults]{exportMergedResults()}}. amRdata's
+files are only read.
 }
 \section{Errors}{
 

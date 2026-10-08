@@ -10,11 +10,20 @@ S3method(print,amr_tasks)
 export(buildMatrices)
 export(eligibleScopes)
 export(expandTasks)
+export(exportMergedResults)
 export(fitModels)
 export(modelingModes)
 export(planMatrices)
 export(profileORB)
 export(readORB)
+export(rescoreFeatures)
+export(runFeatureDyadDiscovery)
 export(runModelingWorkflow)
+export(topFeaturesPerDrugOrClass)
 importFrom(glmnet,glmnet)
 importFrom(rlang,.data)
+importFrom(stats,
+  median,
+  quantile,
+  sd
+)

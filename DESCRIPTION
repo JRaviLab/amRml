@@ -45,6 +45,7 @@ Imports:
     rlang,
     rsample,
     tibble,
+    tidyr,
     tune,
     withr,
     workflows,

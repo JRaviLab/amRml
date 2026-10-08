@@ -18,6 +18,7 @@ expandTasks(built, seeds = 123L, labels = "real")
 An \code{amr_tasks} list:
 \itemize{
 \item \code{built}: the built matrices the tasks use.
+\item \code{settings}: the \code{seeds} and \code{labels} asked for.
 \item \code{tasks}: one row per task: \code{task_id}, \code{matrix_id}, \code{labels}, \code{seed}, and
 the \code{n_fold} and \code{holdout} from eligibility's settings.
 }

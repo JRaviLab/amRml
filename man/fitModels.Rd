@@ -4,21 +4,27 @@
 \alias{fitModels}
 \title{Fit the listed models}
 \usage{
-fitModels(tasks, overwrite = FALSE)
+fitModels(tasks, save_fits = TRUE, overwrite = FALSE)
 }
 \arguments{
 \item{tasks}{An \code{amr_tasks} from \code{\link[=expandTasks]{expandTasks()}}.}
+
+\item{save_fits}{Save each fitted model to \verb{results/models/<task_id>.rds},
+as a list of the fitted workflow (\code{fit}) and the matrix's \code{features}, which
+name its predictors \code{x1}, \code{x2}, ... in order.}
 
 \item{overwrite}{Replace results already in the output folder.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
 \code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), and \code{performance},
-\code{importance} and \code{predictions} (\verb{results/}), plus the \code{built} matrices. \code{performance}
+\code{importance} and \code{predictions} (\verb{results/}), plus the \code{built} matrices.
+Each results table has the ORB's \code{species}. \code{performance}
 keeps old amRml's columns and rounding, adding \code{auprc};
 \code{n_feat} counts the matrix's features (the recipe may drop more).
 \code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
-points to Susceptible).
+points to Susceptible). The run's settings and task counts are written to
+\code{run.json}.
 }
 \description{
 Fits every task from \code{\link[=expandTasks]{expandTasks()}}, one at a time, with old amRml's method:
