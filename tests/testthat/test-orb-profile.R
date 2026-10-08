@@ -159,6 +159,7 @@ test_that("a drug with no class keeps its drug phenotype but adds no class pheno
 
   expect_equal(fxTarget(profile, "drug", "DRZ")$n_resistant, 1)
   expect_equal(unique(profile$targets$target[profile$targets$unit == "drug_class"]), "CLX")
+  expect_equal(profile$drug_classes, tibble::tibble(drug = "DRA", class = "CLX"))
 })
 
 # Genomes and strata
@@ -224,7 +225,7 @@ test_that("the profile has its parts and prints a summary", {
   expect_s3_class(profile, "amr_orb_profile")
   expect_named(
     profile,
-    c("orb", "genomes", "phenotypes", "targets", "excluded_genomes")
+    c("orb", "genomes", "phenotypes", "drug_classes", "targets", "excluded_genomes")
   )
   expect_output(print(profile), "5 profiled, 0 excluded")
   expect_output(print(profile), "country \\(values: 1, missing: 0\\)")
