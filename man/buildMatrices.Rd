@@ -9,41 +9,28 @@ buildMatrices(plan, out_dir = NULL, overwrite = FALSE)
 \arguments{
 \item{plan}{An \code{amr_matrix_plan} from \code{\link[=planMatrices]{planMatrices()}}.}
 
-\item{out_dir}{Folder to write to, created if needed. By default a new run
-folder in the ORB's \verb{amRml/} folder, named by date and time. Elsewhere in
-the ORB is refused.}
+\item{out_dir}{Folder to write to, created if needed.}
 
 \item{overwrite}{Replace matrices already in \code{out_dir}.}
 }
 \value{
-An \code{amr_matrices} list: \code{eligibility}, \code{out_dir}, and \code{matrices}, the
-plan's rows plus \code{status} (\code{"built"}/\code{"skipped"}), \code{rule_id}, \code{n_features}
-and \code{file} (relative to \code{out_dir}).
+An \code{amr_matrices} list: \code{eligibility}, \code{out_dir}, \code{matrices}, and
+\code{storage = "shared_sparse"}. The \code{file} column points to a shared feature
+store rather than a scope-specific Parquet file. \code{matrix_index.rds} records
+membership rows and selected feature column indices per matrix
 }
 \description{
-Writes each planned matrix to \verb{out_dir/matrices/}, and the list of matrices
-to \code{out_dir/matrices.parquet}. A matrix has one row per genome and per
-feature that varies among its training genomes (\code{genome_id}, \code{role},
-\code{phenotype}, \code{feature_id}, \code{value}); a matrix with no varying feature is
-skipped. amRdata's files in the ORB are only read.
+Writes each sparse count matrix per feature type in \verb{features/}.
+Binary encoding and scope-specific feature selection are indexed without
+materializing matrices for speed. amRdata's files in the ORB are only read.
 }
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus one of:
 \itemize{
-\item \code{amrml_invalid_argument}: \code{plan} is not from \code{\link[=planMatrices]{planMatrices()}}, \code{out_dir}
-is not one writable path outside the ORB or in its \verb{amRml/} folder, or it
-already has matrices and \code{overwrite} is \code{FALSE}.
-\item \code{amrml_feature_rows_repeated}: a feature table has two rows for one genome
-and feature.
-\item \code{amrml_feature_values_invalid}: a feature table has missing or negative
-values.
+\item \code{amrml_invalid_argument}: invalid \code{plan}/\code{out_dir}, or output exists without overwrite.
+\item \code{amrml_feature_rows_repeated}: duplicate genome/feature pairs.
+\item \code{amrml_feature_values_invalid}: missing, nonfinite, or negative feature values.
 }
 }
 
-\examples{
-\dontrun{
-built <- buildMatrices(plan, "path/to/output")
-built$matrices
-}
-}
