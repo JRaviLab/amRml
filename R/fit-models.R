@@ -15,6 +15,7 @@
   if (anyNA(genome_idx)) stop("Scope genome is missing from feature store.")
   values <- store$values[genome_idx, columns, drop = FALSE]
   if (encoding == "binary") {
+    values@x[] <- as.numeric(values@x > 0)
     values <- Matrix::drop0(values)
   }
 
@@ -116,7 +117,8 @@
     metrics = yardstick::metric_set(
       yardstick::f_meas, yardstick::pr_auc, yardstick::spec, yardstick::sens,
       yardstick::bal_accuracy, yardstick::mcc
-    )
+    ),
+    control = tune::control_grid(allow_par = FALSE)
   )
   best <- tune::select_best(tuned, metric = "mcc")
 
@@ -224,7 +226,7 @@
 
 #' Fit the listed models
 #'
-#' Fits every task from [expandTasks()], one at a time, with old amRml's method:
+#' Fits tasks from [expandTasks()] in parallel with old amRml's method:
 #' glmnet logistic regression over 10 penalties and 6 mixtures, tuned by
 #' stratified `n_fold` cross-validation and chosen by MCC, then scored on the
 #' task's test genomes.
@@ -237,6 +239,9 @@
 #'
 #' @param tasks An `amr_tasks` from [expandTasks()].
 #' @param overwrite Replace results already in the output folder.
+#' @param BPPARAM A [BiocParallel::BiocParallelParam] backend; by default,
+#'   a two-worker socket cluster with 32 scheduling chunks. Use
+#'   [BiocParallel::SerialParam()] to run sequentially.
 #'
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
 #'   `status`, `rule_id` and `message`; `tasks.parquet`), and `performance`,
@@ -248,8 +253,8 @@
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument`: `tasks`
-#' is not from [expandTasks()], or results already exist and `overwrite` is
-#' `FALSE`.
+#' is not from [expandTasks()], `BPPARAM` is not a BiocParallel backend,
+#' or results already exist and `overwrite` is `FALSE`.
 #'
 #' @examples
 #' \dontrun{
@@ -257,9 +262,11 @@
 #' fit$performance
 #' }
 #' @export
-fitModels <- function(tasks, overwrite = FALSE) {
+fitModels <- function(tasks, overwrite = FALSE,
+                      BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)) {
   call <- rlang::current_env()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
+  .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel::SnowParam()", call = call)
   out_dir <- tasks$built$out_dir
   results <- file.path(out_dir, c("tasks.parquet", "results"))
   .checkArgFlag(overwrite, "overwrite", call = call)
@@ -282,9 +289,9 @@ fitModels <- function(tasks, overwrite = FALSE) {
   cache <- new.env(parent = emptyenv())
   matrix_positions <- match(listed$matrix_id, tasks$built$matrices$matrix_id)
 
-  for (i in seq_len(nrow(listed))) {
+  results_by_task <- BiocParallel::bplapply(seq_len(nrow(listed)), function(i) {
     task <- listed[i, ]
-    result <- tryCatch(
+    tryCatch(
       withr::with_seed(
         task$seed,
         .fitTask(
@@ -299,7 +306,10 @@ fitModels <- function(tasks, overwrite = FALSE) {
       ),
       error = function(e) e
     )
+  }, BPPARAM = BPPARAM)
 
+  for (i in seq_len(nrow(listed))) {
+    result <- results_by_task[[i]]
     if (inherits(result, "error")) {
       listed$status[[i]] <- "failed"
       listed$rule_id[[i]] <- "fit_failed"
