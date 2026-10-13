@@ -5,17 +5,23 @@
 .PHENOTYPES <- c("Resistant", "Susceptible")
 
 
-# A matrix file as its genomes (`rows`: genome_id, role, phenotype) and a genomes x
-# features matrix. Files are complete grids sorted by genome then feature.
-.readMatrixWide <- function(path) {
-  long <- arrow::read_parquet(path)
-  features <- long$feature_id[long$genome_id == long$genome_id[[1]]]
-  rows <- long[seq(1, nrow(long), by = length(features)), c("genome_id", "role", "phenotype")]
+# Read one scope from the shared sparse feature store and its index
+.readMatrixWide <- function(path, rows, columns, encoding, cache) {
+  if (!exists(path, envir = cache, inherits = FALSE)) {
+    assign(path, readRDS(path), envir = cache)
+  }
+  store <- get(path, envir = cache, inherits = FALSE)
+  genome_idx <- match(rows$genome_id, store$genomes)
+  if (anyNA(genome_idx)) stop("Scope genome is missing from feature store.")
+  values <- store$values[genome_idx, columns, drop = FALSE]
+  if (encoding == "binary") {
+    values <- Matrix::drop0(values)
+  }
 
   list(
     rows = rows,
-    features = features,
-    values = matrix(long$value, nrow = nrow(rows), byrow = TRUE)
+    features = store$features[columns],
+    values = values
   )
 }
 
@@ -157,17 +163,17 @@
 }
 
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes.
-.fitTask <- function(task, path) {
+.fitTask <- function(task, path, rows, columns, encoding, cache) {
   started <- Sys.time()
-  matrix <- .readMatrixWide(path)
+  matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
   rows <- matrix$rows
   if (task$labels == "shuffled") {
     rows <- .shuffleLabels(rows)
   }
 
   split <- .splitTask(rows, task$holdout)
-  train <- .modelData(matrix$values[split$train, , drop = FALSE], rows$phenotype[split$train])
-  test <- .modelData(matrix$values[split$test, , drop = FALSE], rows$phenotype[split$test])
+  train <- .modelData(as.matrix(matrix$values[split$train, , drop = FALSE]), rows$phenotype[split$train])
+  test <- .modelData(as.matrix(matrix$values[split$test, , drop = FALSE]), rows$phenotype[split$test])
   fitted <- .fitModel(train, task$n_fold)
 
   scored <- parsnip::augment(fitted$fit, test)
@@ -272,13 +278,22 @@ fitModels <- function(tasks, overwrite = FALSE) {
   listed$rule_id <- NA_character_
   listed$message <- NA_character_
   fitted <- vector("list", nrow(listed))
+  index <- readRDS(file.path(out_dir, "matrix_index.rds"))
+  cache <- new.env(parent = emptyenv())
+  matrix_positions <- match(listed$matrix_id, tasks$built$matrices$matrix_id)
 
   for (i in seq_len(nrow(listed))) {
     task <- listed[i, ]
     result <- tryCatch(
       withr::with_seed(
         task$seed,
-        .fitTask(task, file.path(out_dir, files[[i]])),
+        .fitTask(
+          task, file.path(out_dir, files[[i]]),
+          rows = index$rows[[index$matrix_scopes[[matrix_positions[[i]]]]]],
+          columns = index$columns[[matrix_positions[[i]]]],
+          encoding = tasks$built$matrices$encoding[[matrix_positions[[i]]]],
+          cache = cache
+        ),
         .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
         .rng_sample_kind = "Rejection"
       ),
