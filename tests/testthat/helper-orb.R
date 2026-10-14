@@ -31,10 +31,36 @@ fxMetadataRows <- function(genome, drug, phenotype, class = "CLX",
   )
 }
 
-# weird is a feature table with an odd name; decoy_count is named like one but isn't.
-fxDefaultParquets <- function() {
-  genomes <- fxGenomes()
+# `n_r` Resistant then `n_s` Susceptible genomes for one drug, numbered from `from`.
+fxRows <- function(n_r, n_s, drug = "DRA", from = 1, ...) {
+  genomes <- sprintf("g%03d", from - 1 + seq_len(n_r + n_s))
+  fxMetadataRows(
+    genome = genomes,
+    drug = drug,
+    phenotype = rep(c("Resistant", "Susceptible"), c(n_r, n_s)),
+    ...
+  )
+}
 
+# Two drugs on separate genomes. Each has one Resistant and one Susceptible genome in every
+# year x country cell, so years and countries split the genomes differently.
+fxCrossed <- function() {
+  cells <- expand.grid(
+    phenotype = c("Resistant", "Susceptible"), year = c("Y1", "Y2", "Y3"),
+    country = c("C1", "C2", "C3"), stringsAsFactors = FALSE
+  )
+  oneDrug <- function(drug, class, from) {
+    fxMetadataRows(
+      genome = sprintf("g%03d", from - 1 + seq_len(nrow(cells))),
+      drug = drug, phenotype = cells$phenotype, class = class,
+      country = cells$country, year_bin = cells$year
+    )
+  }
+  rbind(oneDrug("DRA", "CLX", 1), oneDrug("DRB", "CLY", 19))
+}
+
+# weird is a feature table with an odd name; decoy_count is named like one but isn't.
+fxDefaultParquets <- function(genomes = fxGenomes()) {
   list(
     gene_count = tibble::tibble(
       genome_id = rep(genomes, each = 2),
@@ -180,4 +206,25 @@ fxOrbState <- function(dir) {
   paths <- file.path(dir, entries)
   files <- paths[!dir.exists(paths)]
   list(entries = entries, checksums = tools::md5sum(files))
+}
+
+# An ORB from `metadata`, profiled and judged with `...`. `parquets` defaults to the
+# standard feature tables for its genomes.
+fxEligibility <- function(metadata = fxMetadata(), ..., parquets = NULL, env = parent.frame()) {
+  if (is.null(parquets)) {
+    parquets <- fxDefaultParquets(unique(metadata$genome.genome_id))
+  }
+  orb <- readORB(fxOrb(env = env, metadata = metadata, parquets = parquets))
+  eligibleScopes(profileORB(orb), ...)
+}
+
+# A gene table for `n_r` Resistant then `n_s` Susceptible genomes, numbered as fxRows() does.
+# geneA marks the Resistant ones; geneB alternates and carries no signal.
+fxSignalGenes <- function(n_r, n_s) {
+  n <- n_r + n_s
+  tibble::tibble(
+    genome_id = rep(sprintf("g%03d", seq_len(n)), 2),
+    gene = rep(c("geneA", "geneB"), each = n),
+    value = c(rep(1:0, c(n_r, n_s)), rep_len(0:1, n))
+  )
 }
