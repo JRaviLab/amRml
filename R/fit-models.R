@@ -3,6 +3,9 @@
 
 # The phenotypes, with Resistant first so it is the event yardstick scores.
 .PHENOTYPES <- c("Resistant", "Susceptible")
+# Setting an initial cutoff for when matrices are treated as sparse in tidymodels
+# but we should really benchmark this to see where the right threshold is
+.SPARSE_THRESHOLD <- 0.8
 
 
 # Read one scope from the shared sparse feature store and its index
@@ -62,18 +65,38 @@
 
 # The training data as a data frame: the label, then features renamed x1, x2, ..., so any
 # feature ID works in a formula.
-.modelData <- function(values, phenotype) {
-  data <- as.data.frame(values)
+.modelData <- function(values, phenotype, sparse = FALSE) {
+  if (sparse) {
+    colnames(values) <- paste0("x", seq_len(ncol(values)))
+    data <- sparsevctrs::coerce_to_sparse_tibble(values)
+  } else {
+    data <- as.data.frame(as.matrix(values))
+  }
   names(data) <- paste0("x", seq_len(ncol(data)))
   data$phenotype <- factor(phenotype, levels = .PHENOTYPES)
   data
 }
 
 # Ported from old amRml's buildRecipe(): drop constant features, then normalize.
-.buildRecipe <- function(data) {
-  recipes::recipe(phenotype ~ ., data = data) |>
-    recipes::step_zv(recipes::all_predictors()) |>
-    recipes::step_normalize(recipes::all_predictors())
+.buildRecipe <- function(data, sparse = FALSE) {
+  recipe <- recipes::recipe(phenotype ~ ., data = data) |>
+    recipes::step_zv(recipes::all_predictors())
+  if (sparse) {
+    # step_zv() alone seemingly misses constant nonzero sparse columns, so we're
+    # filtering these out at prep to resolve those errors
+    recipe <- recipes::step_rm(
+      recipe,
+      tidyselect::where(function(x) {
+        sparsevctrs::is_sparse_vector(x) &&
+          length(sparsevctrs::sparse_values(x)) == length(x) &&
+          length(unique(sparsevctrs::sparse_values(x))) == 1L
+      }),
+      id = "zv_sparse_nonzero"
+    )
+    recipes::step_scale(recipe, recipes::all_predictors())
+  } else {
+    recipes::step_normalize(recipe, recipes::all_predictors())
+  }
 }
 
 # Ported from old amRml's buildLRModel().
@@ -94,9 +117,9 @@
 
 # Ported from old amRml's tuneGrid(), selectBestModel() and fitBestModel(): tune over
 # stratified folds, choose by MCC, and fit on all training rows.
-.fitModel <- function(data, n_fold) {
+.fitModel <- function(data, n_fold, sparse = FALSE) {
   workflow <- workflows::workflow() |>
-    workflows::add_recipe(.buildRecipe(data)) |>
+    workflows::add_recipe(.buildRecipe(data, sparse = sparse)) |>
     workflows::add_model(.modelSpec())
 
   # After the recipe, whose step IDs use random numbers, so the folds match rsample's.
@@ -174,9 +197,17 @@
   }
 
   split <- .splitTask(rows, task$holdout)
-  train <- .modelData(as.matrix(matrix$values[split$train, , drop = FALSE]), rows$phenotype[split$train])
-  test <- .modelData(as.matrix(matrix$values[split$test, , drop = FALSE]), rows$phenotype[split$test])
-  fitted <- .fitModel(train, task$n_fold)
+  train_values <- matrix$values[split$train, , drop = FALSE]
+  # Not sure if there's a function to calculate how sparsely populated a matrix
+  # is, but here finding it by non-zero values over total values in the matrix
+  # and taking the inverse by subtracting the populated fraction from 1
+  sparsity <- 1 - Matrix::nnzero(train_values) / (as.double(nrow(train_values)) * ncol(train_values))
+  # Is that fraction greater than or equal to our cutoff? If so, that's sparse
+  use_sparse <- sparsity >= .SPARSE_THRESHOLD
+  train <- .modelData(train_values, rows$phenotype[split$train], sparse = use_sparse)
+  test <- .modelData(matrix$values[split$test, , drop = FALSE],
+                     rows$phenotype[split$test], sparse = use_sparse)
+  fitted <- .fitModel(train, task$n_fold, sparse = use_sparse)
 
   scored <- parsnip::augment(fitted$fit, test)
   metrics <- .taskMetrics(scored)
