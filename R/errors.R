@@ -55,7 +55,7 @@
   "stratum_inconsistent",       "profile",     "call",
   "A genome has two values for a stratum.",
 
-  # Deciding what can be modelled: eligibleScopes()
+  # Deciding what can be modeled: eligibleScopes()
   # Whether a mode can run on this ORB
   "mode_not_supported",         "feasibility", "mode",
   "The mode can't run yet.",
@@ -89,6 +89,8 @@
   # Fitting models: fitModels()
   "fit_failed",                 "fit",         "task",
   "Fitting the task's model stopped with an error.",
+  "metrics_undefined",          "fit",         "task",
+  "Some test metrics are undefined, e.g. when one class is predicted for every genome.",
 )
 
 # Build an error of class `amrml_<rule_id>` without throwing it. `message` is a
