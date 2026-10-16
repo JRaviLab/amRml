@@ -46,6 +46,12 @@ A genome is MDR (target \code{mdr}, Resistant) if it is Resistant in at least
 at least that many classes but is Resistant in fewer. A genome tested in
 fewer classes can't be ruled out, so it is \code{"undetermined"} in \verb{$mdr} and has
 no \code{mdr} phenotype.
+
+Target \code{resistant_classes} labels each genome with its combination of
+resistant classes, joined with \verb{_} in radix order (e.g. \code{"MAC_PEN_TMD"}), or
+\code{"Susceptible"}, as amRdata's column of that name does. Every genome tested in
+a class gets one, as in old amRml. In \code{targets}, \code{n_resistant} counts its
+genomes with any resistant class.
 }
 \section{Errors}{
 

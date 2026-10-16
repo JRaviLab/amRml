@@ -16,7 +16,7 @@
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
 #' @param seeds,labels Passed to [expandTasks()].
-#' @param min_genomes,n_fold,min_test_genomes,min_test_minority Passed to
+#' @param min_genomes,n_fold,min_test_genomes,min_test_minority,min_label_genomes Passed to
 #'   [eligibleScopes()].
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
 #'   if `FALSE`, an `out_dir` holding earlier output is refused. The default run
@@ -45,6 +45,7 @@ runModelingWorkflow <- function(orb_dir,
                                 n_fold = 5,
                                 min_test_genomes = 5,
                                 min_test_minority = 2,
+                                min_label_genomes = 25,
                                 overwrite = FALSE,
                                 BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)) {
   call <- rlang::current_env()
@@ -59,7 +60,8 @@ runModelingWorkflow <- function(orb_dir,
   eligibility <- eligibleScopes(
     profileORB(orb),
     modes = modes, min_genomes = min_genomes, n_fold = n_fold,
-    min_test_genomes = min_test_genomes, min_test_minority = min_test_minority
+    min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
+    min_label_genomes = min_label_genomes
   )
   built <- buildMatrices(planMatrices(eligibility), out_dir, overwrite = overwrite)
   arrow::write_parquet(eligibility$scopes, file.path(out_dir, "eligibility.parquet"))

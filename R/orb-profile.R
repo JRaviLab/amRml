@@ -1,5 +1,9 @@
 # Profiling an amRdata ORB: each genome's phenotypes, and the counts per target.
 
+# The MDR target labelling each genome with its combination of resistant classes, as
+# amRdata's `resistant_classes` does.
+.MDR_COMBINATION <- "resistant_classes"
+
 # amRdata's metadata.parquet columns that profiling needs, named as they are used here.
 .METADATA_COLUMNS <- c(
   genome_id = "genome.genome_id",
@@ -122,6 +126,21 @@
   status
 }
 
+# One row per genome tested in any class: its resistant classes in radix order, joined
+# with "_" (e.g. "MAC_PEN_TMD"), or "Susceptible" if it has none. This matches amRdata's
+# `resistant_classes`.
+.classCombinations <- function(class_phenotypes) {
+  dplyr::summarise(
+    dplyr::group_by(class_phenotypes, .data$genome_id),
+    phenotype = if (any(.data$phenotype == "Resistant")) {
+      paste(sort(.data$class_abbr[.data$phenotype == "Resistant"], method = "radix"), collapse = "_")
+    } else {
+      "Susceptible"
+    },
+    .groups = "drop"
+  )
+}
+
 # One row per genome with its strata, which must have one value per genome.
 .genomeTable <- function(metadata, call) {
   columns <- setdiff(names(metadata), c("drug_abbr", "class_abbr", "phenotype"))
@@ -168,7 +187,8 @@
       .data$unit, .data$target, .data$stratum, .data$stratum_value
     ),
     n_genomes = dplyr::n(),
-    n_resistant = sum(.data$phenotype == "Resistant"),
+    # Anything not Susceptible is resistant, so a combination counts as resistant too.
+    n_resistant = sum(.data$phenotype != "Susceptible"),
     n_susceptible = sum(.data$phenotype == "Susceptible"),
     .groups = "drop"
   )
@@ -196,6 +216,12 @@
 #' at least that many classes but is Resistant in fewer. A genome tested in
 #' fewer classes can't be ruled out, so it is `"undetermined"` in `$mdr` and has
 #' no `mdr` phenotype.
+#'
+#' Target `resistant_classes` labels each genome with its combination of
+#' resistant classes, joined with `_` in radix order (e.g. `"MAC_PEN_TMD"`), or
+#' `"Susceptible"`, as amRdata's column of that name does. Every genome tested in
+#' a class gets one, as in old amRml. In `targets`, `n_resistant` counts its
+#' genomes with any resistant class.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus one of:
@@ -285,6 +311,7 @@ profileORB <- function(orb, mdr_min_classes = 2) {
   class_phenotypes <- .classPhenotypes(drug_phenotypes)
   mdr <- .mdrStatus(drug_phenotypes$genome_id, class_phenotypes, mdr_min_classes)
   modeled_mdr <- mdr[mdr$mdr != "undetermined", , drop = FALSE]
+  combinations <- .classCombinations(class_phenotypes)
   phenotypes <- dplyr::bind_rows(
     tibble::tibble(
       genome_id = drug_phenotypes$genome_id,
@@ -304,6 +331,12 @@ profileORB <- function(orb, mdr_min_classes = 2) {
       unit = "mdr",
       target = "mdr",
       phenotype = unname(c(mdr = "Resistant", not_mdr = "Susceptible")[modeled_mdr$mdr])
+    ),
+    tibble::tibble(
+      genome_id = combinations$genome_id,
+      unit = "mdr",
+      target = .MDR_COMBINATION,
+      phenotype = combinations$phenotype
     )
   )
 
@@ -367,6 +400,12 @@ print.amr_orb_profile <- function(x, ...) {
   cat(
     "  MDR (", x$settings$mdr_min_classes, "+ classes): ", mdr[["mdr"]], " MDR, ",
     mdr[["not_mdr"]], " not MDR, ", mdr[["undetermined"]], " undetermined\n",
+    sep = ""
+  )
+  combinations <- x$phenotypes$phenotype[x$phenotypes$target == .MDR_COMBINATION]
+  cat(
+    "  MDR class combinations: ", dplyr::n_distinct(combinations), " across ",
+    length(combinations), " genomes\n",
     sep = ""
   )
   invisible(x)

@@ -251,7 +251,7 @@ test_that("MDR status counts classes tested and resistant per genome", {
 
 test_that("undetermined genomes get no mdr phenotype; the rest are Resistant or Susceptible", {
   profile <- fxProfile(fxMdrMetadata(), parquets = fxDefaultParquets())
-  mdr <- profile$phenotypes[profile$phenotypes$unit == "mdr", ]
+  mdr <- profile$phenotypes[profile$phenotypes$target == "mdr", ]
 
   expect_equal(mdr, tibble::tibble(
     genome_id = c("g1", "g2", "g3"),
@@ -270,6 +270,27 @@ test_that("a higher mdr_min_classes needs more classes tested and resistant", {
 
   expect_equal(profile$mdr$mdr, c("mdr", "not_mdr", "not_mdr", "undetermined", "undetermined"))
   expect_equal(profile$settings$mdr_min_classes, 3)
+})
+
+test_that("each genome tested in a class gets its combination of resistant classes", {
+  metadata <- rbind(
+    fxMdrMetadata(),
+    fxMetadataRows(genome = "g6", drug = c("DRA", "DRB"), phenotype = "Susceptible",
+                   class = c("CLX", "CLY"))
+  )
+  profile <- fxProfile(metadata, parquets = fxDefaultParquets(c(fxGenomes(), "g6")))
+  combinations <- profile$phenotypes[profile$phenotypes$target == "resistant_classes", ]
+
+  expect_equal(combinations, tibble::tibble(
+    genome_id = c("g1", "g2", "g3", "g4", "g5", "g6"),
+    unit = "mdr",
+    target = "resistant_classes",
+    phenotype = c("CLX_CLY_CLZ", "CLX_CLY", "CLX", "CLX", "CLX", "Susceptible")
+  ))
+  # Every combination counts as resistant.
+  expect_equal(fxTarget(profile, "mdr", "resistant_classes")$n_resistant, 5)
+  expect_equal(fxTarget(profile, "mdr", "resistant_classes")$n_susceptible, 1)
+  expect_output(print(profile), "MDR class combinations: 4 across 6 genomes")
 })
 
 test_that("mdr_min_classes must be a whole number of at least 2", {
