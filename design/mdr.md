@@ -1,6 +1,6 @@
 # MDR: modeling combinations of resistant classes
 
-Status: draft spec. The MDR yes/no target is implemented; the combination target is not yet.
+Status: both MDR targets are implemented. See "Checking against old amRml" for results.
 
 ## Goal
 
@@ -162,17 +162,31 @@ should be included in the global rename.
 
 ### 5. Checking against old amRml
 
-1. S. flexneri, `modes = "vanilla"`: same 288 genomes and 4 labels as the old
-   MDR matrices, and the same features where the old code's all-genome variance
-   filter agrees. Compare fits on the old and new matrices with seed 123.
-2. S. argenteus: old builds a 1-label MDR model; new records `single_phenotype`.
-3. E. faecium: run every mode and check the dropped-label counts by hand for
-   one cross scope.
+Done on S. flexneri (amRdata main, October 2026), with old amRml from #42:
+
+1. **Matrices:** all 13 old MDR matrices (`.parquet2MDRMatrix()`, `min_n = 25`)
+   are identical to the new whole-dataset combination matrices: the same 288
+   genomes and labels, the same features, and the same non-zero values. In the
+   whole-dataset mode every scope genome is a training genome at matrix time
+   (the holdout happens at fitting), so selecting features from training genomes
+   gives the old all-genome filter.
+2. **Fit, AMRFinder binary, seed 123:** old `runMLPipeline()` and new
+   `fitModels()` choose the same penalty (1e-4) and mixture (0.2), test on the
+   same 59 genomes, predict the same label for every one, and score MCC 0.85.
+   All 521 non-zero coefficients match exactly.
+
+Still to check:
+
+3. **S. argenteus:** old builds a 1-label MDR model (`PEN`, 65 genomes); new
+   records `single_phenotype` and drops the other 8 genomes. Its yes/no target
+   (5 MDR, 68 not) fails the fold check.
+
+Still to check: E. faecium in every mode, once its ORB is ready.
 
 ## Order of work
 
-1. Profile: `mdr` yes/no rows, tests. **Done.** Nothing after the profile needs to change for it, so it runs in every mode.
-2. Profile: combination rows, tests.
-3. Eligibility: label filter, rules, tests.
-4. Fitting: multinomial path, metrics, importance, tests.
-5. Comparison with old amRml on S. flexneri.
+1. Profile: `mdr` yes/no rows, tests. **Done.**
+2. Profile: combination rows, tests. **Done.**
+3. Eligibility: label filter, rules, tests. **Done.**
+4. Fitting: multinomial path, metrics, importance, tests. **Done.**
+5. Comparison with old amRml on S. flexneri. **Done.**
