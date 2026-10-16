@@ -23,6 +23,7 @@
 #'   folder is always new.
 #' @param BPPARAM BiocParallel backend passed to [fitModels()]. Defaults to a
 #'   eight-worker cluster with 128 chunks of work to chew through.
+#' @param reuse_fits Passed to [fitModels()]; reuse compatible cross-drug fits.
 #'
 #' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...).
@@ -46,13 +47,15 @@ runModelingWorkflow <- function(orb_dir,
                                 min_test_genomes = 5,
                                 min_test_minority = 2,
                                 overwrite = FALSE,
-                                BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)) {
+                                BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
+                                reuse_fits = TRUE) {
   call <- rlang::current_env()
 
   # Checked first, so a bad value doesn't surface after the matrices are built.
   .checkArgSeeds(seeds, call = call)
   .checkArgLabels(labels, call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel::SnowParam()", call = call)
+  .checkArgFlag(reuse_fits, "reuse_fits", call = call)
 
   orb <- readORB(orb_dir)
   out_dir <- out_dir %||% .defaultOutDir(orb$directory)
@@ -65,5 +68,5 @@ runModelingWorkflow <- function(orb_dir,
   arrow::write_parquet(eligibility$scopes, file.path(out_dir, "eligibility.parquet"))
 
   fitModels(expandTasks(built, seeds = seeds, labels = labels),
-            overwrite = overwrite, BPPARAM = BPPARAM)
+            overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits)
 }

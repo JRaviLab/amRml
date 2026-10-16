@@ -4,12 +4,23 @@
 \alias{fitModels}
 \title{Fit the listed models}
 \usage{
-fitModels(tasks, overwrite = FALSE)
+fitModels(
+  tasks,
+  overwrite = FALSE,
+  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
+  reuse_fits = TRUE
+)
 }
 \arguments{
 \item{tasks}{An \code{amr_tasks} from \code{\link[=expandTasks]{expandTasks()}}.}
 
 \item{overwrite}{Replace results already in the output folder.}
+
+\item{BPPARAM}{A \link[BiocParallel:BiocParallelParam]{BiocParallel::BiocParallelParam} backend; by default,
+an eight-worker socket cluster with 128 scheduling chunks. Use
+\code{\link[BiocParallel:SerialParam]{BiocParallel::SerialParam()}} to run sequentially.}
+
+\item{reuse_fits}{Reuse fitted models among compatible cross-drug tasks.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
@@ -21,12 +32,16 @@ keeps old amRml's columns and rounding, adding \code{auprc};
 points to Susceptible).
 }
 \description{
-Fits every task from \code{\link[=expandTasks]{expandTasks()}}, one at a time, with old amRml's method:
+Fits tasks from \code{\link[=expandTasks]{expandTasks()}} in parallel with old amRml's method:
 glmnet logistic regression over 10 penalties and 6 mixtures, tuned by
 stratified \code{n_fold} cross-validation and chosen by MCC, then scored on the
 task's test genomes.
 }
 \details{
+Cross-drug tasks with exactly matching training inputs reuse one fitted model;
+set \code{reuse_fits = FALSE} to disable reuse for comparison. Reused tasks'
+\code{run_time_sec} excludes shared training time for follower tasks; the first
+task in a group includes the training cost.
 Each task runs under its own seed. A task that errors is recorded as
 \code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
 carry on. A shuffled task permutes the training matrix's labels before the
@@ -35,8 +50,8 @@ split.
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument}: \code{tasks}
-is not from \code{\link[=expandTasks]{expandTasks()}}, or results already exist and \code{overwrite} is
-\code{FALSE}.
+is not from \code{\link[=expandTasks]{expandTasks()}}, \code{BPPARAM} is not a BiocParallel backend,
+or results already exist and \code{overwrite} is \code{FALSE}.
 }
 
 \examples{
