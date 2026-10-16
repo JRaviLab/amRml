@@ -4,12 +4,20 @@
 \alias{fitModels}
 \title{Fit the listed models}
 \usage{
-fitModels(tasks, overwrite = FALSE)
+fitModels(
+  tasks,
+  overwrite = FALSE,
+  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)
+)
 }
 \arguments{
 \item{tasks}{An \code{amr_tasks} from \code{\link[=expandTasks]{expandTasks()}}.}
 
 \item{overwrite}{Replace results already in the output folder.}
+
+\item{BPPARAM}{A \link[BiocParallel:BiocParallelParam]{BiocParallel::BiocParallelParam} backend; by default,
+a two-worker socket cluster with 32 scheduling chunks. Use
+\code{\link[BiocParallel:SerialParam]{BiocParallel::SerialParam()}} to run sequentially.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
@@ -18,10 +26,15 @@ An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
 keeps old amRml's columns and rounding, adding \code{auprc};
 \code{n_feat} counts the matrix's features (the recipe may drop more).
 \code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
-points to Susceptible).
+points to Susceptible), plus \code{label}: for the MDR combination target,
+which multinomial regression fits with coefficients per label, the label
+a row's coefficient belongs to, and "POS" points to it (\code{NA} otherwise).
+For that target, \code{performance} has only \code{mcc} and \code{nmcc}, as in old amRml,
+and \code{res_prop} and \code{prob_resistant} are \code{NA}. \code{n_labels} counts each
+task's labels and \code{prob_predicted} is the predicted label's probability.
 }
 \description{
-Fits every task from \code{\link[=expandTasks]{expandTasks()}}, one at a time, with old amRml's method:
+Fits tasks from \code{\link[=expandTasks]{expandTasks()}} in parallel with old amRml's method:
 glmnet logistic regression over 10 penalties and 6 mixtures, tuned by
 stratified \code{n_fold} cross-validation and chosen by MCC, then scored on the
 task's test genomes.
@@ -35,8 +48,8 @@ split.
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument}: \code{tasks}
-is not from \code{\link[=expandTasks]{expandTasks()}}, or results already exist and \code{overwrite} is
-\code{FALSE}.
+is not from \code{\link[=expandTasks]{expandTasks()}}, \code{BPPARAM} is not a BiocParallel backend,
+or results already exist and \code{overwrite} is \code{FALSE}.
 }
 
 \examples{
