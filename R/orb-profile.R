@@ -99,6 +99,29 @@
   )
 }
 
+# One row per genome and its MDR status: "mdr" if Resistant in at least `min_classes`
+# classes; "not_mdr" if tested in at least that many but Resistant in fewer; otherwise
+# "undetermined", since too few classes were tested to rule MDR out.
+.mdrStatus <- function(genome_ids, class_phenotypes, min_classes) {
+  counts <- dplyr::summarise(
+    dplyr::group_by(class_phenotypes, .data$genome_id),
+    n_classes_tested = dplyr::n(),
+    n_classes_resistant = sum(.data$phenotype == "Resistant"),
+    .groups = "drop"
+  )
+  status <- dplyr::left_join(
+    tibble::tibble(genome_id = sort(unique(genome_ids), method = "radix")), counts,
+    by = "genome_id"
+  )
+  status$n_classes_tested[is.na(status$n_classes_tested)] <- 0L
+  status$n_classes_resistant[is.na(status$n_classes_resistant)] <- 0L
+
+  status$mdr <- "undetermined"
+  status$mdr[status$n_classes_tested >= min_classes] <- "not_mdr"
+  status$mdr[status$n_classes_resistant >= min_classes] <- "mdr"
+  status
+}
+
 # One row per genome with its strata, which must have one value per genome.
 .genomeTable <- function(metadata, call) {
   columns <- setdiff(names(metadata), c("drug_abbr", "class_abbr", "phenotype"))
@@ -158,15 +181,21 @@
 
 #' Profile an amRdata ORB
 #'
-#' Labels each genome Resistant or Susceptible per drug and per drug class, and
-#' counts the genomes behind each target, over the whole dataset and within each
-#' value of each stratum (year and country).
+#' Labels each genome Resistant or Susceptible per drug, per drug class and for
+#' multidrug resistance (MDR), and counts the genomes behind each target, over
+#' the whole dataset and within each value of each stratum (year and country).
 #'
 #' @details
 #' A genome is excluded, and listed with the reason, if it has no Resistant or
 #' Susceptible row or is missing from a feature table. A class is Resistant if
 #' any member drug is, and otherwise Susceptible. Repeated rows for a genome and
 #' drug count once if they agree; if they disagree, profiling stops.
+#'
+#' A genome is MDR (target `mdr`, Resistant) if it is Resistant in at least
+#' `mdr_min_classes` drug classes, and not MDR (Susceptible) if it was tested in
+#' at least that many classes but is Resistant in fewer. A genome tested in
+#' fewer classes can't be ruled out, so it is `"undetermined"` in `$mdr` and has
+#' no `mdr` phenotype.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus one of:
@@ -180,13 +209,18 @@
 #' * `amrml_stratum_inconsistent`: a genome has two values for a stratum.
 #'
 #' @param orb An `amr_orb` from [readORB()].
+#' @param mdr_min_classes Fewest drug classes a genome must be Resistant in to
+#'   be MDR; at least 2.
 #'
 #' @return An `amr_orb_profile` list:
 #'   * `orb`: the ORB profiled.
 #'   * `genomes`: each profiled genome and its strata values.
-#'   * `phenotypes`: each genome's phenotype per `unit` (drug or drug class) and
-#'     `target`.
+#'   * `phenotypes`: each genome's phenotype per `unit` (drug, drug class or
+#'     mdr) and `target`.
 #'   * `drug_classes`: each profiled drug and its `class`.
+#'   * `mdr`: each profiled genome's `n_classes_tested`, `n_classes_resistant`
+#'     and `mdr` status (`"mdr"`, `"not_mdr"` or `"undetermined"`).
+#'   * `settings`: `mdr_min_classes`.
 #'   * `targets`: genome counts per target and stratum value; `stratum` is NA
 #'     for the whole dataset.
 #'   * `excluded_genomes`: each excluded genome and its `reason`
@@ -199,11 +233,12 @@
 #' profile$targets
 #' }
 #' @export
-profileORB <- function(orb) {
+profileORB <- function(orb, mdr_min_classes = 2) {
   call <- rlang::current_env()
 
-  # Check the argument is an ORB from readORB().
+  # Check the arguments.
   .checkArgClass(orb, "orb", "amr_orb", "readORB()", call = call)
+  .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
 
   # Read the metadata and keep its Resistant and Susceptible rows.
   metadata <- .readMetadata(orb$metadata_parquet, call = call)
@@ -246,8 +281,10 @@ profileORB <- function(orb) {
     ))
   }
 
-  # Each genome's phenotype per drug class.
+  # Each genome's phenotype per drug class, and its MDR status from those.
   class_phenotypes <- .classPhenotypes(drug_phenotypes)
+  mdr <- .mdrStatus(drug_phenotypes$genome_id, class_phenotypes, mdr_min_classes)
+  modeled_mdr <- mdr[mdr$mdr != "undetermined", , drop = FALSE]
   phenotypes <- dplyr::bind_rows(
     tibble::tibble(
       genome_id = drug_phenotypes$genome_id,
@@ -260,6 +297,13 @@ profileORB <- function(orb) {
       unit = "drug_class",
       target = class_phenotypes$class_abbr,
       phenotype = class_phenotypes$phenotype
+    ),
+    # Undetermined genomes are left out: the yes/no model needs both phenotypes to mean something.
+    tibble::tibble(
+      genome_id = modeled_mdr$genome_id,
+      unit = "mdr",
+      target = "mdr",
+      phenotype = unname(c(mdr = "Resistant", not_mdr = "Susceptible")[modeled_mdr$mdr])
     )
   )
 
@@ -284,6 +328,8 @@ profileORB <- function(orb) {
       genomes = genomes,
       phenotypes = phenotypes,
       drug_classes = drug_classes,
+      mdr = mdr,
+      settings = list(mdr_min_classes = mdr_min_classes),
       targets = targets,
       excluded_genomes = excluded
     ),
@@ -317,5 +363,11 @@ print.amr_orb_profile <- function(x, ...) {
   cat(counts("drug"), sep = "\n")
   cat("  per drug class:\n")
   cat(counts("drug_class"), sep = "\n")
+  mdr <- table(factor(x$mdr$mdr, c("mdr", "not_mdr", "undetermined")))
+  cat(
+    "  MDR (", x$settings$mdr_min_classes, "+ classes): ", mdr[["mdr"]], " MDR, ",
+    mdr[["not_mdr"]], " not MDR, ", mdr[["undetermined"]], " undetermined\n",
+    sep = ""
+  )
   invisible(x)
 }
