@@ -38,6 +38,13 @@ fxCombinationFit <- function(n = 20, env = parent.frame()) {
   fitModels(expandTasks(built), BPPARAM = BiocParallel::SerialParam())
 }
 
+test_that("only the declared MDR combination target is multi-class", {
+  expect_equal(
+    .isMulticlass(c("mdr", "mdr", "drug", "drug_class"), c("resistant_classes", "mdr", "DRA", "CLX")),
+    c(TRUE, FALSE, FALSE, FALSE)
+  )
+})
+
 test_that("folds are assigned for every label, not only Resistant and Susceptible", {
   phenotype <- factor(rep(c("CLX", "CLX_CLY", "Susceptible"), each = 4))
   fold <- withr::with_seed(1, .stratifiedFolds(phenotype, 2))

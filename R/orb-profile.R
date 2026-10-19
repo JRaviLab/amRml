@@ -1,9 +1,5 @@
 # Profiling an amRdata ORB: each genome's phenotypes, and the counts per target.
 
-# The MDR target labelling each genome with its combination of resistant classes, as
-# amRdata's `resistant_classes` does.
-.MDR_COMBINATION <- "resistant_classes"
-
 # amRdata's metadata.parquet columns that profiling needs, named as they are used here.
 .METADATA_COLUMNS <- c(
   genome_id = "genome.genome_id",

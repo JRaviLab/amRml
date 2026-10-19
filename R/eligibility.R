@@ -122,22 +122,22 @@
   .asMembers(train, test)
 }
 
-# Combination scopes keep the labels with at least `min_label_genomes` training genomes, and
+# Multi-class scopes keep the labels with at least `min_label_genomes` training genomes, and
 # drop every genome, training or test, with another label: a test genome whose label the
 # model never trained on can't be predicted. Other scopes keep every genome.
 .keepLabels <- function(members, min_label_genomes) {
   members$kept <- TRUE
-  combination <- members$unit == "mdr" & members$target == .MDR_COMBINATION
-  if (!any(combination)) {
+  multiclass <- .isMulticlass(members$unit, members$target)
+  if (!any(multiclass)) {
     return(members)
   }
 
   keys <- c(.SCOPE_KEYS, "phenotype")
-  train <- members[combination & members$role == "train", keys]
+  train <- members[multiclass & members$role == "train", keys]
   n <- dplyr::count(train, dplyr::across(dplyr::all_of(keys)))
   labels <- n[n$n >= min_label_genomes, keys]
   key <- function(x) do.call(paste, c(unname(as.list(x[keys])), sep = "\r"))
-  members$kept[combination] <- key(members[combination, ]) %in% key(labels)
+  members$kept[multiclass] <- key(members[multiclass, ]) %in% key(labels)
   members
 }
 
@@ -247,13 +247,13 @@
   # A class with data for only one of its drugs is that drug's model again.
   duplicate <- scopes$unit == "drug_class" & scopes$n_drugs %in% 1
 
-  # A combination scope has a label per combination, so its "rarer phenotype" is its
-  # rarest label, and it needs two labels rather than both phenotypes.
-  combination <- scopes$unit == "mdr" & scopes$target == .MDR_COMBINATION
+  # A multi-class scope's "rarer phenotype" is its rarest label, and it needs two labels
+  # rather than both phenotypes.
+  multiclass <- .isMulticlass(scopes$unit, scopes$target)
   rarer <- ifelse(
-    combination, scopes$n_rarest, pmin(scopes$n_resistant, scopes$n_susceptible)
+    multiclass, scopes$n_rarest, pmin(scopes$n_resistant, scopes$n_susceptible)
   )
-  single <- ifelse(combination, scopes$n_labels < 2, rarer == 0)
+  single <- ifelse(multiclass, scopes$n_labels < 2, rarer == 0)
   enough_for_cv <- if (has_test) {
     rarer >= settings$n_fold
   } else {
@@ -261,7 +261,7 @@
   }
   test_ok <- !has_test | (
     scopes$test_n_genomes >= settings$min_test_genomes &
-      (combination |
+      (multiclass |
         pmin(scopes$test_n_resistant, scopes$test_n_susceptible) >= settings$min_test_minority)
   )
 

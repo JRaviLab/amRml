@@ -63,6 +63,11 @@ which matters for the cross modes below.
 
 ## Design, by stage
 
+The combination target is declared once, in `.MULTICLASS_TARGETS` in
+`R/registry.R`, next to `.MODES`. Eligibility and fitting read it through
+`.isMulticlass(unit, target)` instead of checking names or guessing from
+labels. A new multi-class target only needs a row there and a profile builder.
+
 ### 1. Profile (`profileORB()`)
 
 Add two kinds of `unit = "mdr"` rows to `profile$phenotypes`:
@@ -129,7 +134,9 @@ training can't be predicted correctly, so they are dropped from the test set
 
 The combination label has the same blind spot as the yes/no one: a genome
 tested in only one class is labelled from that class alone. Old amRml did the
-same, so the port keeps it, but the per-scope record should count these genomes.
+same, so the port keeps these genomes on purpose, while the yes/no target leaves
+them out as `undetermined`. **Open:** should the combination target also leave
+out `undetermined` genomes? That would change the results compared with old amRml.
 
 ### 3. Matrices (`planMatrices()`, `buildMatrices()`)
 

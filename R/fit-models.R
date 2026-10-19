@@ -1,6 +1,6 @@
 # Fitting a model for each task, with old amRml's method: glmnet logistic regression,
-# tuned by stratified cross-validation and chosen by MCC. A task whose labels aren't
-# Resistant and Susceptible (the MDR combination target) gets multinomial regression.
+# tuned by stratified cross-validation and chosen by MCC. A multi-class target (the MDR
+# combination target; see `.MULTICLASS_TARGETS`) gets multinomial regression.
 
 # The phenotypes, with Resistant first so it is the event yardstick scores.
 .PHENOTYPES <- c("Resistant", "Susceptible")
@@ -269,15 +269,17 @@
   split(seq_len(nrow(listed)), factor(leader, levels = unique(leader)))
 }
 
-# One task: shuffle if asked, split, tune, fit, and score on the test genomes.
+# One task: shuffle if asked, split, tune, fit, and score on the test genomes. `multi` says
+# whether the task's target is multi-class.
 .fitTask <- function(task, path, rows, columns, encoding, cache,
-                     fitted = NULL, return_fitted = FALSE) {
+                     fitted = NULL, return_fitted = FALSE, multi = FALSE) {
   started <- Sys.time()
   matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
   rows <- matrix$rows
-  # Labels other than Resistant and Susceptible are MDR combinations. Eligibility keeps
-  # only labels with training genomes, so every test label is among them.
-  multi <- !all(rows$phenotype %in% .PHENOTYPES)
+  # Eligibility keeps only labels with training genomes, so every test label is among them.
+  if (!multi && !all(rows$phenotype %in% .PHENOTYPES)) {
+    stop("A Resistant/Susceptible target has other phenotypes.")
+  }
   labels <- if (multi) sort(unique(rows$phenotype), method = "radix") else .PHENOTYPES
   if (task$labels == "shuffled") {
     rows <- .shuffleLabels(rows)
@@ -426,6 +428,9 @@ fitModels <- function(tasks, overwrite = FALSE,
   index <- readRDS(file.path(out_dir, "matrix_index.rds"))
   cache <- new.env(parent = emptyenv())
   matrix_positions <- match(listed$matrix_id, tasks$built$matrices$matrix_id)
+  multiclass <- .isMulticlass(
+    tasks$built$matrices$unit[matrix_positions], tasks$built$matrices$target[matrix_positions]
+  )
 
   groups <- if (reuse_fits) {
     .fitTaskGroups(listed, tasks$built$matrices, index)
@@ -453,7 +458,8 @@ fitModels <- function(tasks, overwrite = FALSE,
             encoding = tasks$built$matrices$encoding[[matrix_positions[[i]]]],
             cache = cache,
             fitted = shared_fit,
-            return_fitted = keep_fit
+            return_fitted = keep_fit,
+            multi = multiclass[[i]]
           ),
           .rng_kind = "Mersenne-Twister",
           .rng_normal_kind = "Inversion",
