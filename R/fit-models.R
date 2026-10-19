@@ -217,8 +217,61 @@
   }))
 }
 
+# Cross-test tasks can share a fit when the training inputs exactly match
+.fitTaskGroups <- function(listed, matrices, index) {
+  positions <- match(listed$matrix_id, matrices$matrix_id)
+  signatures <- vector("list", nrow(listed))
+  signature_set <- rep(NA_character_, nrow(listed))
+
+  for (i in which(matrices$mode_id[positions] == "cross_drug")) {
+    p <- positions[[i]]
+    rows <- index$rows[[index$matrix_scopes[[p]]]]
+    if (!any(rows$role == "test")) next
+
+    train <- rows$role == "train"
+    signatures[[i]] <- list(
+      file = matrices$file[[p]],
+      columns = index$columns[[p]],
+      encoding = matrices$encoding[[p]],
+      genome_id = rows$genome_id[train],
+      phenotype = rows$phenotype[train],
+      labels = listed$labels[[i]],
+      seed = listed$seed[[i]],
+      n_fold = listed$n_fold[[i]],
+      holdout = listed$holdout[[i]]
+    )
+    # Collect all signature details
+    signature_set[[i]] <- paste(
+      signatures[[i]]$file, signatures[[i]]$encoding,
+      signatures[[i]]$labels, signatures[[i]]$seed,
+      signatures[[i]]$n_fold, signatures[[i]]$holdout,
+      length(signatures[[i]]$columns), length(signatures[[i]]$genome_id),
+      sep = "|"
+    )
+  }
+
+  leader <- seq_len(nrow(listed))
+  candidates <- which(!is.na(signature_set))
+  for (part in split(candidates, signature_set[candidates])) {
+    representatives <- integer()
+    for (i in part) {
+      found <- representatives[vapply(representatives, function(j) {
+        identical(signatures[[i]], signatures[[j]])
+      }, logical(1))]
+      if (length(found)) {
+        leader[[i]] <- found[[1L]]
+      } else {
+        representatives <- c(representatives, i)
+      }
+    }
+  }
+
+  split(seq_len(nrow(listed)), factor(leader, levels = unique(leader)))
+}
+
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes.
-.fitTask <- function(task, path, rows, columns, encoding, cache) {
+.fitTask <- function(task, path, rows, columns, encoding, cache,
+                     fitted = NULL, return_fitted = FALSE) {
   started <- Sys.time()
   matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
   rows <- matrix$rows
@@ -242,7 +295,7 @@
                       sparse = use_sparse, labels = labels)
   test <- .modelData(matrix$values[split$test, , drop = FALSE],
                      rows$phenotype[split$test], sparse = use_sparse, labels = labels)
-  fitted <- .fitModel(train, task$n_fold, sparse = use_sparse, multi = multi)
+  if (is.null(fitted)) fitted <- .fitModel(train, task$n_fold, sparse = use_sparse, multi = multi)
 
   scored <- parsnip::augment(fitted$fit, test)
   metrics <- .taskMetrics(scored, multi = multi)
@@ -287,12 +340,14 @@
     )
   }
 
-  list(
+  result <- list(
     performance = performance,
     importance = tibble::tibble(task_id = task$task_id, importance),
     predictions = predictions,
     undefined = if (length(undefined)) toString(undefined) else NA_character_
   )
+  if (return_fitted) result$fitted <- fitted
+  result
 }
 
 #' Fit the listed models
@@ -303,6 +358,10 @@
 #' task's test genomes.
 #'
 #' @details
+#' Cross-drug tasks with exactly matching training inputs reuse one fitted model;
+#' set `reuse_fits = FALSE` to disable reuse for comparison. Reused tasks'
+#' `run_time_sec` excludes shared training time for follower tasks; the first
+#' task in a group includes the training cost.
 #' Each task runs under its own seed. A task that errors is recorded as
 #' `fit_failed`, and one with undefined metrics as `metrics_undefined`; the rest
 #' carry on. A shuffled task permutes the training matrix's labels before the
@@ -310,8 +369,9 @@
 #'
 #' @param tasks An `amr_tasks` from [expandTasks()].
 #' @param overwrite Replace results already in the output folder.
+#' @param reuse_fits Reuse fitted models among compatible cross-drug tasks.
 #' @param BPPARAM A [BiocParallel::BiocParallelParam] backend; by default,
-#'   a two-worker socket cluster with 32 scheduling chunks. Use
+#'   an eight-worker socket cluster with 128 scheduling chunks. Use
 #'   [BiocParallel::SerialParam()] to run sequentially.
 #'
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
@@ -339,10 +399,12 @@
 #' }
 #' @export
 fitModels <- function(tasks, overwrite = FALSE,
-                      BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)) {
+                      BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
+                      reuse_fits = TRUE) {
   call <- rlang::current_env()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel::SnowParam()", call = call)
+  .checkArgFlag(reuse_fits, "reuse_fits", call = call)
   out_dir <- tasks$built$out_dir
   results <- file.path(out_dir, c("tasks.parquet", "results"))
   .checkArgFlag(overwrite, "overwrite", call = call)
@@ -365,24 +427,54 @@ fitModels <- function(tasks, overwrite = FALSE,
   cache <- new.env(parent = emptyenv())
   matrix_positions <- match(listed$matrix_id, tasks$built$matrices$matrix_id)
 
-  results_by_task <- BiocParallel::bplapply(seq_len(nrow(listed)), function(i) {
-    task <- listed[i, ]
-    tryCatch(
-      withr::with_seed(
-        task$seed,
-        .fitTask(
-          task, file.path(out_dir, files[[i]]),
-          rows = index$rows[[index$matrix_scopes[[matrix_positions[[i]]]]]],
-          columns = index$columns[[matrix_positions[[i]]]],
-          encoding = tasks$built$matrices$encoding[[matrix_positions[[i]]]],
-          cache = cache
+  groups <- if (reuse_fits) {
+    .fitTaskGroups(listed, tasks$built$matrices, index)
+  } else {
+    as.list(seq_len(nrow(listed)))
+  }
+
+  # Spinning off one task group to one worker; fitted workflow never returned
+  # to main process, just the task results
+  results_by_group <- BiocParallel::bplapply(groups, function(group) {
+    shared_fit <- NULL
+    results <- vector("list", length(group))
+    for (j in seq_along(group)) {
+      i <- group[[j]]
+      task <- listed[i, ]
+      keep_fit <- length(group) > 1L && is.null(shared_fit)
+      result <- tryCatch(
+        withr::with_seed(
+          task$seed,
+          .fitTask(
+            task,
+            file.path(out_dir, files[[i]]),
+            rows = index$rows[[index$matrix_scopes[[matrix_positions[[i]]]]]],
+            columns = index$columns[[matrix_positions[[i]]]],
+            encoding = tasks$built$matrices$encoding[[matrix_positions[[i]]]],
+            cache = cache,
+            fitted = shared_fit,
+            return_fitted = keep_fit
+          ),
+          .rng_kind = "Mersenne-Twister",
+          .rng_normal_kind = "Inversion",
+          .rng_sample_kind = "Rejection"
         ),
-        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-        .rng_sample_kind = "Rejection"
-      ),
-      error = function(e) e
-    )
+        error = function(e)
+          e
+      )
+      if (!inherits(result, "error") && keep_fit) {
+        shared_fit <- result$fitted
+        result$fitted <- NULL
+      }
+      results[[j]] <- result
+    }
+    results
   }, BPPARAM = BPPARAM)
+
+  results_by_task <- vector("list", nrow(listed))
+  for (g in seq_along(groups)) {
+    results_by_task[groups[[g]]] <- results_by_group[[g]]
+  }
 
   for (i in seq_len(nrow(listed))) {
     result <- results_by_task[[i]]
@@ -407,28 +499,52 @@ fitModels <- function(tasks, overwrite = FALSE,
     built = tasks$built
   )
 
-  # If no task was fitted, the results tables still get every column.
+  # Formatting results table if no task fitted
   if (!any(listed$status == "fitted")) {
     fit$performance <- tibble::tibble(
-      task_id = character(), num_obs = integer(), res_prop = numeric(),
-      n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
-      n_labels = integer(), model = character(), n_feats_returned = integer(), n_fold = integer(),
-      fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
-      spec = numeric(), sens = numeric(), log2_apop = numeric(), f1 = numeric(),
-      bal_acc = numeric(), auprc = numeric(), run_time_sec = numeric(),
-      seed = integer(), date = character()
+      task_id = character(),
+      num_obs = integer(),
+      res_prop = numeric(),
+      n_test = integer(),
+      res_prop_test = numeric(),
+      n_feat = integer(),
+      n_labels = integer(),
+      model = character(),
+      n_feats_returned = integer(),
+      n_fold = integer(),
+      fit_penalty = numeric(),
+      fit_mixture = numeric(),
+      mcc = numeric(),
+      nmcc = numeric(),
+      spec = numeric(),
+      sens = numeric(),
+      log2_apop = numeric(),
+      f1 = numeric(),
+      bal_acc = numeric(),
+      auprc = numeric(),
+      run_time_sec = numeric(),
+      seed = integer(),
+      date = character()
     )
     fit$importance <- tibble::tibble(
-      task_id = character(), label = character(), Variable = character(),
-      Importance = numeric(), Sign = character()
+      task_id = character(),
+      label = character(),
+      Variable = character(),
+      Importance = numeric(),
+      Sign = character()
     )
     fit$predictions <- tibble::tibble(
-      task_id = character(), genome_id = character(), truth = character(),
-      predicted = character(), prob_resistant = numeric(), prob_predicted = numeric()
+      task_id = character(),
+      genome_id = character(),
+      truth = character(),
+      predicted = character(),
+      prob_resistant = numeric(),
+      prob_predicted = numeric()
     )
   }
 
-  # Earlier results are replaced only once every task has run.
+  # Earlier results are replaced only once every task has run
+  ## We may want to update this as we go forward based on memory load!
   unlink(results, recursive = TRUE)
   dir.create(file.path(out_dir, "results"))
   arrow::write_parquet(fit$tasks, file.path(out_dir, "tasks.parquet"))

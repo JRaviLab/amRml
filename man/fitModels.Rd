@@ -7,7 +7,8 @@
 fitModels(
   tasks,
   overwrite = FALSE,
-  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)
+  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
+  reuse_fits = TRUE
 )
 }
 \arguments{
@@ -16,8 +17,10 @@ fitModels(
 \item{overwrite}{Replace results already in the output folder.}
 
 \item{BPPARAM}{A \link[BiocParallel:BiocParallelParam]{BiocParallel::BiocParallelParam} backend; by default,
-a two-worker socket cluster with 32 scheduling chunks. Use
+an eight-worker socket cluster with 128 scheduling chunks. Use
 \code{\link[BiocParallel:SerialParam]{BiocParallel::SerialParam()}} to run sequentially.}
+
+\item{reuse_fits}{Reuse fitted models among compatible cross-drug tasks.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
@@ -40,6 +43,10 @@ stratified \code{n_fold} cross-validation and chosen by MCC, then scored on the
 task's test genomes.
 }
 \details{
+Cross-drug tasks with exactly matching training inputs reuse one fitted model;
+set \code{reuse_fits = FALSE} to disable reuse for comparison. Reused tasks'
+\code{run_time_sec} excludes shared training time for follower tasks; the first
+task in a group includes the training cost.
 Each task runs under its own seed. A task that errors is recorded as
 \code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
 carry on. A shuffled task permutes the training matrix's labels before the

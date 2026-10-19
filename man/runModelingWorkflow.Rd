@@ -16,7 +16,8 @@ runModelingWorkflow(
   min_test_minority = 2,
   min_label_genomes = 25,
   overwrite = FALSE,
-  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L)
+  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
+  reuse_fits = TRUE
 )
 }
 \arguments{
@@ -38,6 +39,8 @@ folder is always new.}
 
 \item{BPPARAM}{BiocParallel backend passed to \code{\link[=fitModels]{fitModels()}}. Defaults to a
 eight-worker cluster with 128 chunks of work to chew through.}
+
+\item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
