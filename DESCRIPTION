@@ -41,6 +41,7 @@ Imports:
     dplyr,
     glmnet,
     jsonlite,
+    Matrix,
     parsnip,
     recipes,
     rlang,
