@@ -15,6 +15,9 @@
 #' @param out_dir Folder to write to. By default a new run folder,
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
+#' @param feature_types Feature types to model: `"quick"`, `"standard"` (default),
+#'   `"full"`, or an explicit character vector of ORB feature types.
+#'   Selected before matrices are planned or built; see [planMatrices()].
 #' @param seeds Passed to [expandTasks()].
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
 #'   [expandTasks()]. 
@@ -50,7 +53,8 @@ runModelingWorkflow <- function(orb_dir,
                                 min_test_minority = 2,
                                 overwrite = FALSE,
                                 BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
-                                reuse_fits = TRUE) {
+                                reuse_fits = TRUE,
+                                feature_types = "standard") {
   call <- rlang::current_env()
 
   # Checked first, so a bad value doesn't surface after the matrices are built.
@@ -66,7 +70,7 @@ runModelingWorkflow <- function(orb_dir,
     modes = modes, min_genomes = min_genomes, n_fold = n_fold,
     min_test_genomes = min_test_genomes, min_test_minority = min_test_minority
   )
-  built <- buildMatrices(planMatrices(eligibility), out_dir, overwrite = overwrite)
+  built <- buildMatrices(planMatrices(eligibility, feature_types = feature_types), out_dir, overwrite = overwrite)
   arrow::write_parquet(eligibility$scopes, file.path(out_dir, "eligibility.parquet"))
 
   fitModels(expandTasks(built, seeds = seeds, labels = labels),
