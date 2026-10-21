@@ -3,6 +3,24 @@
 # Strata, as amRml names them, and the genome-level amRdata column holding each.
 .STRATA <- c(year = "year_bin", country = "country_abbr")
 
+# The MDR target labelling each genome with its combination of resistant classes, as
+# amRdata's `resistant_classes` does.
+.MDR_COMBINATION <- "resistant_classes"
+
+# Targets whose phenotype is one label among several, not Resistant or Susceptible.
+# Eligibility counts their labels, and fitting uses multinomial regression. Every other
+# target is Resistant/Susceptible.
+.MULTICLASS_TARGETS <- tibble::tribble(
+  ~unit, ~target,          ~description,
+  "mdr", .MDR_COMBINATION, "Each genome's combination of resistant classes."
+)
+
+# Whether each `unit` and `target` pair is a multi-class target.
+.isMulticlass <- function(unit, target) {
+  paste(unit, target, sep = "\r") %in%
+    paste(.MULTICLASS_TARGETS$unit, .MULTICLASS_TARGETS$target, sep = "\r")
+}
+
 # The modeling modes of the amRml v1 design. `grouping` is what a mode splits genomes
 # by: a stratum, drugs, or nothing.
 .MODES <- tibble::tribble(

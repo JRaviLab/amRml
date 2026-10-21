@@ -10,7 +10,8 @@ eligibleScopes(
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
-  min_test_minority = 2
+  min_test_minority = 2,
+  min_label_genomes = 25
 )
 }
 \arguments{
@@ -25,6 +26,9 @@ eligibleScopes(
 \item{min_test_genomes}{Fewest genomes a separate test set needs.}
 
 \item{min_test_minority}{Fewest of the rarer phenotype a test set needs.}
+
+\item{min_label_genomes}{Fewest training genomes an MDR combination needs to
+stay a label in a scope (old amRml's \code{min_n}).}
 }
 \value{
 An \code{amr_eligibility} list:
@@ -33,6 +37,7 @@ An \code{amr_eligibility} list:
 \item \code{modes}: per mode, \code{feasible}, \code{rule_id}, \code{n_groups}, and how many
 scopes it has and how many are eligible (\code{n_scopes}, \code{n_eligible}).
 \item \code{scopes}: per scope, training and test counts (\code{NA} without a test set),
+the number of labels kept and genomes dropped by the label filter,
 \code{eligible} and \code{rule_id}.
 \item \code{members}: each eligible scope's genomes, by \code{role} (train or test).
 }
@@ -44,7 +49,12 @@ can, records whether it has enough data to model, or why not. Nothing is
 built or fitted.
 }
 \details{
-Counts are of genomes, each with one phenotype. A drug or class needs 2 of a
+Counts are of genomes, each with one phenotype. In the MDR combination target
+(\code{resistant_classes}), each combination is a label: a scope keeps the labels
+with at least \code{min_label_genomes} training genomes and drops the genomes,
+training or test, with any other (\code{n_dropped}, \code{test_n_dropped}). It then
+needs 2 labels, and its rarest label must fill the folds; its test set needs
+only \code{min_test_genomes}. A drug or class needs 2 of a
 mode's groups (3 for leave-one-out) to get scopes, and a stratified one needs
 2 eligible groups. A scope fails, in order, if it's a class with data for only
 one of its drugs, has one phenotype, has fewer than \code{min_genomes} genomes,

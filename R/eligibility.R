@@ -122,6 +122,25 @@
   .asMembers(train, test)
 }
 
+# Multi-class scopes keep the labels with at least `min_label_genomes` training genomes, and
+# drop every genome, training or test, with another label: a test genome whose label the
+# model never trained on can't be predicted. Other scopes keep every genome.
+.keepLabels <- function(members, min_label_genomes) {
+  members$kept <- TRUE
+  multiclass <- .isMulticlass(members$unit, members$target)
+  if (!any(multiclass)) {
+    return(members)
+  }
+
+  keys <- c(.SCOPE_KEYS, "phenotype")
+  train <- members[multiclass & members$role == "train", keys]
+  n <- dplyr::count(train, dplyr::across(dplyr::all_of(keys)))
+  labels <- n[n$n >= min_label_genomes, keys]
+  key <- function(x) do.call(paste, c(unname(as.list(x[keys])), sep = "\r"))
+  members$kept[multiclass] <- key(members[multiclass, ]) %in% key(labels)
+  members
+}
+
 # Each target tested in fewer of the mode's groups than it needs, with its genome counts in
 # them. A target whose genomes all lack a group has none, and is listed too.
 .targetsInTooFewGroups <- function(phenotypes, grouped, loo) {
@@ -129,7 +148,7 @@
     dplyr::group_by(grouped, .data$unit, .data$target),
     n_groups = dplyr::n_distinct(.data$group),
     n_genomes = dplyr::n(),
-    n_resistant = sum(.data$phenotype == "Resistant"),
+    n_resistant = sum(.data$phenotype != "Susceptible"),
     n_susceptible = sum(.data$phenotype == "Susceptible"),
     .groups = "drop"
   )
@@ -174,17 +193,21 @@
   list(members = members, too_few = too_few)
 }
 
-# Per scope, the training and test genome counts.
+# Per scope, the training and test genome counts of kept genomes, with how many labels they
+# have, the size of the rarest, and how many genomes the label filter dropped.
 .scopeCounts <- function(members, has_test) {
   counts <- dplyr::summarise(
     dplyr::group_by(members, dplyr::across(dplyr::all_of(c(.SCOPE_KEYS, "role")))),
-    n_genomes = dplyr::n(),
-    n_resistant = sum(.data$phenotype == "Resistant"),
-    n_susceptible = sum(.data$phenotype == "Susceptible"),
+    n_genomes = sum(.data$kept),
+    n_resistant = sum(.data$kept & .data$phenotype != "Susceptible"),
+    n_susceptible = sum(.data$kept & .data$phenotype == "Susceptible"),
+    n_labels = dplyr::n_distinct(.data$phenotype[.data$kept]),
+    n_rarest = if (any(.data$kept)) min(table(.data$phenotype[.data$kept])) else 0L,
+    n_dropped = sum(!.data$kept),
     .groups = "drop"
   )
 
-  sides <- c("n_genomes", "n_resistant", "n_susceptible")
+  sides <- c("n_genomes", "n_resistant", "n_susceptible", "n_labels", "n_rarest", "n_dropped")
   train <- counts[counts$role == "train", c(.SCOPE_KEYS, sides)]
   test <- counts[counts$role == "test", c(.SCOPE_KEYS, sides)]
   names(test) <- c(.SCOPE_KEYS, paste0("test_", sides))
@@ -224,7 +247,13 @@
   # A class with data for only one of its drugs is that drug's model again.
   duplicate <- scopes$unit == "drug_class" & scopes$n_drugs %in% 1
 
-  rarer <- pmin(scopes$n_resistant, scopes$n_susceptible)
+  # A multi-class scope's "rarer phenotype" is its rarest label, and it needs two labels
+  # rather than both phenotypes.
+  multiclass <- .isMulticlass(scopes$unit, scopes$target)
+  rarer <- ifelse(
+    multiclass, scopes$n_rarest, pmin(scopes$n_resistant, scopes$n_susceptible)
+  )
+  single <- ifelse(multiclass, scopes$n_labels < 2, rarer == 0)
   enough_for_cv <- if (has_test) {
     rarer >= settings$n_fold
   } else {
@@ -232,13 +261,14 @@
   }
   test_ok <- !has_test | (
     scopes$test_n_genomes >= settings$min_test_genomes &
-      pmin(scopes$test_n_resistant, scopes$test_n_susceptible) >= settings$min_test_minority
+      (multiclass |
+        pmin(scopes$test_n_resistant, scopes$test_n_susceptible) >= settings$min_test_minority)
   )
 
   # Check the rules in order and keep each scope's first failure.
   failed <- list(
     duplicate_class = duplicate,
-    single_phenotype = rarer == 0,
+    single_phenotype = single,
     too_few_genomes = scopes$n_genomes < settings$min_genomes,
     too_few_for_cv = !enough_for_cv,
     test_too_small = !test_ok
@@ -263,8 +293,9 @@
 # in too few groups get one decision each.
 .judgeScopes <- function(built, mode, profile, settings) {
   counts <- c(
-    "n_genomes", "n_resistant", "n_susceptible",
-    "test_n_genomes", "test_n_resistant", "test_n_susceptible"
+    "n_genomes", "n_resistant", "n_susceptible", "n_labels", "n_dropped",
+    "test_n_genomes", "test_n_resistant", "test_n_susceptible", "test_n_labels",
+    "test_n_dropped"
   )
   has_test <- mode$LOO || mode$cross_test
   scopes <- .scopeCounts(built$members, has_test)
@@ -275,6 +306,8 @@
   too_few <- built$too_few
   if (NROW(too_few)) {
     too_few[c("train_group", "test_group")] <- NA_character_
+    too_few$n_labels <- NA_integer_
+    too_few$n_dropped <- NA_integer_
     too_few$rule_id <- "too_few_groups_tested"
     decisions <- dplyr::bind_rows(decisions, too_few[names(too_few) != "n_groups"])
   }
@@ -296,7 +329,12 @@
 #' built or fitted.
 #'
 #' @details
-#' Counts are of genomes, each with one phenotype. A drug or class needs 2 of a
+#' Counts are of genomes, each with one phenotype. In the MDR combination target
+#' (`resistant_classes`), each combination is a label: a scope keeps the labels
+#' with at least `min_label_genomes` training genomes and drops the genomes,
+#' training or test, with any other (`n_dropped`, `test_n_dropped`). It then
+#' needs 2 labels, and its rarest label must fill the folds; its test set needs
+#' only `min_test_genomes`. A drug or class needs 2 of a
 #' mode's groups (3 for leave-one-out) to get scopes, and a stratified one needs
 #' 2 eligible groups. A scope fails, in order, if it's a class with data for only
 #' one of its drugs, has one phenotype, has fewer than `min_genomes` genomes,
@@ -314,12 +352,15 @@
 #' @param n_fold Number of cross-validation folds.
 #' @param min_test_genomes Fewest genomes a separate test set needs.
 #' @param min_test_minority Fewest of the rarer phenotype a test set needs.
+#' @param min_label_genomes Fewest training genomes an MDR combination needs to
+#'   stay a label in a scope (old amRml's `min_n`).
 #'
 #' @return An `amr_eligibility` list:
 #'   * `profile` and `settings` (the thresholds, and the `holdout` share).
 #'   * `modes`: per mode, `feasible`, `rule_id`, `n_groups`, and how many
 #'     scopes it has and how many are eligible (`n_scopes`, `n_eligible`).
 #'   * `scopes`: per scope, training and test counts (`NA` without a test set),
+#'     the number of labels kept and genomes dropped by the label filter,
 #'     `eligible` and `rule_id`.
 #'   * `members`: each eligible scope's genomes, by `role` (train or test).
 #'
@@ -334,7 +375,8 @@ eligibleScopes <- function(profile,
                            min_genomes = 40,
                            n_fold = 5,
                            min_test_genomes = 5,
-                           min_test_minority = 2) {
+                           min_test_minority = 2,
+                           min_label_genomes = 25) {
   call <- rlang::current_env()
 
   # Check the arguments.
@@ -343,6 +385,7 @@ eligibleScopes <- function(profile,
   .checkArgCount(n_fold, "n_fold", min = 2, call = call)
   .checkArgCount(min_test_genomes, "min_test_genomes", call = call)
   .checkArgCount(min_test_minority, "min_test_minority", call = call)
+  .checkArgCount(min_label_genomes, "min_label_genomes", call = call)
   modes <- modes %||% .MODES$mode_id
   .checkArgModes(modes, call = call)
 
@@ -351,6 +394,7 @@ eligibleScopes <- function(profile,
     n_fold = n_fold,
     min_test_genomes = min_test_genomes,
     min_test_minority = min_test_minority,
+    min_label_genomes = min_label_genomes,
     holdout = .CV_HOLDOUT
   )
 
@@ -364,13 +408,17 @@ eligibleScopes <- function(profile,
   judged <- lapply(seq_len(nrow(runnable)), function(i) {
     mode <- runnable[i, , drop = FALSE]
     built <- .buildScopes(mode, profile)
+    built$members <- .keepLabels(built$members, settings$min_label_genomes)
     decisions <- .judgeScopes(built, mode, profile, settings)
     eligible <- decisions[decisions$eligible, .SCOPE_KEYS]
     list(
       decisions = decisions,
       members = tibble::tibble(
         mode_id = mode$mode_id,
-        dplyr::semi_join(built$members, eligible, by = .SCOPE_KEYS)
+        dplyr::semi_join(
+          built$members[built$members$kept, names(built$members) != "kept"],
+          eligible, by = .SCOPE_KEYS
+        )
       )
     )
   })
@@ -383,8 +431,10 @@ eligibleScopes <- function(profile,
       mode_id = character(), unit = character(), target = character(),
       train_group = character(), test_group = character(),
       n_genomes = integer(), n_resistant = integer(), n_susceptible = integer(),
+      n_labels = integer(), n_dropped = integer(),
       test_n_genomes = integer(), test_n_resistant = integer(),
-      test_n_susceptible = integer(), eligible = logical(), rule_id = character()
+      test_n_susceptible = integer(), test_n_labels = integer(),
+      test_n_dropped = integer(), eligible = logical(), rule_id = character()
     )
     members <- tibble::tibble(
       mode_id = character(), unit = character(), target = character(),
@@ -421,6 +471,17 @@ print.amr_eligibility <- function(x, ...) {
   cat(
     "  settings :", s$min_genomes, "training genomes,", s$n_fold, "folds; test sets",
     s$min_test_genomes, "genomes,", s$min_test_minority, "of the rarer phenotype\n"
+  )
+
+  combination <- x$scopes[.isMulticlass(x$scopes$unit, x$scopes$target), , drop = FALSE]
+  cat(
+    "  MDR      : ", x$profile$settings$mdr_min_classes, "+ classes; combination labels need ",
+    s$min_label_genomes, " training genomes",
+    if (nrow(combination)) {
+      paste0("; ", sum(combination$eligible), " of ", nrow(combination), " combination scopes eligible")
+    },
+    "\n",
+    sep = ""
   )
 
   labels <- format(x$modes$mode_id)
