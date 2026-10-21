@@ -17,14 +17,14 @@ The \code{feature_dyad_discovery} list from \code{\link[=runFeatureDyadDiscovery
 \description{
 Runs feature rescoring (\code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}) on a fit: its vanilla
 models' merged results, from \code{\link[=exportMergedResults]{exportMergedResults()}}, and the ORB's
-protein-dyad map (\code{dyad_feature.parquet}). Feature rescoring needs real and
-shuffled labels and several seeds, e.g. from \code{runModelingWorkflow(orb_dir, modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
+virtual \code{dyad_feature} relation. Feature rescoring needs real and shuffled
+labels and several seeds, e.g.
+from \code{runModelingWorkflow(orb_dir, modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
 }
 \section{Errors}{
 
-All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument}: \code{fit} is
-not from \code{\link[=fitModels]{fitModels()}}, it has no fitted vanilla models with both real and
-shuffled labels, or the ORB declares no \code{dyad_feature.parquet}.
+Invalid input and missing ORB mappings raise \code{amrml_invalid_argument}.
+DuckDB read errors retain their DBI/driver error classes.
 }
 
 \examples{

@@ -4,9 +4,10 @@
 #'
 #' Runs feature rescoring ([runFeatureDyadDiscovery()]) on a fit: its vanilla
 #' models' merged results, from [exportMergedResults()], and the ORB's
-#' protein-dyad map (`dyad_feature.parquet`). Feature rescoring needs real and
-#' shuffled labels and several seeds, e.g. from `runModelingWorkflow(orb_dir,
-#' modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))`.
+#' virtual `dyad_feature` relation. Feature rescoring needs real and shuffled
+#' labels and several seeds, e.g.
+#' from `runModelingWorkflow(orb_dir, modes = "vanilla", seeds = c(31, 79, 51),
+#' labels = c("real", "shuffled"))`.
 #'
 #' @param fit An `amr_fit` from [fitModels()] or [runModelingWorkflow()].
 #' @param ... Feature rescoring's thresholds, passed to [runFeatureDyadDiscovery()].
@@ -14,9 +15,8 @@
 #' @return The `feature_dyad_discovery` list from [runFeatureDyadDiscovery()].
 #'
 #' @section Errors:
-#' All errors have class `amrml_error`, plus `amrml_invalid_argument`: `fit` is
-#' not from [fitModels()], it has no fitted vanilla models with both real and
-#' shuffled labels, or the ORB declares no `dyad_feature.parquet`.
+#' Invalid input and missing ORB mappings raise `amrml_invalid_argument`.
+#' DuckDB read errors retain their DBI/driver error classes.
 #'
 #' @examples
 #' \dontrun{
@@ -47,16 +47,7 @@ rescoreFeatures <- function(fit, ...) {
     )
   }
 
-  orb_files <- fit$built$eligibility$profile$orb$files$path
-  dyads <- orb_files[basename(orb_files) == "dyad_feature.parquet"]
-  if (!length(dyads)) {
-    .amrAbort(
-      "invalid_argument",
-      "The ORB declares no `dyad_feature.parquet`, which maps features to protein dyads.",
-      call = call
-    )
-  }
-
+  # Complete any merged-result export before changing into the ORB directory
   merged <- file.path(
     fit$built$out_dir, "merged", c("all_perf.parquet", "all_top_features.parquet")
   )
@@ -64,10 +55,46 @@ rescoreFeatures <- function(fit, ...) {
     exportMergedResults(fit, overwrite = TRUE)
   }
 
+  # Locate the ORB
+  orb_files <- fit$built$eligibility$profile$orb$files$path
+  orb_dirs <- unique(dirname(orb_files))
+  orb_databases <- unique(unlist(lapply(orb_dirs, function(dir) {
+    list.files(dir, pattern = "_parquet[.]duckdb$", full.names = TRUE)
+  }), use.names = FALSE))
+
+  if (length(orb_databases) != 1L) {
+    .amrAbort(
+      "invalid_argument",
+      "Expected exactly one Parquet-backed ORB DuckDB with a virtual `dyad_feature` view.",
+      call = call
+    )
+  }
+
+  # Virtual Parquet paths are relative to the ORB directory; restore caller's 
+  # working directory after database disconnect
+  previous_wd <- getwd()
+  on.exit(setwd(previous_wd), add = TRUE)
+  setwd(dirname(orb_databases[[1L]]))
+  con <- DBI::dbConnect(
+    duckdb::duckdb(),
+    dbdir = basename(orb_databases[[1L]]),
+    read_only = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (!"dyad_feature" %in% DBI::dbListTables(con) ||
+      !all(c("dyad", "feature") %in% DBI::dbListFields(con, "dyad_feature"))) {
+    .amrAbort(
+      "invalid_argument",
+      "ORB DuckDB must expose the virtual `dyad_feature(dyad, feature)` relation.",
+      call = call
+    )
+  }
+
   runFeatureDyadDiscovery(
     all_top_features_parquet = merged[[2]],
     all_performance_parquet = merged[[1]],
-    dyad_feature_parquet = dyads[[1]],
+    dyad_con = con,
     ...
   )
 }

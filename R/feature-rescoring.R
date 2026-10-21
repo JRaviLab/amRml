@@ -1,5 +1,201 @@
 # Feature rescoring: features consistently important across seeds, and their dyads.
 
+# Feature evidence and model reliability scoring
+
+#' Assess model reliability using real-label and shuffled-label MCC
+#'
+#' Compare each model's real-label MCC with the shuffled-label MCC from the
+#' same seed and with the average shuffled MCC plus one standard deviation (SD)
+#' for the same drug, feature type, and encoding. A seed supports the model only
+#' when its real-label MCC is positive and exceeds both comparisons.
+#' At least two defined shuffled MCC values are needed to calculate the SD.
+#'
+#' @param all_performance_parquet Path to the merged model-performance Parquet file.
+#' @param min_supported_seeds Number of supporting seeds required (default 2).
+#' @return List with reliability results by representation and MCC comparisons
+#'   by seed. Missing MCC values are not replaced with zero.
+#' @export
+assessModelReliability <- function(all_performance_parquet,
+                                  min_supported_seeds = 2L) {
+  stopifnot(file.exists(all_performance_parquet))
+  if (length(min_supported_seeds) != 1L || is.na(min_supported_seeds) ||
+      min_supported_seeds < 1L || min_supported_seeds != as.integer(min_supported_seeds))
+    stop("min_supported_seeds must be a positive integer.", call. = FALSE)
+  
+  keys <- c("species", "drug_label", "drug_or_class", "feature_type",
+            "feature_subtype", "seed")
+  rep_keys <- head(keys, -1L)
+  perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
+  if (!all(c(keys, "shuffled", "mcc") %in% names(perf)))
+    stop("Performance must contain scope, seed, shuffled and mcc columns.", call. = FALSE)
+  if (anyNA(perf[c(keys, "shuffled")]) ||
+      !is.logical(perf$shuffled) ||
+      anyDuplicated(perf[c(keys, "shuffled")]))
+    stop("Performance has missing or duplicate fit identities.", call. = FALSE)
+  if (any(!is.na(perf$mcc) &
+          (!is.finite(perf$mcc) | abs(perf$mcc) > 1 + 1e-8)))
+    stop("Defined MCC must be finite and in [-1, 1].", call. = FALSE)
+  
+  # Construct the null reference separately within each representation.
+  # A single shuffled MCC cannot support an SD estimate (not SD = 0)
+  shuffled_baseline <- perf |>
+    dplyr::filter(shuffled) |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(rep_keys))) |>
+    dplyr::summarise(
+      n_shuffled_defined = sum(!is.na(mcc)),
+      mean_shuffled_mcc = if (n_shuffled_defined >= 2L) mean(mcc, na.rm = TRUE) else NA_real_,
+      sd_shuffled_mcc = if (n_shuffled_defined >= 2L) stats::sd(mcc, na.rm = TRUE) else NA_real_,
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(shuffled_upper = mean_shuffled_mcc + sd_shuffled_mcc)
+  
+  real <- perf |>
+    dplyr::filter(!shuffled) |>
+    dplyr::select(dplyr::all_of(keys), mcc_real = mcc) |>
+    dplyr::mutate(has_real = TRUE)
+  shuffled <- perf |>
+    dplyr::filter(shuffled) |>
+    dplyr::select(dplyr::all_of(keys), mcc_shuffled = mcc) |>
+    dplyr::mutate(has_shuffled = TRUE)
+  
+  paired <- dplyr::full_join(real, shuffled, by = keys) |>
+    dplyr::left_join(shuffled_baseline, by = rep_keys) |>
+    dplyr::mutate(
+      assessable_pair = !is.na(mcc_real) & !is.na(mcc_shuffled) &
+        !is.na(shuffled_upper),
+      # Count this seed as supporting the model only if real-label MCC is
+      # positive and exceeds both its matched shuffled MCC and the shuffled
+      # average plus one SD. Missing MCC values cannot provide support
+      above_background = dplyr::coalesce(
+        assessable_pair & mcc_real > 0 & mcc_real > mcc_shuffled &
+          mcc_real > shuffled_upper, FALSE
+      )
+    )
+  
+  summary <- paired |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(rep_keys))) |>
+    dplyr::summarise(
+      n_real_fits = sum(!is.na(has_real)),
+      n_shuffled_fits = sum(!is.na(has_shuffled)),
+      n_shuffled_defined = dplyr::first(n_shuffled_defined),
+      mean_shuffled_mcc = dplyr::first(mean_shuffled_mcc),
+      sd_shuffled_mcc = dplyr::first(sd_shuffled_mcc),
+      n_paired_assessable = sum(assessable_pair),
+      n_supported_seeds = sum(above_background),
+      n_unassessable_real = sum(!is.na(has_real) & is.na(mcc_real)),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(
+      evidence_status = dplyr::case_when(
+        n_supported_seeds >= min_supported_seeds ~ "supported",
+        n_paired_assessable < min_supported_seeds ~ "insufficient",
+        n_supported_seeds == 0L ~ "background_like",
+        TRUE ~ "weak_discrimination"
+      ),
+      supported = evidence_status == "supported"
+    )
+  
+  list(by_representation = summary, by_seed = paired)
+}
+
+
+#' Summarize feature importance across successfully fitted seeds
+#'
+#' Calculate each feature's average normalized importance using only seeds
+#' where that feature was available to the model. Include a zero for a feature
+#' that was available but not returned by a fitted model. Also record how often
+#' the feature belongs to the group accounting for the chosen share of importance.
+#'
+#' @param scored_top_features Feature importance from successful real-label fits,
+#'   returned by scoreFeaturesWithinSeed(..., filter_model = FALSE).
+#' @param candidate_inventory One row per feature available in each successfully
+#'   fitted seed, using the same feature identifiers as scored_top_features.
+#'   Features absent from a seed's candidate list are not counted as zeros.
+#' @return Tibble with average normalized importance, counts of eligible and
+#'   fitted seeds, frequency in the core feature group, and coefficient signs.
+#' @export
+summarizeFeatureEvidence <- function(scored_top_features,
+                                              candidate_inventory) {
+  keys <- c("species", "drug_label", "drug_or_class", "feature_type",
+            "feature_subtype", "seed")
+  feature_keys <- c(keys, "variable")
+  scope <- c("species", "drug_label", "drug_or_class", "feature_type",
+             "feature_subtype")
+  by_feature <- c(scope, "variable")
+  if (!is.data.frame(scored_top_features) || !is.data.frame(candidate_inventory) ||
+      !all(c(feature_keys, "contribution", "in_core", "sign") %in% names(scored_top_features)) ||
+      !all(feature_keys %in% names(candidate_inventory)))
+    stop("Expected per-seed coefficients and candidate-by-fitted-seed inventory.", call. = FALSE)
+  if (!nrow(scored_top_features) || !nrow(candidate_inventory) ||
+      anyNA(scored_top_features[feature_keys]) || anyNA(candidate_inventory[feature_keys]) ||
+      anyDuplicated(scored_top_features[feature_keys]) ||
+      anyDuplicated(candidate_inventory[feature_keys]))
+    stop("Missing/duplicate candidate or returned-feature identities.", call. = FALSE)
+  if (any(!is.finite(scored_top_features$contribution) |
+          scored_top_features$contribution < 0) ||
+      anyNA(scored_top_features$in_core))
+    stop("Invalid normalized coefficient evidence.", call. = FALSE)
+  if (nrow(dplyr::anti_join(scored_top_features, candidate_inventory,
+                            by = feature_keys)))
+    stop("Returned coefficient is absent from that fitted seed's candidate inventory.",
+         call. = FALSE)
+  fitted <- dplyr::distinct(scored_top_features, dplyr::across(dplyr::all_of(keys)))
+  candidates_fitted <- dplyr::distinct(candidate_inventory, dplyr::across(dplyr::all_of(keys)))
+  if (nrow(dplyr::anti_join(fitted, candidates_fitted, by = keys)) ||
+      nrow(dplyr::anti_join(candidates_fitted, fitted, by = keys)))
+    stop("Fitted tasks and candidate-inventory tasks do not match.", call. = FALSE)
+  
+  # Within each fitted seed, the normalized importance of the returned
+  # features must add up to 1. If it does not, the fit cannot be scored reliably
+  sums <- scored_top_features |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(keys))) |>
+    dplyr::summarize(total = sum(contribution), .groups = "drop")
+  if (any(abs(sums$total - 1) > 1e-7))
+    stop("Returned normalized feature importance does not sum to one.", call. = FALSE)
+  
+  # Give a feature zero importance when it was available in a fitted seed
+  # but not returned by the model. Don't include seeds where it was unavailable
+  filled <- candidate_inventory |>
+    dplyr::select(dplyr::all_of(feature_keys)) |>
+    dplyr::left_join(
+      dplyr::select(scored_top_features,
+                    dplyr::all_of(feature_keys), contribution, in_core, sign),
+      by = feature_keys
+    ) |>
+    dplyr::mutate(
+      returned = !is.na(contribution),
+      contribution = dplyr::coalesce(contribution, 0),
+      in_core = dplyr::coalesce(in_core, FALSE)
+    )
+  n_fitted <- fitted |>
+    dplyr::count(dplyr::across(dplyr::all_of(scope)), name = "n_fitted_seeds")
+  result <- filled |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(by_feature))) |>
+    dplyr::summarize(
+      n_eligible_seeds = dplyr::n(),
+      n_returned_seeds = sum(returned),
+      n_core_seeds = sum(in_core),
+      direct_score = mean(contribution),
+      core_seed_fraction = mean(in_core),
+      sign_consistent = dplyr::n_distinct(sign[returned]) <= 1L,
+      sign = if (dplyr::n_distinct(sign[returned]) == 1L)
+        sign[which(returned)[[1L]]] else NA_character_,
+      .groups = "drop"
+    ) |>
+    dplyr::left_join(n_fitted, by = scope) |>
+    dplyr::mutate(
+      # A feature is reproducible when it is in the core group for at least
+      # two eligible seeds. Keep the counts to distinguish 2 of 2 from 2 of 3
+      reproducibly_important = n_core_seeds >= 2L & n_eligible_seeds >= 2L
+    ) |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(scope))) |>
+    dplyr::arrange(dplyr::desc(direct_score), variable, .by_group = TRUE) |>
+    dplyr::mutate(direct_rank = dplyr::row_number()) |>
+    dplyr::ungroup()
+  result
+}
+
+
 #' Filter model fits to those passing quality thresholds
 #'
 #' @param all_performance_parquet The path to the 'all performance parquet' file
@@ -67,8 +263,8 @@ filterOptimalModel <- function(all_performance_parquet,
 #'   \item \code{rank}: descending rank of \code{contribution} within the group; ties receive the average of the ranks they span.
 #'   \item \code{n_features}: the number of rows (features) in the group.
 #'   \item \code{rank_score}: \code{(n_features - rank) / (n_features - 1)}; ranges 0-1 with higher values indicating higher importance (a single-feature group scores 1).
-#'   \item \code{cum_contrib}: the cumulative sum of \code{contribution} in descending order; features tied on \code{contribution} share the same \code{cum_contrib}, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
-#'   \item \code{in_core}: TRUE when \code{cum_contrib <= core_contribution_threshold}; a tied block that would push the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
+#'   \item \code{cum_contrib}: the cumulative sum of \code{contribution} in descending order, with ties broken deterministically by variable identifier.
+#'   \item \code{in_core}: TRUE for the smallest deterministic prefix reaching the requested cumulative normalized importance; the feature crossing the threshold is INCLUDED. This is a reporting tier, not a multiplicative score.
 #' }
 #'
 #' @keywords internal
@@ -119,6 +315,13 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
       feat_return_ratio = n_feats_returned / n_feat
     )
 
+  # The threshold must be between 0 and 1; the default of 0.75 means
+  # that the core feature group must cover at least 75% of total importance
+  if (length(core_contribution_threshold) != 1L ||
+      !is.finite(core_contribution_threshold) ||
+      core_contribution_threshold < 0 || core_contribution_threshold > 1)
+    stop("core_contribution_threshold must be in [0, 1].", call. = FALSE)
+
   # add different layers of scoring to the features within each seed
   scored_top_features <- all_top_features |>
     dplyr::select(
@@ -149,7 +352,10 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
     dplyr::mutate(
       contribution = importance / sum(importance, na.rm = TRUE)
     ) |>
-    dplyr::arrange(dplyr::desc(contribution), .by_group = TRUE) |>
+    # Sort features from highest to lowest importance. If two features have
+    # equal importance, sort by feature ID so the input row order cannot
+    # change which one enters the core group first
+    dplyr::arrange(dplyr::desc(contribution), variable, .by_group = TRUE) |>
     dplyr::mutate(
       rank = rank(dplyr::desc(contribution), ties.method = "average"),
       n_features = dplyr::n(),
@@ -160,13 +366,20 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
       ),
       running_contrib = cumsum(contribution)
     ) |>
-    dplyr::group_by(contribution, .add = TRUE) |>
     dplyr::mutate(
-      cum_contrib = max(running_contrib),
-      in_core = cum_contrib <= core_contribution_threshold
+      cum_contrib = running_contrib,
+      # Include features until their combined importance reaches the threshold.
+      # Keep the feature that reaches or exceeds it, but not the ones after it
+      in_core = core_contribution_threshold > 0 &
+        (running_contrib - contribution < core_contribution_threshold)
     ) |>
     dplyr::ungroup() |>
     dplyr::select(-running_contrib)
+
+  # If a model has no usable total importance, the relative contribution
+  # of its features cannot be calculated
+  if (any(!is.finite(scored_top_features$contribution)))
+    stop("A fitted model has no valid total coefficient importance.", call. = FALSE)
 
   return(scored_top_features)
 }
@@ -338,8 +551,8 @@ topFeaturesPerDrugOrClass <- function(
 #' Internal helper called on the output of `topFeaturesPerDrugOrClass()`.
 #'
 #' @param top_filtered_features The tibble of top features for each drug/class generated from `topFeaturesPerDrugOrClass()`.
-#' @param dyad_feature_parquet The path to the Parquet file containing the mapping of features to protein dyads. Must have a \code{feature} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{dyad} column giving the dyad id.
-#'
+#' @param dyad_con Open read-only DBI connection exposing virtual
+#'   `dyad_feature(dyad, feature)` in the ORB DuckDB.
 #' @returns a tibble with one row per species/drug_label/drug_or_class/dyad (\code{dyad} is the protein-dyad id), with:
 #' \itemize{
 #'   \item \code{frequency}: the number of top-feature rows mapped to this dyad.
@@ -352,15 +565,14 @@ topFeaturesPerDrugOrClass <- function(
 #'
 #' @keywords internal
 summariseDyads <- function(top_filtered_features,
-                            dyad_feature_parquet
-                            ) {
+                           dyad_con) 
+  {
   stopifnot(is.data.frame(top_filtered_features))
-  stopifnot(file.exists(dyad_feature_parquet))
+  stopifnot(inherits(dyad_con, "DBIConnection"))
 
-  dyad_feature <- arrow::read_parquet(normalizePath(dyad_feature_parquet)) |> 
-    dplyr::distinct()
-
-  top_dyads <- top_filtered_features |>
+  # Query the ORB only for the selected features. Its virtual mapping may
+  # contain millions of feature-to-dyad links, so avoid loading all of them
+  selected_features <- top_filtered_features |>
     dplyr::mutate(
       feature_type = dplyr::case_when(
         feature_type == "AMRFinder"  ~ "amr",
@@ -371,7 +583,29 @@ summariseDyads <- function(top_filtered_features,
       )
     ) |>
     tidyr::unite("feature", feature_type, variable, sep = ":", remove = FALSE) |>
-    tidyr::unite("feature_type_subtype", feature_type, feature_subtype, sep = ":", remove = FALSE) |>
+    tidyr::unite("feature_type_subtype", feature_type, feature_subtype, sep = ":", remove = FALSE)
+
+  feature_keys <- unique(selected_features$feature)
+  if (!length(feature_keys)) {
+    dyad_feature <- tibble::tibble(dyad = character(), feature = character())
+  } else {
+    # Quote feature IDs safely for SQL and query them in groups of 1,000
+    dyad_feature <- dplyr::bind_rows(lapply(
+      split(feature_keys, ceiling(seq_along(feature_keys) / 1000L)),
+      function(keys) {
+        quoted <- as.character(DBI::dbQuoteString(dyad_con, keys))
+        DBI::dbGetQuery(
+          dyad_con,
+          paste0(
+            "SELECT DISTINCT dyad, feature FROM dyad_feature WHERE feature IN (",
+            paste(quoted, collapse = ", "), ")"
+          )
+        )
+      }
+    ))
+  }
+
+  top_dyads <- selected_features |>
     dplyr::left_join(dyad_feature, by = "feature", relationship = "many-to-many") |>
     dplyr::filter(!is.na(dyad)) |>
     dplyr::select(species, drug_label, drug_or_class, feature_type_subtype, dyad, feature, sign,
@@ -419,8 +653,7 @@ summariseDyads <- function(top_filtered_features,
 #' top features and their importance scores.
 #' @param all_performance_parquet Path to the Parquet file containing
 #' model-performance results.
-#' @param dyad_feature_parquet Path to the Parquet file mapping features
-#' to protein dyads.
+#' @param dyad_con Open DBI connection to the ORB virtual `dyad_feature` view.
 #'
 #' @param MCC_threshold Minimum non-shuffled MCC used to define good model
 #' performance. Default is \code{0.5}, meaning that only models with a non-shuffled MCC of 0.5 or higher are considered.
@@ -502,7 +735,7 @@ summariseDyads <- function(top_filtered_features,
 runFeatureDyadDiscovery <- function(
     all_top_features_parquet,
     all_performance_parquet,
-    dyad_feature_parquet,
+    dyad_con,
     MCC_threshold = 0.5,
     compare_to_shuffled = TRUE,
     core_contribution_threshold = 0.9,
@@ -527,9 +760,11 @@ runFeatureDyadDiscovery <- function(
 
   input_files <- c(
     all_top_features_parquet = all_top_features_parquet,
-    all_performance_parquet = all_performance_parquet,
-    dyad_feature_parquet = dyad_feature_parquet
+    all_performance_parquet = all_performance_parquet
   )
+
+  # Require the ORB virtual mapping
+  stopifnot(inherits(dyad_con, "DBIConnection"))
 
   missing_files <- input_files[!file.exists(input_files)]
 
@@ -915,7 +1150,7 @@ runFeatureDyadDiscovery <- function(
 
   top_dyads <- summariseDyads(
     top_filtered_features = top_features,
-    dyad_feature_parquet = dyad_feature_parquet
+    dyad_con = dyad_con
   )
 
   # -------------------------------------------------------------------------
