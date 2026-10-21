@@ -502,3 +502,9 @@ test_that("the print shows each mode's result", {
   expect_output(print(eligibility), "stratified_year +: not run \\(too_few_groups\\)")
   expect_output(print(eligibility), "lodo +: not run \\(mode_not_supported\\)")
 })
+
+test_that("the print shows the MDR settings", {
+  eligibility <- fxEligibility(modes = "vanilla")
+
+  expect_output(print(eligibility), "MDR +: 2\\+ classes; combination labels need 25 training genomes")
+})

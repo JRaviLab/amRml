@@ -473,6 +473,17 @@ print.amr_eligibility <- function(x, ...) {
     s$min_test_genomes, "genomes,", s$min_test_minority, "of the rarer phenotype\n"
   )
 
+  combination <- x$scopes[.isMulticlass(x$scopes$unit, x$scopes$target), , drop = FALSE]
+  cat(
+    "  MDR      : ", x$profile$settings$mdr_min_classes, "+ classes; combination labels need ",
+    s$min_label_genomes, " training genomes",
+    if (nrow(combination)) {
+      paste0("; ", sum(combination$eligible), " of ", nrow(combination), " combination scopes eligible")
+    },
+    "\n",
+    sep = ""
+  )
+
   labels <- format(x$modes$mode_id)
   for (i in seq_len(nrow(x$modes))) {
     mode <- x$modes[i, , drop = FALSE]
