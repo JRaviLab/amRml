@@ -4,8 +4,8 @@
 #'
 #' Runs every stage on an ORB: [readORB()], [profileORB()], [eligibleScopes()],
 #' [planMatrices()], [buildMatrices()], [expandTasks()] and [fitModels()]. Each
-#' can also be called on its own. Old amRml's standard run is a choice of
-#' `modes`; its intense run adds `seeds` and `labels`.
+#' can also be called on its own. By default every task is fitted on both the real
+#' and the shuffled labels; `labels = "real"` skips the shuffled controls.
 #'
 #' @details
 #' Everything goes to `out_dir`: `eligibility.parquet`, `matrices.parquet`,
@@ -15,7 +15,9 @@
 #' @param out_dir Folder to write to. By default a new run folder,
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
-#' @param seeds,labels Passed to [expandTasks()].
+#' @param seeds Passed to [expandTasks()].
+#' @param labels `"real"`, `"shuffled"` or both (the default), passed to
+#'   [expandTasks()]. 
 #' @param min_genomes,n_fold,min_test_genomes,min_test_minority Passed to
 #'   [eligibleScopes()].
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
@@ -41,7 +43,7 @@ runModelingWorkflow <- function(orb_dir,
                                 out_dir = NULL,
                                 modes = NULL,
                                 seeds = 123L,
-                                labels = "real",
+                                labels = c("real", "shuffled"),
                                 min_genomes = 40,
                                 n_fold = 5,
                                 min_test_genomes = 5,
