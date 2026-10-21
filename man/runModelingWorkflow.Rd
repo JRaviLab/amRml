@@ -15,9 +15,11 @@ runModelingWorkflow(
   min_test_genomes = 5,
   min_test_minority = 2,
   min_label_genomes = 25,
+  mdr_min_classes = 2,
   overwrite = FALSE,
   BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
-  reuse_fits = TRUE
+  reuse_fits = TRUE,
+  feature_types = "standard"
 )
 }
 \arguments{
@@ -36,6 +38,9 @@ runModelingWorkflow(
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_label_genomes}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
+\item{mdr_min_classes}{Passed to \code{\link[=profileORB]{profileORB()}}: fewest drug classes a genome
+must be Resistant in to be MDR; at least 2.}
+
 \item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
 folder is always new.}
@@ -44,6 +49,10 @@ folder is always new.}
 eight-worker cluster with 128 chunks of work to chew through.}
 
 \item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
+
+\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
+\code{"full"}, or an explicit character vector of ORB feature types.
+Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be

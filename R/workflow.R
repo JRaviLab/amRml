@@ -21,8 +21,10 @@
 #' @param seeds Passed to [expandTasks()].
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
 #'   [expandTasks()]. 
-#' @param min_genomes,n_fold,min_test_genomes,min_test_minority Passed to
+#' @param min_genomes,n_fold,min_test_genomes,min_test_minority,min_label_genomes Passed to
 #'   [eligibleScopes()].
+#' @param mdr_min_classes Passed to [profileORB()]: fewest drug classes a genome
+#'   must be Resistant in to be MDR; at least 2.
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
 #'   if `FALSE`, an `out_dir` holding earlier output is refused. The default run
 #'   folder is always new.
@@ -52,6 +54,7 @@ runModelingWorkflow <- function(orb_dir,
                                 min_test_genomes = 5,
                                 min_test_minority = 2,
                                 min_label_genomes = 25,
+                                mdr_min_classes = 2,
                                 overwrite = FALSE,
                                 BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
                                 reuse_fits = TRUE,
@@ -62,12 +65,13 @@ runModelingWorkflow <- function(orb_dir,
   .checkArgSeeds(seeds, call = call)
   .checkArgLabels(labels, call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel::SnowParam()", call = call)
+  .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
   .checkArgFlag(reuse_fits, "reuse_fits", call = call)
 
   orb <- readORB(orb_dir)
   out_dir <- out_dir %||% .defaultOutDir(orb$directory)
   eligibility <- eligibleScopes(
-    profileORB(orb),
+    profileORB(orb, mdr_min_classes = mdr_min_classes),
     modes = modes, min_genomes = min_genomes, n_fold = n_fold,
     min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
     min_label_genomes = min_label_genomes
