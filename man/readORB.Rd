@@ -4,7 +4,7 @@
 \alias{readORB}
 \title{Read an amRdata ORB}
 \usage{
-readORB(path)
+readORB(path = NULL)
 }
 \arguments{
 \item{path}{Character. The ORB directory: the folder amRdata wrote its
@@ -34,7 +34,9 @@ ID column such as \code{gene} or \code{Pfam}.
 
 All errors have class \code{amrml_error}, plus one of:
 \itemize{
-\item \code{amrml_invalid_argument}: \code{path} is not a single directory path.
+\item \code{amrml_invalid_argument}: \code{path} is not a single directory path, or is
+missing in a non-interactive session.
+\item \code{amrml_no_orbs_found}: \code{path} is missing and no usable ORB is registered.
 \item \code{amrml_orb_dir_not_found}: \code{path} does not exist.
 \item \code{amrml_manifest_not_found}: the directory holds no \code{manifest_*.json}.
 \item \code{amrml_orb_no_usable_manifest}: no manifest is usable. \code{observed} holds

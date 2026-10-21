@@ -443,3 +443,89 @@ test_that("printing an ORB shows its summary and returns it invisibly", {
   expect_identical(result$value, orb)
   expect_false(result$visible)
 })
+
+# Listing and choosing ORBs
+
+# Stand in for the amRdata registry with the manifests of `dirs`.
+fxRegistry <- function(dirs, env = parent.frame()) {
+  testthat::local_mocked_bindings(
+    .registryManifests = function() file.path(dirs, fxManifestName()),
+    .env = env
+  )
+}
+
+test_that("listORBs() lists registered ORBs and those found under root, each once", {
+  registered <- fxOrb()
+  root <- withr::local_tempdir()
+  found <- file.path(root, "data", "Tst", "orb")
+  dir.create(found, recursive = TRUE)
+  fxWriteManifest(found, fxReadManifest(registered))
+  fxRegistry(c(registered, found))
+
+  orbs <- listORBs(root)
+  expect_equal(nrow(orbs), 2L)
+  expect_true(all(orbs$usable))
+  expect_setequal(orbs$directory, normalizePath(c(registered, found)))
+  expect_equal(orbs$source[orbs$directory == normalizePath(found)], "both")
+  expect_equal(orbs$source[orbs$directory == normalizePath(registered)], "registry")
+
+  fxRegistry(character())
+  expect_equal(listORBs(root)$source, "root")
+  expect_equal(nrow(listORBs()), 0L)
+})
+
+test_that("one ORB's problem is a row, not an error", {
+  good <- fxOrb()
+  unready <- fxOrb(artifact_status = "building")
+  gone <- file.path(tempdir(), "no-such-orb")
+  fxRegistry(c(unready, gone, good))
+
+  orbs <- listORBs()
+  expect_equal(orbs$directory[[1]], normalizePath(good))
+  expect_equal(orbs$usable, c(TRUE, FALSE, FALSE))
+  expect_equal(
+    orbs$rule_id[match(normalizePath(c(unready, gone), mustWork = FALSE), orbs$directory)],
+    c("orb_not_ready", "orb_dir_not_found")
+  )
+})
+
+test_that("a bad root is an error and unreadable folders under it are warned about", {
+  fxRegistry(character())
+  expect_error(listORBs(c("a", "b")), class = "amrml_invalid_argument")
+  expect_error(listORBs(file.path(tempdir(), "no-such-root")), class = "amrml_orb_dir_not_found")
+
+  skip_on_os("windows")
+  skip_if(identical(Sys.info()[["user"]], "root"), "root ignores permissions")
+  root <- withr::local_tempdir()
+  locked <- file.path(root, "locked")
+  dir.create(locked)
+  Sys.chmod(locked, "000")
+  withr::defer(Sys.chmod(locked, "755"))
+
+  expect_warning(listORBs(root), "can't be read")
+  Sys.chmod(root, "000")
+  expect_error(listORBs(root), class = "amrml_orb_dir_unreadable")
+  Sys.chmod(root, "755")
+})
+
+test_that("readORB() without a path picks from the registry, interactively only", {
+  one <- fxOrb()
+  two <- fxOrb()
+  fxRegistry(one)
+  withr::local_options(rlang_interactive = TRUE)
+
+  expect_message(orb <- readORB(), "Using ORB")
+  expect_equal(orb$directory, normalizePath(one))
+
+  fxRegistry(c(one, two))
+  local_mocked_bindings(menu = function(choices, title) 2L, .package = "utils")
+  expect_equal(readORB()$directory, listORBs()$directory[[2]])
+  local_mocked_bindings(menu = function(choices, title) 0L, .package = "utils")
+  expect_error(readORB(), class = "amrml_invalid_argument")
+
+  fxRegistry(character())
+  expect_error(readORB(), class = "amrml_no_orbs_found")
+
+  withr::local_options(rlang_interactive = FALSE)
+  expect_error(readORB(), class = "amrml_invalid_argument")
+})

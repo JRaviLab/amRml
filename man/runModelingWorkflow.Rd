@@ -9,7 +9,7 @@ runModelingWorkflow(
   out_dir = NULL,
   modes = NULL,
   seeds = 123L,
-  labels = "real",
+  labels = c("real", "shuffled"),
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
@@ -28,7 +28,10 @@ runModelingWorkflow(
 
 \item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
 
-\item{seeds, labels}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
+\item{seeds}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
+
+\item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
+\code{\link[=expandTasks]{expandTasks()}}.}
 
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_label_genomes}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
@@ -49,8 +52,8 @@ reached from it (\verb{$built}, \verb{$built$eligibility}, ...).
 \description{
 Runs every stage on an ORB: \code{\link[=readORB]{readORB()}}, \code{\link[=profileORB]{profileORB()}}, \code{\link[=eligibleScopes]{eligibleScopes()}},
 \code{\link[=planMatrices]{planMatrices()}}, \code{\link[=buildMatrices]{buildMatrices()}}, \code{\link[=expandTasks]{expandTasks()}} and \code{\link[=fitModels]{fitModels()}}. Each
-can also be called on its own. Old amRml's standard run is a choice of
-\code{modes}; its intense run adds \code{seeds} and \code{labels}.
+can also be called on its own. By default every task is fitted on both the real
+and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
 Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},

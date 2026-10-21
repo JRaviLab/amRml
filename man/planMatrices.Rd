@@ -4,15 +4,18 @@
 \alias{planMatrices}
 \title{Plan the matrices to build}
 \usage{
-planMatrices(eligibility)
+planMatrices(eligibility, modes = NULL)
 }
 \arguments{
 \item{eligibility}{An \code{amr_eligibility} from \code{\link[=eligibleScopes]{eligibleScopes()}}.}
+
+\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}} to plan matrices for, or \code{NULL} for
+every mode in \code{eligibility}.}
 }
 \value{
 An \code{amr_matrix_plan} list:
 \itemize{
-\item \code{eligibility}: the eligibility used.
+\item \code{eligibility}: the eligibility used, with \code{members} limited to \code{modes}.
 \item \code{matrices}: one row per matrix: \code{matrix_id}, the scope (\code{mode_id}, \code{unit},
 \code{target}, \code{train_group}, \code{test_group}), \code{feature_type}, \code{encoding}, and
 the scope's \code{n_train} and \code{n_test} genomes (\code{NA} without a test set).
@@ -26,12 +29,15 @@ binary, and also as counts when its table has values above 1.
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument} if
-\code{eligibility} is not from \code{\link[=eligibleScopes]{eligibleScopes()}}.
+\code{eligibility} is not from \code{\link[=eligibleScopes]{eligibleScopes()}} or \code{modes} names an unknown mode.
 }
 
 \examples{
 \dontrun{
 plan <- planMatrices(eligibleScopes(profileORB(readORB("path/to/amRdata/output"))))
 plan$matrices
+
+# Only some modes
+planMatrices(eligibility, modes = c("vanilla", "loto"))
 }
 }
