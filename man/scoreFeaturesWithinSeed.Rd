@@ -37,8 +37,8 @@ a tibble of scored top features, one row per feature within each species/drug_la
 \item \code{rank}: descending rank of \code{contribution} within the group; ties receive the average of the ranks they span.
 \item \code{n_features}: the number of rows (features) in the group.
 \item \code{rank_score}: \code{(n_features - rank) / (n_features - 1)}; ranges 0-1 with higher values indicating higher importance (a single-feature group scores 1).
-\item \code{cum_contrib}: the cumulative sum of \code{contribution} in descending order; features tied on \code{contribution} share the same \code{cum_contrib}, equal to the cumulative sum through the end of their tied block, so a tie is never split by arbitrary sort order.
-\item \code{in_core}: TRUE when \code{cum_contrib <= core_contribution_threshold}; a tied block that would push the cumulative total past the threshold is excluded in its entirety (conservative: stays at-or-under the threshold rather than overshooting it).
+\item \code{cum_contrib}: the cumulative sum of \code{contribution} in descending order, with ties broken deterministically by variable identifier.
+\item \code{in_core}: TRUE for the smallest deterministic prefix reaching the requested cumulative normalized importance; the feature crossing the threshold is INCLUDED. This is a reporting tier, not a multiplicative score.
 }
 }
 \description{

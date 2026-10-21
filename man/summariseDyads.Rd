@@ -4,12 +4,13 @@
 \alias{summariseDyads}
 \title{Aggregate mapped features to protein dyads}
 \usage{
-summariseDyads(top_filtered_features, dyad_feature_parquet)
+summariseDyads(top_filtered_features, dyad_con)
 }
 \arguments{
 \item{top_filtered_features}{The tibble of top features for each drug/class generated from \code{topFeaturesPerDrugOrClass()}.}
 
-\item{dyad_feature_parquet}{The path to the Parquet file containing the mapping of features to protein dyads. Must have a \code{feature} column formatted as \code{"<feature_type>:<variable>"} (using the short feature-type codes \code{amr}/\code{cog}/\code{defense}/\code{pfam}/\code{protein}) and a \code{dyad} column giving the dyad id.}
+\item{dyad_con}{Open read-only DBI connection exposing virtual
+\code{dyad_feature(dyad, feature)} in the ORB DuckDB.}
 }
 \value{
 a tibble with one row per species/drug_label/drug_or_class/dyad (\code{dyad} is the protein-dyad id), with:

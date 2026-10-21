@@ -7,7 +7,7 @@
 runFeatureDyadDiscovery(
   all_top_features_parquet,
   all_performance_parquet,
-  dyad_feature_parquet,
+  dyad_con,
   MCC_threshold = 0.5,
   compare_to_shuffled = TRUE,
   core_contribution_threshold = 0.9,
@@ -33,8 +33,7 @@ top features and their importance scores.}
 \item{all_performance_parquet}{Path to the Parquet file containing
 model-performance results.}
 
-\item{dyad_feature_parquet}{Path to the Parquet file mapping features
-to protein dyads.}
+\item{dyad_con}{Open DBI connection to the ORB virtual \code{dyad_feature} view.}
 
 \item{MCC_threshold}{Minimum non-shuffled MCC used to define good model
 performance. Default is \code{0.5}, meaning that only models with a non-shuffled MCC of 0.5 or higher are considered.}
