@@ -86,3 +86,9 @@ test_that("importance is per label, and predictions carry the predicted label's 
   expect_true(all(fit$predictions$prob_predicted >= 1 / 3 & fit$predictions$prob_predicted <= 1))
   expect_true(all(fit$predictions$truth %in% c("CLX", "CLX_CLY", "Susceptible")))
 })
+
+test_that("the print counts tasks by drug, drug class and MDR", {
+  fit <- fxCombinationFit()
+
+  expect_output(print(fit), "by target: 0 drug, 0 drug class, 1 MDR")
+})

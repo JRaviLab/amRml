@@ -578,6 +578,15 @@ print.amr_fit <- function(x, ...) {
   cat("<amr_fit>", orb$dataset_id, "-", orb$dataset_label, "\n")
   cat("  in", x$built$out_dir, "\n")
   cat("  ", nrow(t), " tasks: ", counts(t), "\n", sep = "")
+  units <- table(factor(
+    x$built$matrices$unit[match(t$matrix_id, x$built$matrices$matrix_id)],
+    c("drug", "drug_class", "mdr")
+  ))
+  cat(
+    "  by target: ", units[["drug"]], " drug, ", units[["drug_class"]], " drug class, ",
+    units[["mdr"]], " MDR\n",
+    sep = ""
+  )
   cat(.modeLines(names(by_mode), vapply(by_mode, counts, character(1))), sep = "\n")
   invisible(x)
 }
