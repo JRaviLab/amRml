@@ -281,6 +281,174 @@
   tables[order(tables$feature_type, method = "radix"), , drop = FALSE]
 }
 
+# Resource names amRdata registers its dataset manifests under, in the BiocFileCache
+# every amR package shares.
+.REGISTRY_PATTERN <- "^amR_dataset_manifest_"
+
+# Paths of the manifests amRdata registered. A cache that can't be opened is reported, not
+# fatal, since `root` may still find ORBs.
+.registryManifests <- function() {
+  tryCatch({
+    bfc <- BiocFileCache::BiocFileCache(ask = FALSE)
+    hits <- BiocFileCache::bfcquery(bfc, query = .REGISTRY_PATTERN, field = "rname", exact = FALSE)
+    as.character(hits$rpath)
+  }, error = function(e) {
+    rlang::inform(c("Could not read the amRdata registry.", x = conditionMessage(e)))
+    character()
+  })
+}
+
+# Directories under `root` (and `root` itself) holding a manifest. Folders that can't be
+# read are skipped with a warning, so an ORB in one isn't mistaken for absent.
+.scanRoot <- function(root, call) {
+  if (!rlang::is_string(root) || !nzchar(root)) {
+    .amrAbort("invalid_argument", "`root` must be a single directory path.", call = call)
+  }
+
+  if (!dir.exists(root)) {
+    .amrAbort("orb_dir_not_found", c("The root to search does not exist.", x = root), call = call)
+  }
+
+  root <- normalizePath(root, mustWork = TRUE)
+  .readable <- function(dirs) file.access(dirs, 4) == 0 & file.access(dirs, 1) == 0
+
+  if (!.readable(root)) {
+    .amrAbort("orb_dir_unreadable", c("The root to search can't be read.", x = root), call = call)
+  }
+
+  dirs <- list.dirs(root, full.names = TRUE, recursive = TRUE)
+  blocked <- dirs[!.readable(dirs)]
+  if (length(blocked)) {
+    rlang::warn(c(
+      paste0(length(blocked), " folder(s) under `root` can't be read, so ORBs in them are not listed."),
+      .bullets(utils::head(blocked, 5))
+    ))
+  }
+
+  readable <- setdiff(dirs, blocked)
+  has_manifest <- vapply(readable, function(dir) {
+    length(list.files(dir, pattern = .MANIFEST_PATTERN)) > 0L
+  }, logical(1))
+  readable[has_manifest]
+}
+
+# One row for an ORB directory: its newest usable manifest, or why it has none.
+.orbRow <- function(dir) {
+  row <- function(usable, rule_id = NA_character_, dataset_id = NA_character_,
+                  dataset_label = NA_character_, finished_at = NA_character_) {
+    tibble::tibble(
+      dataset_id = dataset_id, dataset_label = dataset_label, directory = dir,
+      finished_at = finished_at, usable = usable, rule_id = rule_id
+    )
+  }
+
+  if (!dir.exists(dir)) return(row(FALSE, "orb_dir_not_found"))
+  if (file.access(dir, 4) != 0 || file.access(dir, 1) != 0) return(row(FALSE, "orb_dir_unreadable"))
+
+  paths <- list.files(dir, pattern = .MANIFEST_PATTERN, full.names = TRUE)
+  if (!length(paths)) return(row(FALSE, "manifest_not_found"))
+
+  checked <- lapply(paths, .manifestReadiness)
+  usable <- !vapply(checked, inherits, logical(1), "amrml_error")
+
+  if (!any(usable)) {
+    rule_id <- if (length(checked) == 1L) checked[[1]]$rule_id else "orb_no_usable_manifest"
+    return(row(FALSE, rule_id))
+  }
+
+  chosen <- .newestReady(checked[usable])
+  row(TRUE, dataset_id = chosen$dataset_id, dataset_label = chosen$dataset_label,
+      finished_at = chosen$finished_at)
+}
+
+#' List the ORBs available
+#'
+#' Finds amRdata ORBs the way `runDataProcessing()` finds its datasets: in the
+#' BiocFileCache registry amRdata records each dataset's manifest in. If `root` is
+#' given, the folders under it are searched too, which also finds ORBs that were
+#' never registered. Nothing is read beyond the manifests, so listing is fast; an
+#' ORB's parquet files are only checked by [readORB()].
+#'
+#' A problem with one ORB is a row with `usable = FALSE` and its `rule_id`, so it
+#' doesn't hide the others. A problem with `root` itself is an error, and folders
+#' under `root` that can't be read are skipped with a warning.
+#'
+#' @param root A folder to search for ORBs, recursively, or `NULL` to use the registry
+#'   only.
+#'
+#' @return A tibble with one row per ORB directory, usable ones first and newest first:
+#'   `dataset_id`, `dataset_label`, `directory` (what [readORB()] takes), `finished_at`,
+#'   `usable`, `rule_id` (why it is not usable, otherwise `NA`) and `source` (`"registry"`,
+#'   `"root"` or `"both"`).
+#'
+#' @section Errors:
+#' All errors have class `amrml_error`, plus one of:
+#'
+#' * `amrml_invalid_argument`: `root` is not a single directory path.
+#' * `amrml_orb_dir_not_found`: `root` does not exist.
+#' * `amrml_orb_dir_unreadable`: `root` can't be read.
+#'
+#' @examples
+#' \dontrun{
+#' listORBs()
+#' listORBs("path/to/amRdata/output")
+#' }
+#' @export
+listORBs <- function(root = NULL) {
+  call <- rlang::current_env()
+  normalize <- function(x) unique(normalizePath(x, mustWork = FALSE))
+
+  registered <- normalize(dirname(.registryManifests()))
+  scanned <- if (is.null(root)) character() else normalize(.scanRoot(root, call))
+  dirs <- union(registered, scanned)
+
+  empty <- .orbRow("")[0, ]
+  orbs <- dplyr::bind_rows(empty, lapply(dirs, .orbRow))
+  in_registry <- dirs %in% registered
+  orbs$source <- ifelse(in_registry, ifelse(dirs %in% scanned, "both", "registry"), "root")
+
+  orbs[order(!orbs$usable, dplyr::desc(orbs$finished_at), orbs$directory, method = "radix"), ]
+}
+
+# The ORB directory to read when `readORB()` gets no path: the registry's only usable
+# ORB, or the user's pick from a menu.
+.selectORB <- function(call) {
+  if (!rlang::is_interactive()) {
+    .amrAbort(
+      "invalid_argument",
+      "`path` must be supplied in non-interactive sessions.",
+      call = call
+    )
+  }
+
+  orbs <- listORBs()
+  orbs <- orbs[orbs$usable, , drop = FALSE]
+
+  if (!nrow(orbs)) {
+    .amrAbort(
+      "no_orbs_found",
+      c("No usable ORB is registered.", i = "Run amRdata first, or supply `path`."),
+      call = call
+    )
+  }
+
+  if (nrow(orbs) == 1L) {
+    rlang::inform(paste0("Using ORB: ", orbs$dataset_label[[1]]))
+    return(orbs$directory[[1]])
+  }
+
+  pick <- utils::menu(
+    paste0(orbs$dataset_label, " [", orbs$dataset_id, "]"),
+    title = "Select an ORB to read:"
+  )
+
+  if (pick == 0L) {
+    .amrAbort("invalid_argument", "ORB selection cancelled.", call = call)
+  }
+
+  orbs$directory[[pick]]
+}
+
 #' Read an amRdata ORB
 #'
 #' Validates the ORB in `path` and returns an object describing it.
@@ -297,7 +465,9 @@
 #' @section Errors:
 #' All errors have class `amrml_error`, plus one of:
 #'
-#' * `amrml_invalid_argument`: `path` is not a single directory path.
+#' * `amrml_invalid_argument`: `path` is not a single directory path, or is
+#'   missing in a non-interactive session.
+#' * `amrml_no_orbs_found`: `path` is missing and no usable ORB is registered.
 #' * `amrml_orb_dir_not_found`: `path` does not exist.
 #' * `amrml_manifest_not_found`: the directory holds no `manifest_*.json`.
 #' * `amrml_orb_no_usable_manifest`: no manifest is usable. `observed` holds
@@ -325,8 +495,11 @@
 #' orb$feature_tables
 #' }
 #' @export
-readORB <- function(path) {
+readORB <- function(path = NULL) {
   call <- rlang::current_env()
+
+  # No path: choose from the registered ORBs, as amRdata does for its datasets.
+  if (is.null(path)) path <- .selectORB(call)
 
   # Check the path is a single existing directory.
   if (missing(path) || !rlang::is_string(path) || !nzchar(path)) {

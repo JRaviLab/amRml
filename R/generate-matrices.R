@@ -122,28 +122,39 @@
 #' binary, and also as counts when its table has values above 1.
 #'
 #' @param eligibility An `amr_eligibility` from [eligibleScopes()].
+#' @param modes Mode IDs from [modelingModes()] to plan matrices for, or `NULL` for
+#'   every mode in `eligibility`.
 #'
 #' @return An `amr_matrix_plan` list:
-#'   * `eligibility`: the eligibility used.
+#'   * `eligibility`: the eligibility used, with `members` limited to `modes`.
 #'   * `matrices`: one row per matrix: `matrix_id`, the scope (`mode_id`, `unit`,
 #'     `target`, `train_group`, `test_group`), `feature_type`, `encoding`, and
 #'     the scope's `n_train` and `n_test` genomes (`NA` without a test set).
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument` if
-#' `eligibility` is not from [eligibleScopes()].
+#' `eligibility` is not from [eligibleScopes()] or `modes` names an unknown mode.
 #'
 #' @examples
 #' \dontrun{
 #' plan <- planMatrices(eligibleScopes(profileORB(readORB("path/to/amRdata/output"))))
 #' plan$matrices
+#'
+#' # Only some modes
+#' planMatrices(eligibility, modes = c("vanilla", "loto"))
 #' }
 #' @export
-planMatrices <- function(eligibility) {
+planMatrices <- function(eligibility, modes = NULL) {
   call <- rlang::current_env()
   .checkArgClass(eligibility, "eligibility", "amr_eligibility", "eligibleScopes()", call = call)
+  if (!is.null(modes)) {
+    .checkArgModes(modes, call = call)
+    # Members of the modes left out would have no planned scope when building.
+    eligibility$members <- eligibility$members[eligibility$members$mode_id %in% modes, , drop = FALSE]
+  }
 
   scopes <- eligibility$scopes[eligibility$scopes$eligible, , drop = FALSE]
+  if (!is.null(modes)) scopes <- scopes[scopes$mode_id %in% modes, , drop = FALSE]
   scopes <- tibble::tibble(
     scopes[c("mode_id", .SCOPE_KEYS)],
     n_train = scopes$n_genomes,
