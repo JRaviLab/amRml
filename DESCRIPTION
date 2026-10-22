@@ -49,6 +49,7 @@ Imports:
     rsample,
     sparsevctrs,
     tibble,
+    tidyselect,
     tune,
     withr,
     workflows,

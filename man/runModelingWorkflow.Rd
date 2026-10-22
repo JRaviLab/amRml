@@ -41,8 +41,7 @@ runModelingWorkflow(
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
 folder is always new.}
 
-\item{BPPARAM}{BiocParallel backend passed to \code{\link[=fitModels]{fitModels()}}. Defaults to a
-eight-worker cluster with 128 chunks of work to chew through.}
+\item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
 
 \item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
 
@@ -51,8 +50,10 @@ eight-worker cluster with 128 chunks of work to chew through.}
 Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
 
 \item{resume}{Resume interrupted model fitting in an existing \code{out_dir},
-using its saved matrices and completed task groups. Supply the same modeling
-arguments; \code{BPPARAM} may be changed. \code{overwrite} must be \code{FALSE}.}
+using its saved matrices and completed task groups, or reopen unchanged
+completed results. Supply the same modeling arguments and the exact run
+folder (e.g. \verb{<ORB>/amRml/<date-time>/}); \code{BPPARAM} may be changed.
+\code{overwrite} must be \code{FALSE}.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
@@ -66,11 +67,13 @@ and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
 Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},
-\verb{matrices/}, \code{tasks.parquet} and \verb{results/}. amRdata's files are only read.
+\verb{features/}, \code{matrix_index.rds}, \code{workflow.rds}, \code{tasks.parquet} and \verb{results/}.
+amRdata's files are only read.
 }
 \section{Errors}{
 
-Any error from the stages it runs, all with class \code{amrml_error}.
+Errors from any stage, including \code{amrml_invalid_argument} for mismatched resume
+settings, propagate to the caller.
 }
 
 \examples{

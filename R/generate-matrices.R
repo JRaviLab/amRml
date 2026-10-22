@@ -256,6 +256,7 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
   orb <- plan$eligibility$profile$orb
   out_dir <- out_dir %||% .defaultOutDir(orb$directory)
   .checkArgOutDir(out_dir, orb$directory, overwrite, call = call)
+  out_dir <- .resolvePath(out_dir, call = call)
 
   # Preserve outputs until the new index and feature stores exist
   staging <- tempfile(".matrices-building-", tmpdir = out_dir)
