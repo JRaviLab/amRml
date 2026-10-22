@@ -31,3 +31,4 @@ importFrom(stats,
   quantile,
   sd
 )
+importFrom(utils,head)

@@ -1,7 +1,7 @@
 # Validate and write resumable fits
 
 # An explicit worker receives one group and reads its feature stores locally.
-.runTaskGroup <- function(job, cache, species, model_dir, save_fits) {
+.runTaskGroup <- function(job, species, model_dir, save_fits, cache) {
   shared_fit <- NULL
   outcomes <- vector("list", nrow(job$tasks))
   for (j in seq_len(nrow(job$tasks))) {
@@ -11,7 +11,8 @@
       withr::with_seed(
         task$seed,
         .fitTask(
-          task = task, path = job$paths[[j]], species = species,
+          task = task, path = job$paths[[j]],
+          species = species,
           rows = job$rows[[j]], columns = job$columns[[j]],
           encoding = job$encoding[[j]], cache = cache,
           fitted = shared_fit, return_fitted = keep_fit, multi = job$multi[[j]]
@@ -24,11 +25,14 @@
     if (is.null(outcome[["error"]])) {
       if (keep_fit) shared_fit <- outcome$fitted
       outcome$fitted <- NULL
-      if (save_fits) .saveFitCheckpoint(outcome$model, file.path(model_dir, paste0(task$task_id, ".rds")))
+      if (save_fits) {
+        .saveFitCheckpoint(outcome$model, file.path(model_dir, paste0(task$task_id, ".rds")))
+      }
       outcome$model <- NULL
     }
     outcomes[[j]] <- outcome
   }
+  # Commit the group only after any requested model files have been saved.
   .saveFitCheckpoint(outcomes, job$checkpoint)
   TRUE
 }
@@ -63,11 +67,13 @@
   }
   list(
     version = 2L,
-    contract = "runner",
+    contract = "saved-models",
     tasks = tasks$tasks,
     matrices = tasks$built$matrices,
     groups = groups,
-    reuse_fits = reuse_fits, save_fits = save_fits,
+    reuse_fits = reuse_fits,
+    save_fits = save_fits,
+    species = tasks$built$eligibility$profile$orb$dataset_id,
     input_checksums = checksums
   )
 }
@@ -85,7 +91,7 @@
 }
 
 # Fail invalid checkpoints rather than treating them as model fits
-.readFitCheckpoint <- function(path, task_ids) {
+.readFitCheckpoint <- function(path, task_ids, model_dir, save_fits) {
   result <- readRDS(path)
   valid <- is.list(result) && length(result) == length(task_ids)
   if (valid) for (j in seq_along(task_ids)) {
@@ -101,6 +107,10 @@
       all(x$predictions$task_id == task_ids[[j]]) &&
       is.character(x$undefined) && length(x$undefined) == 1L
     if (!failure && !success) valid <- FALSE
+    if (success && save_fits &&
+        !file.exists(file.path(model_dir, paste0(task_ids[[j]], ".rds")))) {
+      stop("A saved model is missing for checkpoint task: ", task_ids[[j]], call. = FALSE)
+    }
   }
   if (!valid) stop("Invalid fitted task checkpoint: ", path, call. = FALSE)
   result
@@ -112,15 +122,14 @@
     performance = tibble::tibble(
       task_id = character(), species = character(), num_obs = integer(), res_prop = numeric(),
       n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
-      n_labels = integer(), model = character(), n_feats_returned = integer(),
-      n_fold = integer(),
+      n_labels = integer(), model = character(), n_feats_returned = integer(), n_fold = integer(),
       fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
       spec = numeric(), sens = numeric(), log2_apop = numeric(), f1 = numeric(),
       bal_acc = numeric(), auprc = numeric(), run_time_sec = numeric(),
       seed = integer(), date = character()
     ),
     importance = tibble::tibble(
-      task_id = character(), species = character(), label = character(), Variable = character(),
+      task_id = character(), species = character(), Variable = character(),
       Importance = numeric(), Sign = character()
     ),
     predictions = tibble::tibble(
@@ -216,28 +225,28 @@
 #' run in another output directory.
 #'
 #' @param tasks An `amr_tasks` from [expandTasks()].
+#' @param save_fits Save each fitted model to `results/models/<task_id>.rds`:
+#'   the fitted workflow (`fit`) and the `features` its predictors `x1`, `x2`,
+#'   ... stand for.
+#'   Must match the interrupted run when resuming.
 #' @param overwrite Replace results already in the output folder.
 #' @param reuse_fits Reuse fitted models among compatible cross-drug tasks.
 #' @param resume Reuse saved task groups from an interrupted fit or reopen an
 #'   unchanged completed fit. The task plan, matrix files and `reuse_fits`
 #'   setting must match the original run.
+#'   `save_fits` must also match.
 #'
-#' @param BPPARAM A [BiocParallel::BiocParallelParam] backend; by default,
-#'   an eight-worker socket cluster with 128 scheduling chunks. Use
-#'   [BiocParallel::SerialParam()] to run sequentially.
-#'
+#' @param BPPARAM A `BiocParallelParam`, e.g. `BiocParallel::MulticoreParam(4)`,
+#'   or `BiocParallel::SerialParam()` to fit one task at a time.
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
-#'   `status`, `rule_id` and `message`; `tasks.parquet`), and `performance`,
-#'   `importance` and `predictions` (`results/`), plus the `built` matrices. `performance`
-#'   keeps old amRml's columns and rounding, adding `auprc`;
-#'   `n_feat` counts the matrix's features (the recipe may drop more).
-#'   `importance` has old amRml's `Variable`, `Importance` and `Sign` ("POS"
-#'   points to Susceptible), plus `label`: for the MDR combination target,
-#'   which multinomial regression fits with coefficients per label, the label
-#'   a row's coefficient belongs to, and "POS" points to it (`NA` otherwise).
-#'   For that target, `performance` has only `mcc` and `nmcc`, as in old amRml,
-#'   and `res_prop` and `prob_resistant` are `NA`. `n_labels` counts each
-#'   task's labels and `prob_predicted` is the predicted label's probability.
+#'   `status`, `rule_id` and `message`; `tasks.parquet`), `performance`,
+#'   `importance` and `predictions` (`results/`), and the `built` matrices. In
+#'   `importance`, `Sign` "POS" points to Susceptible and "NEG" to Resistant. The
+#'   run's settings and task counts go to `run.json`.
+#'
+#' MDR combination models retain per-label coefficients in `importance$label`.
+#' Their binary-only performance metrics and `prob_resistant` are `NA`;
+#' `n_labels` records label counts and `prob_predicted` the predicted-label probability.
 #'
 #' @section Errors:
 #' Invalid arguments or incompatible resume inputs raise `amrml_invalid_argument`.
@@ -249,17 +258,16 @@
 #' fit$performance
 #' }
 #' @export
-fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
-                      BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
+fitModels <- function(tasks, save_fits = TRUE,
+                      BPPARAM = BiocParallel::bpparam(), overwrite = FALSE,
                       reuse_fits = TRUE, resume = FALSE) {
   call <- rlang::current_env()
-  started <- Sys.time()
-  .checkArgFlag(save_fits, "save_fits", call = call)
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
   .checkArgFlag(overwrite, "overwrite", call = call)
   .checkArgFlag(reuse_fits, "reuse_fits", call = call)
   .checkArgFlag(resume, "resume", call = call)
+  .checkArgFlag(save_fits, "save_fits", call = call)
   if (resume && overwrite) {
     .amrAbort("invalid_argument", "`resume` and `overwrite` cannot both be TRUE.", call = call)
   }
@@ -271,6 +279,8 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
               observed = list(out_dir = out_dir), call = call)
   }
 
+  started <- Sys.time()
+  species <- tasks$built$eligibility$profile$orb$dataset_id
   listed <- tasks$tasks
   listed$status <- rep("fitted", nrow(listed))
   listed$rule_id <- rep(NA_character_, nrow(listed))
@@ -301,13 +311,12 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
     .saveFitCheckpoint(manifest, manifest_path)
   }
   model_dir <- file.path(checkpoint_dir, "models")
-  if (save_fits) dir.create(model_dir, recursive = TRUE, showWarnings = FALSE)
-  species <- tasks$built$eligibility$profile$orb$dataset_id
+  if (save_fits) dir.create(model_dir, showWarnings = FALSE)
   group_paths <- file.path(checkpoint_dir, sprintf("group-%06d.rds", seq_along(groups)))
   recovered <- which(file.exists(group_paths))
   # Validate recovered groups before scheduling more work.
   for (g in recovered) {
-    .readFitCheckpoint(group_paths[[g]], listed$task_id[groups[[g]]])
+    .readFitCheckpoint(group_paths[[g]], listed$task_id[groups[[g]]], model_dir, save_fits)
   }
   pending <- which(!file.exists(group_paths))
   if (resume) message(length(recovered), " task groups recovered; ",
@@ -318,14 +327,14 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
   # An empty cache is sent once; each worker populates its own copy across groups.
   cache <- new.env(parent = emptyenv())
   if (length(jobs)) BiocParallel::bplapply(
-    jobs, .runTaskGroup, cache = cache, species = species, model_dir = model_dir,
-    save_fits = save_fits, BPPARAM = BPPARAM
+    jobs, .runTaskGroup, cache = cache, species = species, model_dir = model_dir, save_fits = save_fits,
+    BPPARAM = BPPARAM
   )
 
   outcomes <- vector("list", nrow(listed))
   for (g in seq_along(groups)) {
     outcomes[groups[[g]]] <- .readFitCheckpoint(
-      group_paths[[g]], listed$task_id[groups[[g]]]
+      group_paths[[g]], listed$task_id[groups[[g]]], model_dir, save_fits
     )
   }
   for (i in seq_along(outcomes)) {
@@ -355,16 +364,18 @@ fitModels <- function(tasks, save_fits = TRUE, overwrite = FALSE,
     arrow::write_parquet(fit[[name]], file.path(staging, "results", paste0(name, ".parquet")))
   }
   if (save_fits) {
-    dir.create(file.path(staging, "results", "models"))
-    for (task_id in listed$task_id[listed$status == "fitted"]) {
-      if (!file.copy(file.path(model_dir, paste0(task_id, ".rds")),
-                     file.path(staging, "results", "models", paste0(task_id, ".rds")))) {
-        stop("Could not retain fitted model: ", task_id)
-      }
+    destination <- file.path(staging, "results", "models")
+    dir.create(destination)
+    ids <- listed$task_id[listed$status == "fitted"]
+    source <- file.path(model_dir, paste0(ids, ".rds"))
+    if (length(ids) && !all(file.copy(source, destination))) {
+      stop("Could not stage every saved model; checkpoints were preserved.", call. = FALSE)
     }
   }
-  jsonlite::write_json(.runRecord(tasks, listed, started, save_fits, BPPARAM),
-                       file.path(staging, "run.json"), pretty = TRUE, auto_unbox = TRUE)
+  jsonlite::write_json(
+    .runRecord(tasks, listed, started, save_fits, BPPARAM),
+    file.path(staging, "run.json"), pretty = TRUE, auto_unbox = TRUE
+  )
   files <- list.files(staging, recursive = TRUE, full.names = FALSE)
   checksums <- tools::md5sum(file.path(staging, files))
   names(checksums) <- files

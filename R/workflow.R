@@ -9,8 +9,9 @@
 #'
 #' @details
 #' Everything goes to `out_dir`: `eligibility.parquet`, `matrices.parquet`,
-#' `features/`, `matrix_index.rds`, `workflow.rds`, `tasks.parquet` and `results/`.
-#' amRdata's files are only read.
+#' `features/`, `matrix_index.rds`, `workflow.rds`, `tasks.parquet`, `run.json`,
+#' `results/` (including `results/models/` when `save_fits = TRUE`), and `merged/` from
+#' [exportMergedResults()]. amRdata's files are only read.
 #'
 #' @param orb_dir An amRdata ORB directory.
 #' @param out_dir Folder to write to. By default a new run folder,
@@ -19,14 +20,13 @@
 #' @param feature_types Feature types to model: `"quick"`, `"standard"` (default),
 #'   `"full"`, or an explicit character vector of ORB feature types.
 #'   Selected before matrices are planned or built; see [planMatrices()].
-#' @param save_fits Retain fitted model files. Passed to [fitModels()].
 #' @param seeds Passed to [expandTasks()].
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
 #'   [expandTasks()]. 
+#' @param save_fits Passed to [fitModels()]. Must match when resuming.
+#' @param mdr_min_classes Minimum resistant classes for MDR, passed to [profileORB()].
 #' @param min_genomes,n_fold,min_test_genomes,min_test_minority,min_mdr_label_genomes Passed to
 #'   [eligibleScopes()].
-#' @param mdr_min_classes Passed to [profileORB()]: fewest drug classes a genome
-#'   must be Resistant in to be MDR; at least 2.
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
 #'   if `FALSE`, an `out_dir` holding earlier output is refused. The default run
 #'   folder is always new.
@@ -57,6 +57,7 @@ runModelingWorkflow <- function(orb_dir,
                                 seeds = 123L,
                                 labels = c("real", "shuffled"),
                                 save_fits = TRUE,
+                                BPPARAM = BiocParallel::bpparam(),
                                 min_genomes = 40,
                                 n_fold = 5,
                                 min_test_genomes = 5,
@@ -64,19 +65,19 @@ runModelingWorkflow <- function(orb_dir,
                                 min_mdr_label_genomes = 25,
                                 mdr_min_classes = 2,
                                 overwrite = FALSE,
-                                BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
                                 reuse_fits = TRUE,
                                 feature_types = "standard",
                                 resume = FALSE) {
   call <- rlang::current_env()
   # Checked first, so a bad value doesn't surface after the matrices are built.
+  .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
   .checkArgSeeds(seeds, call = call)
   .checkArgLabels(labels, call = call)
   .checkArgFlag(overwrite, "overwrite", call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
-  .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
   .checkArgFlag(reuse_fits, "reuse_fits", call = call)
   .checkArgFlag(resume, "resume", call = call)
+  .checkArgFlag(save_fits, "save_fits", call = call)
   if (resume && (is.null(out_dir) || overwrite)) {
     .amrAbort("invalid_argument", "Resuming requires `out_dir` and `overwrite = FALSE`.", call = call)
   }
@@ -87,7 +88,7 @@ runModelingWorkflow <- function(orb_dir,
     min_genomes = min_genomes, n_fold = n_fold,
     min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
     min_mdr_label_genomes = min_mdr_label_genomes, mdr_min_classes = mdr_min_classes,
-    reuse_fits = reuse_fits, feature_types = feature_types
+    reuse_fits = reuse_fits, feature_types = feature_types, save_fits = save_fits
   )
   if (resume) {
     snapshot <- file.path(out_dir, "workflow.rds")
@@ -105,8 +106,7 @@ runModelingWorkflow <- function(orb_dir,
     orb <- readORB(orb_dir)
     out_dir <- out_dir %||% .defaultOutDir(orb$directory)
     eligibility <- eligibleScopes(
-      profileORB(orb, mdr_min_classes = mdr_min_classes),
-      modes = modes, min_genomes = min_genomes, n_fold = n_fold,
+      profileORB(orb, mdr_min_classes = mdr_min_classes), modes = modes, min_genomes = min_genomes, n_fold = n_fold,
       min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
       min_mdr_label_genomes = min_mdr_label_genomes
     )
@@ -121,7 +121,8 @@ runModelingWorkflow <- function(orb_dir,
 
   fit <- fitModels(
     expandTasks(built, seeds = seeds, labels = labels),
-    save_fits = save_fits, overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume
+    save_fits = save_fits,
+    overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume
   )
   exportMergedResults(fit, overwrite = overwrite || resume)
   fit
