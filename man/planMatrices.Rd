@@ -4,13 +4,19 @@
 \alias{planMatrices}
 \title{Plan the matrices to build}
 \usage{
-planMatrices(eligibility, modes = NULL)
+planMatrices(eligibility, modes = NULL, feature_types = "standard")
 }
 \arguments{
 \item{eligibility}{An \code{amr_eligibility} from \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
 \item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}} to plan matrices for, or \code{NULL} for
 every mode in \code{eligibility}.}
+
+\item{feature_types}{A preset (\code{"quick"}, \code{"standard"}, or \code{"full"}) or an
+explicit character vector of feature types. Default \code{"standard"}.
+Quick uses gene, protein, and Pfam; Standard also includes COG and
+AMRFinder; Full additionally includes struct and DefenseCas. Presets use
+only tables present in the ORB. Explicit selections require exact names.}
 }
 \value{
 An \code{amr_matrix_plan} list:
@@ -23,13 +29,15 @@ the scope's \code{n_train} and \code{n_test} genomes (\code{NA} without a test s
 }
 \description{
 Lists every matrix the eligible scopes need, before any is built: one per
-eligible scope, feature type and encoding. Each feature type is encoded as
-binary, and also as counts when its table has values above 1.
+eligible scope, selected feature type and encoding. Each feature type is
+encoded as binary, and also as counts when its table has values above 1.
+Feature types are selected before their tables are scanned or matrices built.
 }
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument} if
-\code{eligibility} is not from \code{\link[=eligibleScopes]{eligibleScopes()}} or \code{modes} names an unknown mode.
+\code{eligibility} is not from \code{\link[=eligibleScopes]{eligibleScopes()}}, \code{modes} names an unknown mode,
+or \code{feature_types} is invalid.
 }
 
 \examples{
@@ -39,5 +47,8 @@ plan$matrices
 
 # Only some modes
 planMatrices(eligibility, modes = c("vanilla", "loto"))
+
+# Quick feature selection
+planMatrices(eligibility, feature_types = "quick")
 }
 }

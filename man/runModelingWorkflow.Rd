@@ -16,7 +16,9 @@ runModelingWorkflow(
   min_test_minority = 2,
   overwrite = FALSE,
   BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
-  reuse_fits = TRUE
+  reuse_fits = TRUE,
+  feature_types = "standard",
+  resume = FALSE
 )
 }
 \arguments{
@@ -43,6 +45,14 @@ folder is always new.}
 eight-worker cluster with 128 chunks of work to chew through.}
 
 \item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
+
+\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
+\code{"full"}, or an explicit character vector of ORB feature types.
+Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+
+\item{resume}{Resume interrupted model fitting in an existing \code{out_dir},
+using its saved matrices and completed task groups. Supply the same modeling
+arguments; \code{BPPARAM} may be changed. \code{overwrite} must be \code{FALSE}.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be

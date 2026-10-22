@@ -183,7 +183,7 @@
   tibble::tibble(
     Variable = features[as.integer(sub("^x", "", names(coefs)))],
     Importance = abs(unname(coefs)),
-    Sign = ifelse(unname(coefs) > 0, "POS", "NEG")
+    Sign = as.character(ifelse(unname(coefs) > 0, "POS", "NEG"))
   )
 }
 
@@ -302,11 +302,64 @@
 
   result <- list(
     performance = performance,
-    importance = tibble::tibble(task_id = task$task_id, importance),
+    importance = tibble::tibble(task_id = rep(task$task_id, nrow(importance)), importance),
     predictions = predictions,
     undefined = if (length(undefined)) toString(undefined) else NA_character_
   )
   if (return_fitted) result$fitted <- fitted
+  result
+}
+
+# Describe the tasks and matrix files a checkpoint belongs to. Checksums prevent
+# completed fits from being mixed with changed training inputs when resuming.
+## This is draft functionality, and should be replaced with proper ORB manifest
+## logging after verification, but modeling resume functionality is badly needed.
+.fitCheckpointManifest <- function(tasks, groups, reuse_fits) {
+  out_dir <- tasks$built$out_dir
+  listed <- tasks$tasks
+  files <- tasks$built$matrices$file[
+    match(listed$matrix_id, tasks$built$matrices$matrix_id)
+  ]
+  inputs <- unique(c("matrix_index.rds", files))
+  checksums <- tools::md5sum(file.path(out_dir, inputs))
+  names(checksums) <- inputs
+  if (anyNA(checksums)) {
+    stop("Cannot read the matrix files needed for checkpoints.", call. = FALSE)
+  }
+
+  list(
+    version = 1L,
+    tasks = listed,
+    matrices = tasks$built$matrices,
+    groups = groups,
+    reuse_fits = reuse_fits,
+    input_checksums = checksums
+  )
+}
+
+# Write one completed task group before its worker finishes. A temporary file
+# prevents an interrupted write from appearing as a finished checkpoint.
+.saveFitCheckpoint <- function(result, path) {
+  temporary <- tempfile(".group-", tmpdir = dirname(path), fileext = ".rds")
+  on.exit(unlink(temporary), add = TRUE)
+  saveRDS(result, temporary, compress = FALSE)
+  if (!file.rename(temporary, path)) {
+    stop("Could not save fitted task group: ", path, call. = FALSE)
+  }
+  invisible(path)
+}
+
+# Fail invalid checkpoints rather than treating them as model fits
+.readFitCheckpoint <- function(path, n_tasks) {
+  result <- readRDS(path)
+  valid <- is.list(result) && length(result) == n_tasks &&
+    all(vapply(result, function(x) {
+      inherits(x, "error") ||
+        (is.list(x) && all(c("performance", "importance", "predictions", "undefined") %in% names(x)))
+    }, logical(1)))
+  if (!valid) {
+    stop("Invalid fitted task checkpoint: ", path, call. = FALSE)
+  }
   result
 }
 
@@ -322,6 +375,9 @@
 #' set `reuse_fits = FALSE` to disable reuse for comparison. Reused tasks'
 #' `run_time_sec` excludes shared training time for follower tasks; the first
 #' task in a group includes the training cost.
+#' Each completed task group is saved in `fit-checkpoints/` so it can be reused
+#' after an interruption. Checkpoints are removed after results are written.
+#' Use `resume = TRUE` with the same tasks and output directory to reuse them.
 #' Each task runs under its own seed. A task that errors is recorded as
 #' `fit_failed`, and one with undefined metrics as `metrics_undefined`; the rest
 #' carry on. A shuffled task permutes the training matrix's labels before the
@@ -330,6 +386,8 @@
 #' @param tasks An `amr_tasks` from [expandTasks()].
 #' @param overwrite Replace results already in the output folder.
 #' @param reuse_fits Reuse fitted models among compatible cross-drug tasks.
+#' @param resume Reuse saved task groups from an interrupted fit. The task plan,
+#'   matrix files and `reuse_fits` setting must match the original run.
 #' @param BPPARAM A [BiocParallel::BiocParallelParam] backend; by default,
 #'   an eight-worker socket cluster with 128 scheduling chunks. Use
 #'   [BiocParallel::SerialParam()] to run sequentially.
@@ -355,15 +413,19 @@
 #' @export
 fitModels <- function(tasks, overwrite = FALSE,
                       BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
-                      reuse_fits = TRUE) {
+                      reuse_fits = TRUE, resume = FALSE) {
   call <- rlang::current_env()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel::SnowParam()", call = call)
   .checkArgFlag(reuse_fits, "reuse_fits", call = call)
+  .checkArgFlag(resume, "resume", call = call)
+  if (resume && overwrite) {
+    .amrAbort("invalid_argument", "`resume` and `overwrite` cannot both be TRUE.", call = call)
+  }
   out_dir <- tasks$built$out_dir
   results <- file.path(out_dir, c("tasks.parquet", "results"))
   .checkArgFlag(overwrite, "overwrite", call = call)
-  if (any(file.exists(results)) && !overwrite) {
+  if (any(file.exists(results)) && !overwrite && !resume) {
     .amrAbort(
       "invalid_argument",
       "The output folder already has results; set `overwrite = TRUE` to replace them.",
@@ -388,11 +450,45 @@ fitModels <- function(tasks, overwrite = FALSE,
     as.list(seq_len(nrow(listed)))
   }
 
-  # Spinning off one task group to one worker; fitted workflow never returned
-  # to main process, just the task results
-  results_by_group <- BiocParallel::bplapply(groups, function(group) {
+  # Check existing fits against the tasks and matrices, only overwrite old checkpoints
+  # on a new run when overwrite = TRUE
+  checkpoint_dir <- file.path(out_dir, "fit-checkpoints")
+  manifest_path <- file.path(checkpoint_dir, "manifest.rds")
+  manifest <- .fitCheckpointManifest(tasks, groups, reuse_fits)
+  if (resume) {
+    if (!file.exists(manifest_path) ||
+        !identical(readRDS(manifest_path), manifest)) {
+      .amrAbort(
+        "invalid_argument",
+        "Saved fits do not match these tasks or matrix files; cannot resume.",
+        call = call
+      )
+    }
+  } else {
+    if (dir.exists(checkpoint_dir) && !overwrite) {
+      .amrAbort(
+        "invalid_argument",
+        "Task checkpoints already exist; use `resume = TRUE` to reuse them.",
+        call = call
+      )
+    }
+    unlink(checkpoint_dir, recursive = TRUE)
+    dir.create(checkpoint_dir, recursive = TRUE)
+    saveRDS(manifest, manifest_path)
+  }
+
+  group_paths <- file.path(checkpoint_dir, sprintf("group-%06d.rds", seq_along(groups)))
+  pending <- which(!file.exists(group_paths))
+  if (resume) {
+    message(sum(file.exists(group_paths)), " task groups recovered; ",
+            length(pending), " task groups remaining.")
+  }
+
+  # Workers save each finished group immediately, only fit missing groups on resumption.
+  if (length(pending)) BiocParallel::bplapply(pending, function(g) {
+    group <- groups[[g]]
     shared_fit <- NULL
-    results <- vector("list", length(group))
+    group_results <- vector("list", length(group))
     for (j in seq_along(group)) {
       i <- group[[j]]
       task <- listed[i, ]
@@ -421,10 +517,16 @@ fitModels <- function(tasks, overwrite = FALSE,
         shared_fit <- result$fitted
         result$fitted <- NULL
       }
-      results[[j]] <- result
+      group_results[[j]] <- result
     }
-    results
+    .saveFitCheckpoint(group_results, group_paths[[g]])
+    TRUE
   }, BPPARAM = BPPARAM)
+
+  # Read every saved group, including groups completed by an earlier run
+  results_by_group <- lapply(seq_along(groups), function(g) {
+    .readFitCheckpoint(group_paths[[g]], length(groups[[g]]))
+  })
 
   results_by_task <- vector("list", nrow(listed))
   for (g in seq_along(groups)) {
@@ -449,7 +551,11 @@ fitModels <- function(tasks, overwrite = FALSE,
   fit <- list(
     tasks = listed,
     performance = dplyr::bind_rows(lapply(fitted, `[[`, "performance")),
-    importance = dplyr::bind_rows(lapply(fitted, `[[`, "importance")),
+    importance = dplyr::bind_rows(lapply(fitted, function(x) {
+      if (is.null(x)) return(NULL)
+      x$importance$Sign <- as.character(x$importance$Sign)
+      x$importance
+    })),
     predictions = dplyr::bind_rows(lapply(fitted, `[[`, "predictions")),
     built = tasks$built
   )
@@ -495,14 +601,44 @@ fitModels <- function(tasks, overwrite = FALSE,
     )
   }
 
-  # Earlier results are replaced only once every task has run
-  ## We may want to update this as we go forward based on memory load!
-  unlink(results, recursive = TRUE)
-  dir.create(file.path(out_dir, "results"))
-  arrow::write_parquet(fit$tasks, file.path(out_dir, "tasks.parquet"))
+  # Keep checkpoints until all Parquet files are finished
+  staging <- tempfile(".results-building-", tmpdir = out_dir)
+  dir.create(file.path(staging, "results"), recursive = TRUE)
+  on.exit(unlink(staging, recursive = TRUE), add = TRUE)
+  arrow::write_parquet(fit$tasks, file.path(staging, "tasks.parquet"))
   for (table in c("performance", "importance", "predictions")) {
-    arrow::write_parquet(fit[[table]], file.path(out_dir, "results", paste0(table, ".parquet")))
+    arrow::write_parquet(fit[[table]], file.path(staging, "results", paste0(table, ".parquet")))
   }
+
+  backup <- tempfile(".results-previous-", tmpdir = out_dir)
+  dir.create(backup)
+  old_moved <- character()
+  new_moved <- character()
+  tryCatch({
+    for (name in c("tasks.parquet", "results")) {
+      if (file.exists(file.path(out_dir, name))) {
+        if (!file.rename(file.path(out_dir, name), file.path(backup, name))) {
+          stop("Could not move previous result: ", name)
+        }
+        old_moved <- c(old_moved, name)
+      }
+      if (!file.rename(file.path(staging, name), file.path(out_dir, name))) {
+        stop("Could not install result: ", name)
+      }
+      new_moved <- c(new_moved, name)
+    }
+  }, error = function(e) {
+    for (name in rev(new_moved)) unlink(file.path(out_dir, name), recursive = TRUE)
+    restored <- vapply(rev(old_moved), function(name) {
+      file.rename(file.path(backup, name), file.path(out_dir, name))
+    }, logical(1))
+    if (all(restored)) unlink(backup, recursive = TRUE)
+    stop(conditionMessage(e), if (!all(restored)) paste0(
+      " Previous results may be recoverable from: ", backup
+    ), call. = FALSE)
+  })
+  unlink(backup, recursive = TRUE)
+  unlink(checkpoint_dir, recursive = TRUE)
 
   structure(fit, class = "amr_fit")
 }

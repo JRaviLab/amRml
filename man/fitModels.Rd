@@ -8,7 +8,8 @@ fitModels(
   tasks,
   overwrite = FALSE,
   BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
-  reuse_fits = TRUE
+  reuse_fits = TRUE,
+  resume = FALSE
 )
 }
 \arguments{
@@ -21,6 +22,9 @@ an eight-worker socket cluster with 128 scheduling chunks. Use
 \code{\link[BiocParallel:SerialParam]{BiocParallel::SerialParam()}} to run sequentially.}
 
 \item{reuse_fits}{Reuse fitted models among compatible cross-drug tasks.}
+
+\item{resume}{Reuse saved task groups from an interrupted fit. The task plan,
+matrix files and \code{reuse_fits} setting must match the original run.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
@@ -42,6 +46,9 @@ Cross-drug tasks with exactly matching training inputs reuse one fitted model;
 set \code{reuse_fits = FALSE} to disable reuse for comparison. Reused tasks'
 \code{run_time_sec} excludes shared training time for follower tasks; the first
 task in a group includes the training cost.
+Each completed task group is saved in \verb{fit-checkpoints/} so it can be reused
+after an interruption. Checkpoints are removed after results are written.
+Use \code{resume = TRUE} with the same tasks and output directory to reuse them.
 Each task runs under its own seed. A task that errors is recorded as
 \code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
 carry on. A shuffled task permutes the training matrix's labels before the
