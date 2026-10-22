@@ -2,7 +2,7 @@
 % Please edit documentation in R/eligibility.R
 \name{eligibleScopes}
 \alias{eligibleScopes}
-\title{Decide what can be modelled}
+\title{Decide what can be modeled}
 \usage{
 eligibleScopes(
   profile,
@@ -38,7 +38,7 @@ scopes it has and how many are eligible (\code{n_scopes}, \code{n_eligible}).
 }
 }
 \description{
-Compares the modelling modes with a profiled ORB. For each mode, records
+Compares the modeling modes with a profiled ORB. For each mode, records
 whether it can run on this ORB at all; for each drug or class in a mode that
 can, records whether it has enough data to model, or why not. Nothing is
 built or fitted.

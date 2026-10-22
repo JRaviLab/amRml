@@ -115,41 +115,104 @@
   list(rows = rows, matrix_scopes = matrix_scopes)
 }
 
+# Select feature tables before planning or loading any model matrices.
+# Presets use the feature tables present in this ORB; an explicit selection must
+# match the ORB exactly so misspelled or unavailable features are not ignored.
+.resolveFeatureTypes <- function(feature_types, available, call) {
+  presets <- list(
+    quick = c("gene", "protein", "Pfam"),
+    standard = c("gene", "protein", "Pfam", "COG", "AMRFinder"),
+    full = c("gene", "protein", "Pfam", "COG", "AMRFinder", "struct", "DefenseCas")
+  )
+
+  if (!is.character(feature_types) || !length(feature_types) ||
+      anyNA(feature_types) || any(!nzchar(feature_types))) {
+    .amrAbort("invalid_argument", "`feature_types` must be a preset or a nonempty character vector.", call = call)
+  }
+
+  preset <- length(feature_types) == 1L &&
+    tolower(feature_types) %in% names(presets)
+  selected <- if (preset) presets[[tolower(feature_types)]] else unique(feature_types)
+
+  if (preset) {
+    selected <- intersect(selected, available)
+  } else {
+    missing <- setdiff(selected, available)
+    if (length(missing)) {
+      .amrAbort(
+        "invalid_argument",
+        paste0("Unknown or unavailable feature type(s): ", paste(missing, collapse = ", "),
+               ". Available: ", paste(available, collapse = ", ")),
+        call = call
+      )
+    }
+  }
+
+  if (!length(selected)) {
+    .amrAbort("invalid_argument", "The selected feature preset has no tables in this ORB.", call = call)
+  }
+  selected
+}
+
 #' Plan the matrices to build
 #'
 #' Lists every matrix the eligible scopes need, before any is built: one per
-#' eligible scope, feature type and encoding. Each feature type is encoded as
-#' binary, and also as counts when its table has values above 1.
+#' eligible scope, selected feature type and encoding. Each feature type is
+#' encoded as binary, and also as counts when its table has values above 1.
+#' Feature types are selected before their tables are scanned or matrices built.
 #'
 #' @param eligibility An `amr_eligibility` from [eligibleScopes()].
+#' @param modes Mode IDs from [modelingModes()] to plan matrices for, or `NULL` for
+#'   every mode in `eligibility`.
+#' @param feature_types A preset (`"quick"`, `"standard"`, or `"full"`) or an
+#'   explicit character vector of feature types. Default `"standard"`.
+#'   Quick uses gene, protein, and Pfam; Standard also includes COG and
+#'   AMRFinder; Full additionally includes struct and DefenseCas. Presets use
+#'   only tables present in the ORB. Explicit selections require exact names.
 #'
 #' @return An `amr_matrix_plan` list:
-#'   * `eligibility`: the eligibility used.
+#'   * `eligibility`: the eligibility used, with `members` limited to `modes`.
 #'   * `matrices`: one row per matrix: `matrix_id`, the scope (`mode_id`, `unit`,
 #'     `target`, `train_group`, `test_group`), `feature_type`, `encoding`, and
 #'     the scope's `n_train` and `n_test` genomes (`NA` without a test set).
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument` if
-#' `eligibility` is not from [eligibleScopes()].
+#' `eligibility` is not from [eligibleScopes()], `modes` names an unknown mode,
+#' or `feature_types` is invalid.
 #'
 #' @examples
 #' \dontrun{
 #' plan <- planMatrices(eligibleScopes(profileORB(readORB("path/to/amRdata/output"))))
 #' plan$matrices
+#'
+#' # Only some modes
+#' planMatrices(eligibility, modes = c("vanilla", "loto"))
+#'
+#' # Quick feature selection
+#' planMatrices(eligibility, feature_types = "quick")
 #' }
 #' @export
-planMatrices <- function(eligibility) {
+planMatrices <- function(eligibility, modes = NULL, feature_types = "standard") {
   call <- rlang::current_env()
   .checkArgClass(eligibility, "eligibility", "amr_eligibility", "eligibleScopes()", call = call)
+  if (!is.null(modes)) {
+    .checkArgModes(modes, call = call)
+    # Members of the modes left out would have no planned scope when building.
+    eligibility$members <- eligibility$members[eligibility$members$mode_id %in% modes, , drop = FALSE]
+  }
 
   scopes <- eligibility$scopes[eligibility$scopes$eligible, , drop = FALSE]
+  if (!is.null(modes)) scopes <- scopes[scopes$mode_id %in% modes, , drop = FALSE]
   scopes <- tibble::tibble(
     scopes[c("mode_id", .SCOPE_KEYS)],
     n_train = scopes$n_genomes,
     n_test = scopes$test_n_genomes
   )
-  encodings <- .encodings(eligibility$profile$orb$feature_tables)
+  feature_tables <- eligibility$profile$orb$feature_tables
+  selected <- .resolveFeatureTypes(feature_types, feature_tables$feature_type, call = call)
+  feature_tables <- feature_tables[feature_tables$feature_type %in% selected, , drop = FALSE]
+  encodings <- .encodings(feature_tables)
 
   keys <- c("mode_id", .SCOPE_KEYS, "feature_type", "encoding")
   matrices <- dplyr::cross_join(scopes, encodings)
@@ -193,6 +256,7 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
   orb <- plan$eligibility$profile$orb
   out_dir <- out_dir %||% .defaultOutDir(orb$directory)
   .checkArgOutDir(out_dir, orb$directory, overwrite, call = call)
+  out_dir <- .resolvePath(out_dir, call = call)
 
   # Preserve outputs until the new index and feature stores exist
   staging <- tempfile(".matrices-building-", tmpdir = out_dir)

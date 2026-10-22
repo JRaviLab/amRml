@@ -1,0 +1,331 @@
+# Fitting a model for each task, with old amRml's method: glmnet logistic regression,
+# tuned by stratified cross-validation and chosen by MCC.
+
+# The phenotypes, with Resistant first so it is the event yardstick scores.
+.PHENOTYPES <- c("Resistant", "Susceptible")
+# Setting an initial cutoff for when matrices are treated as sparse in tidymodels
+# but we should really benchmark this to see where the right threshold is
+.SPARSE_THRESHOLD <- 0.8
+
+
+# Read one scope from the shared sparse feature store and its index
+.readMatrixWide <- function(path, rows, columns, encoding, cache) {
+  if (!exists(path, envir = cache, inherits = FALSE)) {
+    assign(path, readRDS(path), envir = cache)
+  }
+  store <- get(path, envir = cache, inherits = FALSE)
+  genome_idx <- match(rows$genome_id, store$genomes)
+  if (anyNA(genome_idx)) stop("Scope genome is missing from feature store.")
+  values <- store$values[genome_idx, columns, drop = FALSE]
+  if (encoding == "binary") {
+    values@x[] <- as.numeric(values@x > 0)
+    values <- Matrix::drop0(values)
+  }
+
+  list(
+    rows = rows,
+    features = store$features[columns],
+    values = values
+  )
+}
+
+# Ported from old amRml's shuffleLabels(), with the task's seed: the training matrix's labels
+# are permuted before the split. Test rows (cross, leave-one-out) keep their real labels.
+.shuffleLabels <- function(rows) {
+  train <- which(rows$role == "train")
+  rows$phenotype[train] <- rows$phenotype[train][sample.int(length(train))]
+  rows
+}
+
+# Training and test rows. A matrix with test rows uses them; otherwise each phenotype keeps
+# floor((1 - holdout) x n) genomes for training, as rsample's stratified split does.
+# Training rows come grouped by phenotype, in rsample's order: with duplicate features,
+# glmnet's coefficients depend on row order.
+.splitTask <- function(rows, holdout) {
+  if (any(rows$role == "test")) {
+    return(list(train = which(rows$role == "train"), test = which(rows$role == "test")))
+  }
+
+  train <- unlist(lapply(split(seq_len(nrow(rows)), rows$phenotype), function(i) {
+    sort(i[sample.int(length(i), floor((1 - holdout) * length(i)))])
+  }), use.names = FALSE)
+  list(train = train, test = setdiff(seq_len(nrow(rows)), train))
+}
+
+# Each training row's fold, assigned per phenotype as rsample's stratified folds do, but
+# without pooling rare phenotypes (`pool = 0.1`), which can leave a fold without them.
+.stratifiedFolds <- function(phenotype, n_fold) {
+  fold <- integer(length(phenotype))
+  for (level in intersect(.PHENOTYPES, phenotype)) {
+    i <- which(phenotype == level)
+    fold[i] <- sample(rep_len(seq_len(n_fold), length(i)))
+  }
+  fold
+}
+
+# The training data as a data frame: the label, then features renamed x1, x2, ..., so any
+# feature ID works in a formula.
+.modelData <- function(values, phenotype, sparse = FALSE) {
+  if (sparse) {
+    colnames(values) <- paste0("x", seq_len(ncol(values)))
+    data <- sparsevctrs::coerce_to_sparse_tibble(values)
+  } else {
+    data <- as.data.frame(as.matrix(values))
+  }
+  names(data) <- paste0("x", seq_len(ncol(data)))
+  data$phenotype <- factor(phenotype, levels = .PHENOTYPES)
+  data
+}
+
+# Ported from old amRml's buildRecipe(): drop constant features, then normalize.
+.buildRecipe <- function(data, sparse = FALSE) {
+  recipe <- recipes::recipe(phenotype ~ ., data = data) |>
+    recipes::step_zv(recipes::all_predictors())
+  if (sparse) {
+    # step_zv() alone seemingly misses constant nonzero sparse columns, so we're
+    # filtering these out at prep to resolve those errors
+    recipe <- recipes::step_rm(
+      recipe,
+      tidyselect::where(function(x) {
+        sparsevctrs::is_sparse_vector(x) &&
+          length(sparsevctrs::sparse_values(x)) == length(x) &&
+          length(unique(sparsevctrs::sparse_values(x))) == 1L
+      }),
+      id = "zv_sparse_nonzero"
+    )
+    recipes::step_scale(recipe, recipes::all_predictors())
+  } else {
+    recipes::step_normalize(recipe, recipes::all_predictors())
+  }
+}
+
+# Ported from old amRml's buildLRModel().
+.modelSpec <- function() {
+  parsnip::logistic_reg(penalty = tune::tune(), mixture = tune::tune()) |>
+    parsnip::set_engine("glmnet")
+}
+
+# Ported from old amRml's buildTuningGrid(): 10 penalties x 6 mixtures.
+.tuningGrid <- function() {
+  penalty_vec <- 10^seq(-4, -1, length.out = 10)
+  mix_vec <- 0:5 / 5
+  tibble::tibble(
+    penalty = rep(penalty_vec, each = length(mix_vec)),
+    mixture = rep(mix_vec, length(penalty_vec))
+  )
+}
+
+# Ported from old amRml's tuneGrid(), selectBestModel() and fitBestModel(): tune over
+# stratified folds, choose by MCC, and fit on all training rows.
+.fitModel <- function(data, n_fold, sparse = FALSE) {
+  workflow <- workflows::workflow() |>
+    workflows::add_recipe(.buildRecipe(data, sparse = sparse)) |>
+    workflows::add_model(.modelSpec())
+
+  # After the recipe, whose step IDs use random numbers, so the folds match rsample's.
+  fold <- .stratifiedFolds(data$phenotype, n_fold)
+
+  splits <- lapply(sort(unique(fold)), function(k) {
+    rsample::make_splits(
+      list(analysis = which(fold != k), assessment = which(fold == k)),
+      data = data
+    )
+  })
+  resamples <- rsample::manual_rset(splits, ids = paste0("Fold", sort(unique(fold))))
+
+  tuned <- tune::tune_grid(
+    workflow,
+    resamples = resamples,
+    grid = .tuningGrid(),
+    metrics = yardstick::metric_set(
+      yardstick::f_meas, yardstick::pr_auc, yardstick::spec, yardstick::sens,
+      yardstick::bal_accuracy, yardstick::mcc
+    ),
+    control = tune::control_grid(allow_par = FALSE)
+  )
+  best <- tune::select_best(tuned, metric = "mcc")
+
+  list(
+    fit = parsnip::fit(tune::finalize_workflow(workflow, best), data = data),
+    penalty = best$penalty,
+    mixture = best$mixture
+  )
+}
+
+# Ported from old amRml's .calculate*() helpers, keeping AUPRC. Resistant is the event.
+# Each metric is rounded to 2, and nMCC and log2(AUPRC / prior) use the rounded values.
+.taskMetrics <- function(scored) {
+  estimate <- function(metric, ...) {
+    round(as.numeric(metric(scored, truth = "phenotype", ...)$.estimate), 2)
+  }
+  mcc <- estimate(yardstick::mcc, estimate = ".pred_class")
+  auprc <- estimate(yardstick::pr_auc, ".pred_Resistant")
+
+  tibble::tibble(
+    mcc = mcc,
+    nmcc = round((mcc + 1) / 2, 2),
+    spec = estimate(yardstick::spec, estimate = ".pred_class"),
+    sens = estimate(yardstick::sens, estimate = ".pred_class"),
+    log2_apop = round(log2(auprc / mean(scored$phenotype == "Resistant")), 2),
+    f1 = estimate(yardstick::f_meas, estimate = ".pred_class"),
+    bal_acc = estimate(yardstick::bal_accuracy, estimate = ".pred_class"),
+    auprc = auprc
+  )
+}
+
+# Ported from old amRml's .viGlmnet(): the non-zero coefficients at the chosen penalty, on
+# normalized features. glmnet models the second level, so "POS" points to Susceptible.
+.taskImportance <- function(fit, penalty, features) {
+  coefs <- stats::coef(parsnip::extract_fit_engine(fit), s = penalty)[, 1]
+  coefs <- coefs[names(coefs) != "(Intercept)" & coefs != 0]
+  coefs <- coefs[order(-abs(coefs))]
+
+  tibble::tibble(
+    Variable = features[as.integer(sub("^x", "", names(coefs)))],
+    Importance = abs(unname(coefs)),
+    Sign = as.character(ifelse(unname(coefs) > 0, "POS", "NEG"))
+  )
+}
+
+# Cross-test tasks can share a fit when the training inputs exactly match
+.fitTaskGroups <- function(listed, matrices, index) {
+  positions <- match(listed$matrix_id, matrices$matrix_id)
+  signatures <- vector("list", nrow(listed))
+  signature_set <- rep(NA_character_, nrow(listed))
+
+  for (i in which(matrices$mode_id[positions] == "cross_drug")) {
+    p <- positions[[i]]
+    rows <- index$rows[[index$matrix_scopes[[p]]]]
+    if (!any(rows$role == "test")) next
+
+    train <- rows$role == "train"
+    signatures[[i]] <- list(
+      file = matrices$file[[p]],
+      columns = index$columns[[p]],
+      encoding = matrices$encoding[[p]],
+      genome_id = rows$genome_id[train],
+      phenotype = rows$phenotype[train],
+      labels = listed$labels[[i]],
+      seed = listed$seed[[i]],
+      n_fold = listed$n_fold[[i]],
+      holdout = listed$holdout[[i]]
+    )
+    # Collect all signature details
+    signature_set[[i]] <- paste(
+      signatures[[i]]$file, signatures[[i]]$encoding,
+      signatures[[i]]$labels, signatures[[i]]$seed,
+      signatures[[i]]$n_fold, signatures[[i]]$holdout,
+      length(signatures[[i]]$columns), length(signatures[[i]]$genome_id),
+      sep = "|"
+    )
+  }
+
+  leader <- seq_len(nrow(listed))
+  candidates <- which(!is.na(signature_set))
+  for (part in split(candidates, signature_set[candidates])) {
+    representatives <- integer()
+    for (i in part) {
+      found <- representatives[vapply(representatives, function(j) {
+        identical(signatures[[i]], signatures[[j]])
+      }, logical(1))]
+      if (length(found)) {
+        leader[[i]] <- found[[1L]]
+      } else {
+        representatives <- c(representatives, i)
+      }
+    }
+  }
+
+  split(seq_len(nrow(listed)), factor(leader, levels = unique(leader)))
+}
+
+# One task: shuffle if asked, split, tune, fit, and score on the test genomes.
+.fitTask <- function(task, path, rows, columns, encoding, cache,
+                     fitted = NULL, return_fitted = FALSE) {
+  started <- Sys.time()
+  matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
+  rows <- matrix$rows
+  if (task$labels == "shuffled") {
+    rows <- .shuffleLabels(rows)
+  }
+
+  split <- .splitTask(rows, task$holdout)
+  train_values <- matrix$values[split$train, , drop = FALSE]
+  # Not sure if there's a function to calculate how sparsely populated a matrix
+  # is, but here finding it by non-zero values over total values in the matrix
+  # and taking the inverse by subtracting the populated fraction from 1
+  sparsity <- 1 - Matrix::nnzero(train_values) / (as.double(nrow(train_values)) * ncol(train_values))
+  # Is that fraction greater than or equal to our cutoff? If so, that's sparse
+  use_sparse <- sparsity >= .SPARSE_THRESHOLD
+  train <- .modelData(train_values, rows$phenotype[split$train], sparse = use_sparse)
+  test <- .modelData(matrix$values[split$test, , drop = FALSE],
+                     rows$phenotype[split$test], sparse = use_sparse)
+  if (is.null(fitted)) fitted <- .fitModel(train, task$n_fold, sparse = use_sparse)
+
+  scored <- parsnip::augment(fitted$fit, test)
+  metrics <- .taskMetrics(scored)
+  importance <- .taskImportance(fitted$fit, fitted$penalty, matrix$features)
+  input <- rows$role == "train"
+
+  performance <- tibble::tibble(
+    task_id = task$task_id,
+    num_obs = sum(input),
+    res_prop = round(mean(rows$phenotype[input] == "Resistant"), 2),
+    n_test = length(split$test),
+    res_prop_test = round(mean(test$phenotype == "Resistant"), 2),
+    n_feat = length(matrix$features),
+    model = "LR",
+    n_feats_returned = nrow(importance),
+    n_fold = task$n_fold,
+    fit_penalty = fitted$penalty,
+    fit_mixture = fitted$mixture,
+    metrics,
+    run_time_sec = round(as.numeric(difftime(Sys.time(), started, units = "secs")), 2),
+    seed = task$seed,
+    date = as.character(Sys.Date())
+  )
+  predictions <- tibble::tibble(
+    task_id = task$task_id,
+    genome_id = rows$genome_id[split$test],
+    truth = as.character(scored$phenotype),
+    predicted = as.character(scored$.pred_class),
+    prob_resistant = scored$.pred_Resistant
+  )
+
+  # Metrics that can't be computed, such as MCC when every test genome gets one prediction.
+  undefined <- names(metrics)[vapply(metrics, is.na, logical(1))]
+  if (length(undefined) && dplyr::n_distinct(scored$.pred_class) == 1) {
+    undefined <- paste0(
+      toString(undefined), "; every test genome was predicted ", scored$.pred_class[[1]]
+    )
+  }
+
+  result <- list(
+    performance = performance,
+    importance = tibble::tibble(task_id = rep(task$task_id, nrow(importance)), importance),
+    predictions = predictions,
+    undefined = if (length(undefined)) toString(undefined) else NA_character_
+  )
+  if (return_fitted) result$fitted <- fitted
+  result
+}
+
+#' @export
+print.amr_fit <- function(x, ...) {
+  orb <- x$built$eligibility$profile$orb
+  t <- x$tasks
+  modes <- .taskModes(t, x$built$matrices)
+  by_mode <- split(t, factor(modes, unique(modes)))
+  counts <- function(rows) {
+    paste0(
+      sum(rows$status == "fitted"), " fitted (", sum(rows$rule_id %in% "metrics_undefined"),
+      " with undefined metrics), ", sum(rows$status == "failed"), " failed"
+    )
+  }
+
+  cat("<amr_fit>", orb$dataset_id, "-", orb$dataset_label, "\n")
+  cat("  in", x$built$out_dir, "\n")
+  cat("  ", nrow(t), " tasks: ", counts(t), "\n", sep = "")
+  cat(.modeLines(names(by_mode), vapply(by_mode, counts, character(1))), sep = "\n")
+  invisible(x)
+}
