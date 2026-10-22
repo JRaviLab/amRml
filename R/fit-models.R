@@ -1,43 +1,59 @@
-# Fitting each task's model: glmnet logistic regression, tuned by cross-validation on MCC.
+# Fitting a model for each task, with old amRml's method: glmnet logistic regression,
+# tuned by stratified cross-validation and chosen by MCC.
 
 # The phenotypes, with Resistant first so it is the event yardstick scores.
 .PHENOTYPES <- c("Resistant", "Susceptible")
+# Setting an initial cutoff for when matrices are treated as sparse in tidymodels
+# but we should really benchmark this to see where the right threshold is
+.SPARSE_THRESHOLD <- 0.8
 
 
-# A matrix file (a complete grid, sorted by genome then feature) as its rows and its values.
-.readMatrixWide <- function(path) {
-  long <- arrow::read_parquet(path)
-  features <- long$feature_id[long$genome_id == long$genome_id[[1]]]
-  rows <- long[seq(1, nrow(long), by = length(features)), c("genome_id", "role", "phenotype")]
+# Read one scope from the shared sparse feature store and its index
+.readMatrixWide <- function(path, rows, columns, encoding, cache) {
+  if (!exists(path, envir = cache, inherits = FALSE)) {
+    assign(path, readRDS(path), envir = cache)
+  }
+  store <- get(path, envir = cache, inherits = FALSE)
+  genome_idx <- match(rows$genome_id, store$genomes)
+  if (anyNA(genome_idx)) stop("Scope genome is missing from feature store.")
+  values <- store$values[genome_idx, columns, drop = FALSE]
+  if (encoding == "binary") {
+    values@x[] <- as.numeric(values@x > 0)
+    values <- Matrix::drop0(values)
+  }
 
   list(
     rows = rows,
-    features = features,
-    values = matrix(long$value, nrow = nrow(rows), byrow = TRUE)
+    features = store$features[columns],
+    values = values
   )
 }
 
-# The training rows' labels permuted; test rows keep their real labels.
+# Ported from old amRml's shuffleLabels(), with the task's seed: the training matrix's labels
+# are permuted before the split. Test rows (cross, leave-one-out) keep their real labels.
 .shuffleLabels <- function(rows) {
   train <- which(rows$role == "train")
   rows$phenotype[train] <- rows$phenotype[train][sample.int(length(train))]
   rows
 }
 
-# Training and test rows: the matrix's test rows, or a stratified holdout drawn as rsample does.
+# Training and test rows. A matrix with test rows uses them; otherwise each phenotype keeps
+# floor((1 - holdout) x n) genomes for training, as rsample's stratified split does.
+# Training rows come grouped by phenotype, in rsample's order: with duplicate features,
+# glmnet's coefficients depend on row order.
 .splitTask <- function(rows, holdout) {
   if (any(rows$role == "test")) {
     return(list(train = which(rows$role == "train"), test = which(rows$role == "test")))
   }
 
-  # Grouped by phenotype in rsample's order, since glmnet's fit depends on row order.
   train <- unlist(lapply(split(seq_len(nrow(rows)), rows$phenotype), function(i) {
     sort(i[sample.int(length(i), floor((1 - holdout) * length(i)))])
   }), use.names = FALSE)
   list(train = train, test = setdiff(seq_len(nrow(rows)), train))
 }
 
-# Each training row's fold, stratified by phenotype as rsample does, without pooling rare ones.
+# Each training row's fold, assigned per phenotype as rsample's stratified folds do, but
+# without pooling rare phenotypes (`pool = 0.1`), which can leave a fold without them.
 .stratifiedFolds <- function(phenotype, n_fold) {
   fold <- integer(length(phenotype))
   for (level in intersect(.PHENOTYPES, phenotype)) {
@@ -47,28 +63,49 @@
   fold
 }
 
-# The model's data, with features renamed x1, x2, ... so any feature ID works in a formula.
-.modelData <- function(values, phenotype) {
-  data <- as.data.frame(values)
+# The training data as a data frame: the label, then features renamed x1, x2, ..., so any
+# feature ID works in a formula.
+.modelData <- function(values, phenotype, sparse = FALSE) {
+  if (sparse) {
+    colnames(values) <- paste0("x", seq_len(ncol(values)))
+    data <- sparsevctrs::coerce_to_sparse_tibble(values)
+  } else {
+    data <- as.data.frame(as.matrix(values))
+  }
   names(data) <- paste0("x", seq_len(ncol(data)))
   data$phenotype <- factor(phenotype, levels = .PHENOTYPES)
   data
 }
 
-# Drop constant features, then normalize.
-.buildRecipe <- function(data) {
-  recipes::recipe(phenotype ~ ., data = data) |>
-    recipes::step_zv(recipes::all_predictors()) |>
-    recipes::step_normalize(recipes::all_predictors())
+# Ported from old amRml's buildRecipe(): drop constant features, then normalize.
+.buildRecipe <- function(data, sparse = FALSE) {
+  recipe <- recipes::recipe(phenotype ~ ., data = data) |>
+    recipes::step_zv(recipes::all_predictors())
+  if (sparse) {
+    # step_zv() alone seemingly misses constant nonzero sparse columns, so we're
+    # filtering these out at prep to resolve those errors
+    recipe <- recipes::step_rm(
+      recipe,
+      tidyselect::where(function(x) {
+        sparsevctrs::is_sparse_vector(x) &&
+          length(sparsevctrs::sparse_values(x)) == length(x) &&
+          length(unique(sparsevctrs::sparse_values(x))) == 1L
+      }),
+      id = "zv_sparse_nonzero"
+    )
+    recipes::step_scale(recipe, recipes::all_predictors())
+  } else {
+    recipes::step_normalize(recipe, recipes::all_predictors())
+  }
 }
 
-# Logistic regression with glmnet, its penalty and mixture tuned.
+# Ported from old amRml's buildLRModel().
 .modelSpec <- function() {
   parsnip::logistic_reg(penalty = tune::tune(), mixture = tune::tune()) |>
     parsnip::set_engine("glmnet")
 }
 
-# 10 penalties x 6 mixtures.
+# Ported from old amRml's buildTuningGrid(): 10 penalties x 6 mixtures.
 .tuningGrid <- function() {
   penalty_vec <- 10^seq(-4, -1, length.out = 10)
   mix_vec <- 0:5 / 5
@@ -78,10 +115,11 @@
   )
 }
 
-# Tune over stratified folds, choose by MCC, and fit on all training rows.
-.fitModel <- function(data, n_fold) {
+# Ported from old amRml's tuneGrid(), selectBestModel() and fitBestModel(): tune over
+# stratified folds, choose by MCC, and fit on all training rows.
+.fitModel <- function(data, n_fold, sparse = FALSE) {
   workflow <- workflows::workflow() |>
-    workflows::add_recipe(.buildRecipe(data)) |>
+    workflows::add_recipe(.buildRecipe(data, sparse = sparse)) |>
     workflows::add_model(.modelSpec())
 
   # After the recipe, whose step IDs use random numbers, so the folds match rsample's.
@@ -102,7 +140,8 @@
     metrics = yardstick::metric_set(
       yardstick::f_meas, yardstick::pr_auc, yardstick::spec, yardstick::sens,
       yardstick::bal_accuracy, yardstick::mcc
-    )
+    ),
+    control = tune::control_grid(allow_par = FALSE)
   )
   best <- tune::select_best(tuned, metric = "mcc")
 
@@ -113,7 +152,8 @@
   )
 }
 
-# Test metrics with Resistant as the event, rounded to 2; nMCC and log2_apop use rounded values.
+# Ported from old amRml's .calculate*() helpers, keeping AUPRC. Resistant is the event.
+# Each metric is rounded to 2, and nMCC and log2(AUPRC / prior) use the rounded values.
 .taskMetrics <- function(scored) {
   estimate <- function(metric, ...) {
     round(as.numeric(metric(scored, truth = "phenotype", ...)$.estimate), 2)
@@ -133,7 +173,8 @@
   )
 }
 
-# Non-zero coefficients at the chosen penalty; glmnet models Susceptible, so "POS" points to it.
+# Ported from old amRml's .viGlmnet(): the non-zero coefficients at the chosen penalty, on
+# normalized features. glmnet models the second level, so "POS" points to Susceptible.
 .taskImportance <- function(fit, penalty, features) {
   coefs <- stats::coef(parsnip::extract_fit_engine(fit), s = penalty)[, 1]
   coefs <- coefs[names(coefs) != "(Intercept)" & coefs != 0]
@@ -142,23 +183,84 @@
   tibble::tibble(
     Variable = features[as.integer(sub("^x", "", names(coefs)))],
     Importance = abs(unname(coefs)),
-    Sign = ifelse(unname(coefs) > 0, "POS", "NEG")
+    Sign = as.character(ifelse(unname(coefs) > 0, "POS", "NEG"))
   )
 }
 
+# Cross-test tasks can share a fit when the training inputs exactly match
+.fitTaskGroups <- function(listed, matrices, index) {
+  positions <- match(listed$matrix_id, matrices$matrix_id)
+  signatures <- vector("list", nrow(listed))
+  signature_set <- rep(NA_character_, nrow(listed))
+
+  for (i in which(matrices$mode_id[positions] == "cross_drug")) {
+    p <- positions[[i]]
+    rows <- index$rows[[index$matrix_scopes[[p]]]]
+    if (!any(rows$role == "test")) next
+
+    train <- rows$role == "train"
+    signatures[[i]] <- list(
+      file = matrices$file[[p]],
+      columns = index$columns[[p]],
+      encoding = matrices$encoding[[p]],
+      genome_id = rows$genome_id[train],
+      phenotype = rows$phenotype[train],
+      labels = listed$labels[[i]],
+      seed = listed$seed[[i]],
+      n_fold = listed$n_fold[[i]],
+      holdout = listed$holdout[[i]]
+    )
+    # Collect all signature details
+    signature_set[[i]] <- paste(
+      signatures[[i]]$file, signatures[[i]]$encoding,
+      signatures[[i]]$labels, signatures[[i]]$seed,
+      signatures[[i]]$n_fold, signatures[[i]]$holdout,
+      length(signatures[[i]]$columns), length(signatures[[i]]$genome_id),
+      sep = "|"
+    )
+  }
+
+  leader <- seq_len(nrow(listed))
+  candidates <- which(!is.na(signature_set))
+  for (part in split(candidates, signature_set[candidates])) {
+    representatives <- integer()
+    for (i in part) {
+      found <- representatives[vapply(representatives, function(j) {
+        identical(signatures[[i]], signatures[[j]])
+      }, logical(1))]
+      if (length(found)) {
+        leader[[i]] <- found[[1L]]
+      } else {
+        representatives <- c(representatives, i)
+      }
+    }
+  }
+
+  split(seq_len(nrow(listed)), factor(leader, levels = unique(leader)))
+}
+
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes.
-.fitTask <- function(task, path, species) {
+.fitTask <- function(task, path, species, rows, columns, encoding, cache,
+                     fitted = NULL, return_fitted = FALSE) {
   started <- Sys.time()
-  matrix <- .readMatrixWide(path)
+  matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
   rows <- matrix$rows
   if (task$labels == "shuffled") {
     rows <- .shuffleLabels(rows)
   }
 
   split <- .splitTask(rows, task$holdout)
-  train <- .modelData(matrix$values[split$train, , drop = FALSE], rows$phenotype[split$train])
-  test <- .modelData(matrix$values[split$test, , drop = FALSE], rows$phenotype[split$test])
-  fitted <- .fitModel(train, task$n_fold)
+  train_values <- matrix$values[split$train, , drop = FALSE]
+  # Not sure if there's a function to calculate how sparsely populated a matrix
+  # is, but here finding it by non-zero values over total values in the matrix
+  # and taking the inverse by subtracting the populated fraction from 1
+  sparsity <- 1 - Matrix::nnzero(train_values) / (as.double(nrow(train_values)) * ncol(train_values))
+  # Is that fraction greater than or equal to our cutoff? If so, that's sparse
+  use_sparse <- sparsity >= .SPARSE_THRESHOLD
+  train <- .modelData(train_values, rows$phenotype[split$train], sparse = use_sparse)
+  test <- .modelData(matrix$values[split$test, , drop = FALSE],
+                     rows$phenotype[split$test], sparse = use_sparse)
+  if (is.null(fitted)) fitted <- .fitModel(train, task$n_fold, sparse = use_sparse)
 
   scored <- parsnip::augment(fitted$fit, test)
   metrics <- .taskMetrics(scored)
@@ -200,35 +302,19 @@
     )
   }
 
-  list(
+  result <- list(
     performance = performance,
-    importance = tibble::tibble(task_id = task$task_id, species = species, importance),
+    importance = tibble::tibble(
+      task_id = rep(task$task_id, nrow(importance)),
+      species = rep(species, nrow(importance)), importance
+    ),
     predictions = predictions,
     undefined = if (length(undefined)) toString(undefined) else NA_character_,
     # The model's predictors are x1, x2, ...; `features` names them, in that order.
     model = list(fit = fitted$fit, features = matrix$features)
   )
-}
-
-# One task on a worker: fit under its seed, save the fit, and return the results or the error.
-.runTask <- function(job, species, staging, save_fits) {
-  result <- tryCatch(
-    withr::with_seed(
-      job$task$seed,
-      .fitTask(job$task, job$path, species),
-      .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-      .rng_sample_kind = "Rejection"
-    ),
-    error = function(e) e
-  )
-
-  if (inherits(result, "error")) {
-    return(list(error = conditionMessage(result)))
-  }
-  if (save_fits) {
-    saveRDS(result$model, file.path(staging, "models", paste0(job$task$task_id, ".rds")))
-  }
-  result[names(result) != "model"]
+  if (return_fitted) result$fitted <- fitted
+  result
 }
 
 # The run's settings and outcome, as written to run.json; vectors stay arrays (I()).
@@ -265,155 +351,6 @@
     n_failed = sum(listed$status == "failed")
   )
 }
-
-#' Fit the listed models
-#'
-#' Fits every task from [expandTasks()]: glmnet logistic regression over 10
-#' penalties and 6 mixtures, tuned by stratified `n_fold` cross-validation and
-#' chosen by MCC, then scored on the task's test genomes.
-#'
-#' @details
-#' Each task runs under its own seed, so results are the same in serial and in
-#' parallel. A task that errors is recorded as `fit_failed`, and one with
-#' undefined metrics as `metrics_undefined`; the rest carry on.
-#'
-#' @param tasks An `amr_tasks` from [expandTasks()].
-#' @param save_fits Save each fitted model to `results/models/<task_id>.rds`:
-#'   the fitted workflow (`fit`) and the `features` its predictors `x1`, `x2`,
-#'   ... stand for.
-#' @param BPPARAM A `BiocParallelParam`, e.g. `BiocParallel::MulticoreParam(4)`,
-#'   or `BiocParallel::SerialParam()` to fit one task at a time.
-#' @param overwrite Replace results already in the output folder.
-#'
-#' @return An `amr_fit` list, also written to the output folder: `tasks` (with
-#'   `status`, `rule_id` and `message`; `tasks.parquet`), `performance`,
-#'   `importance` and `predictions` (`results/`), and the `built` matrices. In
-#'   `importance`, `Sign` "POS" points to Susceptible and "NEG" to Resistant. The
-#'   run's settings and task counts go to `run.json`.
-#'
-#' @section Errors:
-#' All errors have class `amrml_error`, plus `amrml_invalid_argument`: `tasks`
-#' is not from [expandTasks()], `save_fits` or `overwrite` is not `TRUE` or
-#' `FALSE`, `BPPARAM` is not a `BiocParallelParam`, or results already exist
-#' and `overwrite` is `FALSE`.
-#'
-#' @examples
-#' \dontrun{
-#' fit <- fitModels(expandTasks(built))
-#' fit$performance
-#' }
-#' @export
-fitModels <- function(tasks,
-                      save_fits = TRUE,
-                      BPPARAM = BiocParallel::bpparam(),
-                      overwrite = FALSE) {
-  call <- rlang::current_env()
-  .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
-  .checkArgFlag(save_fits, "save_fits", call = call)
-  .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
-  out_dir <- tasks$built$out_dir
-  results <- file.path(out_dir, c("tasks.parquet", "run.json", "results"))
-  .checkArgFlag(overwrite, "overwrite", call = call)
-  if (any(file.exists(results)) && !overwrite) {
-    .amrAbort(
-      "invalid_argument",
-      "The output folder already has results; set `overwrite = TRUE` to replace them.",
-      observed = list(out_dir = out_dir),
-      call = call
-    )
-  }
-
-  started <- Sys.time()
-  species <- tasks$built$eligibility$profile$orb$dataset_id
-  listed <- tasks$tasks
-  files <- tasks$built$matrices$file[match(listed$matrix_id, tasks$built$matrices$matrix_id)]
-  listed$status <- "fitted"
-  listed$rule_id <- NA_character_
-  listed$message <- NA_character_
-  fitted <- vector("list", nrow(listed))
-
-  # Fits are saved as they're made, in a staging folder moved into results/ at the end.
-  staging <- tempfile(".results-building-", tmpdir = out_dir)
-  dir.create(file.path(staging, "models"), recursive = TRUE)
-  on.exit(unlink(staging, recursive = TRUE), add = TRUE)
-
-  # Each worker gets only its task row and matrix path, and reads the matrix itself.
-  jobs <- lapply(seq_len(nrow(listed)), function(i) {
-    list(task = listed[i, ], path = file.path(out_dir, files[[i]]))
-  })
-  outcomes <- BiocParallel::bplapply(
-    jobs, .runTask,
-    species = species, staging = staging, save_fits = save_fits, BPPARAM = BPPARAM
-  )
-
-  for (i in seq_along(outcomes)) {
-    outcome <- outcomes[[i]]
-    if (!is.null(outcome[["error"]])) {
-      listed$status[[i]] <- "failed"
-      listed$rule_id[[i]] <- "fit_failed"
-      listed$message[[i]] <- outcome[["error"]]
-      next
-    }
-    fitted[[i]] <- outcome
-    if (!is.na(outcome$undefined)) {
-      listed$rule_id[[i]] <- "metrics_undefined"
-      listed$message[[i]] <- paste("Undefined:", outcome$undefined)
-    }
-  }
-
-  fit <- list(
-    tasks = listed,
-    performance = dplyr::bind_rows(lapply(fitted, `[[`, "performance")),
-    importance = dplyr::bind_rows(lapply(fitted, `[[`, "importance")),
-    predictions = dplyr::bind_rows(lapply(fitted, `[[`, "predictions")),
-    built = tasks$built
-  )
-
-  # If no task was fitted, the results tables still get every column.
-  if (!any(listed$status == "fitted")) {
-    fit$performance <- tibble::tibble(
-      task_id = character(), species = character(), num_obs = integer(), res_prop = numeric(),
-      n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
-      model = character(), n_feats_returned = integer(), n_fold = integer(),
-      fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
-      spec = numeric(), sens = numeric(), log2_apop = numeric(), f1 = numeric(),
-      bal_acc = numeric(), auprc = numeric(), run_time_sec = numeric(),
-      seed = integer(), date = character()
-    )
-    fit$importance <- tibble::tibble(
-      task_id = character(), species = character(), Variable = character(), Importance = numeric(),
-      Sign = character()
-    )
-    fit$predictions <- tibble::tibble(
-      task_id = character(), species = character(), genome_id = character(), truth = character(),
-      predicted = character(), prob_resistant = numeric()
-    )
-  }
-
-  # Earlier results are replaced only once every task has run.
-  unlink(results, recursive = TRUE)
-  dir.create(file.path(out_dir, "results"))
-  arrow::write_parquet(fit$tasks, file.path(out_dir, "tasks.parquet"))
-  for (table in c("performance", "importance", "predictions")) {
-    arrow::write_parquet(fit[[table]], file.path(out_dir, "results", paste0(table, ".parquet")))
-  }
-  if (save_fits) {
-    moved <- file.rename(file.path(staging, "models"), file.path(out_dir, "results", "models"))
-    if (!moved) {
-      rlang::abort(
-        paste0("Could not move the saved fits into '", out_dir, "'."),
-        class = c("amrml_internal_error", "amrml_error")
-      )
-    }
-  }
-  jsonlite::write_json(
-    .runRecord(tasks, listed, started, save_fits, BPPARAM), file.path(out_dir, "run.json"),
-    pretty = TRUE, auto_unbox = TRUE
-  )
-
-  structure(fit, class = "amr_fit")
-}
-
 
 #' @export
 print.amr_fit <- function(x, ...) {

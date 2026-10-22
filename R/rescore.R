@@ -23,8 +23,8 @@
 #' fit <- runModelingWorkflow("path/to/ORB",
 #'   modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
 #' )
-#' crap <- rescoreFeatures(fit)
-#' crap$features$top
+#' rescored <- rescoreFeatures(fit)
+#' rescored$features$top
 #' }
 #' @export
 rescoreFeatures <- function(fit, ...) {

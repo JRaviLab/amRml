@@ -4,7 +4,7 @@
 \alias{readORB}
 \title{Read an amRdata ORB}
 \usage{
-readORB(path)
+readORB(path = NULL)
 }
 \arguments{
 \item{path}{Character. The ORB directory: the folder amRdata wrote its
@@ -23,18 +23,21 @@ Validates the ORB in \code{path} and returns an object describing it.
 }
 \details{
 Uses the manifest whose \code{amRml_input} is ready and whose producer run
-finished last, with a message if more than one is ready. The ORB must be
-where that manifest says, with every declared file present at its recorded
-size. If it is not, \code{readORB()} stops with an error; it never falls back to
-an older manifest, which would read older data. Feature tables are the
-declared parquet files with the columns \code{genome_id}, \code{value} and one feature
-ID column such as \code{gene} or \code{Pfam}.
+finished last, with a message if more than one is ready. Recorded file
+paths are resolved by filename within the manifest's directory, so an ORB
+can be moved between directories and platforms. Every declared file must be
+present at its recorded size. Otherwise, \code{readORB()} stops with an error;
+it never falls back to an older manifest, which would read older data.
+Feature tables are the declared parquet files with the columns \code{genome_id},
+\code{value} and one feature ID column such as \code{gene} or \code{Pfam}.
 }
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus one of:
 \itemize{
-\item \code{amrml_invalid_argument}: \code{path} is not a single directory path.
+\item \code{amrml_invalid_argument}: \code{path} is not a single directory path, or is
+missing in a non-interactive session.
+\item \code{amrml_no_orbs_found}: \code{path} is missing and no usable ORB is registered.
 \item \code{amrml_orb_dir_not_found}: \code{path} does not exist.
 \item \code{amrml_manifest_not_found}: the directory holds no \code{manifest_*.json}.
 \item \code{amrml_orb_no_usable_manifest}: no manifest is usable. \code{observed} holds

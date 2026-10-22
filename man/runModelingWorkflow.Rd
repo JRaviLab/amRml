@@ -9,14 +9,17 @@ runModelingWorkflow(
   out_dir = NULL,
   modes = NULL,
   seeds = 123L,
-  labels = "real",
+  labels = c("real", "shuffled"),
   save_fits = TRUE,
   BPPARAM = BiocParallel::bpparam(),
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
-  overwrite = FALSE
+  overwrite = FALSE,
+  reuse_fits = TRUE,
+  feature_types = "standard",
+  resume = FALSE
 )
 }
 \arguments{
@@ -27,9 +30,14 @@ runModelingWorkflow(
 
 \item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
 
-\item{seeds, labels}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
+\item{seeds}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
 
-\item{save_fits, BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}.}
+\item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
+\code{\link[=expandTasks]{expandTasks()}}.}
+
+\item{save_fits}{Passed to \code{\link[=fitModels]{fitModels()}}. Must match when resuming.}
+
+\item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
 
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
@@ -37,6 +45,18 @@ runModelingWorkflow(
 \item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
 folder is always new.}
+
+\item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
+
+\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
+\code{"full"}, or an explicit character vector of ORB feature types.
+Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+
+\item{resume}{Resume interrupted model fitting in an existing \code{out_dir},
+using its saved matrices and completed task groups, or reopen unchanged
+completed results. Supply the same modeling arguments and the exact run
+folder (e.g. \verb{<ORB>/amRml/<date-time>/}); \code{BPPARAM} may be changed.
+\code{overwrite} must be \code{FALSE}.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
@@ -45,18 +65,19 @@ reached from it (\verb{$built}, \verb{$built$eligibility}, ...).
 \description{
 Runs every stage on an ORB: \code{\link[=readORB]{readORB()}}, \code{\link[=profileORB]{profileORB()}}, \code{\link[=eligibleScopes]{eligibleScopes()}},
 \code{\link[=planMatrices]{planMatrices()}}, \code{\link[=buildMatrices]{buildMatrices()}}, \code{\link[=expandTasks]{expandTasks()}} and \code{\link[=fitModels]{fitModels()}}. Each
-can also be called on its own. Old amRml's standard run is a choice of
-\code{modes}; its intense run adds \code{seeds} and \code{labels}.
+can also be called on its own. By default every task is fitted on both the real
+and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
 Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},
-\verb{matrices/}, \code{tasks.parquet}, \code{run.json}, \verb{results/} (with the saved fits in
-\verb{results/models/}), and \verb{merged/} from \code{\link[=exportMergedResults]{exportMergedResults()}}. amRdata's
-files are only read.
+\verb{features/}, \code{matrix_index.rds}, \code{workflow.rds}, \code{tasks.parquet}, \code{run.json},
+\verb{results/} (including \verb{results/models/} when \code{save_fits = TRUE}), and \verb{merged/} from
+\code{\link[=exportMergedResults]{exportMergedResults()}}. amRdata's files are only read.
 }
 \section{Errors}{
 
-Any error from the stages it runs, all with class \code{amrml_error}.
+Errors from any stage, including \code{amrml_invalid_argument} for mismatched resume
+settings, propagate to the caller.
 }
 
 \examples{

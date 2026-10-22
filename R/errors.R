@@ -16,6 +16,10 @@
   "The ORB directory does not exist.",
   "manifest_not_found",         "orb",         "call",
   "No amRdata manifest in the ORB directory.",
+  "orb_dir_unreadable",         "orb",         "call",
+  "The ORB directory, or the root searched for ORBs, can't be read.",
+  "no_orbs_found",              "orb",         "call",
+  "No usable ORB is registered, so there is none to choose.",
 
   # Manifest selection
   "manifest_unreadable",        "orb",         "manifest",

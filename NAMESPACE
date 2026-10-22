@@ -14,6 +14,7 @@ export(expandTasks)
 export(exportMergedResults)
 export(exportNetwork)
 export(fitModels)
+export(listORBs)
 export(modelingModes)
 export(planMatrices)
 export(profileORB)
@@ -30,3 +31,4 @@ importFrom(stats,
   quantile,
   sd
 )
+importFrom(utils,head)
