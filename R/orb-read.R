@@ -15,6 +15,12 @@
 .FEATURE_TABLE_COLUMNS <- c("genome_id", "value")
 
 
+## An ORB created on Windows causes trouble on Unix systems due to backslash handling
+## Little path helper follows
+.orbFilePath <- function(path, manifest_path) {
+  file.path(dirname(manifest_path), basename(chartr("\\", "/", path)))
+}
+
 # Tibble of the files the producer run's export stage lists. Manifest fields are
 # read with `[[`, since `$` also matches a longer name that starts the same way.
 .declaredFiles <- function(run, manifest_path) {
@@ -38,8 +44,8 @@
     ))
   }
 
-  ## Adding path resolution
-  path <- file.path(dirname(manifest_path), basename(path))
+  ## Adding path resolution, now with Windows tolerance!
+  path <- .orbFilePath(path, manifest_path)
   tibble::tibble(
     path = path,
     name = basename(path),
@@ -100,9 +106,10 @@
 
   # The metadata file must be declared, so the file checks cover it.
   files <- .declaredFiles(run, manifest_path)
-  metadata_parquet <- file.path(dirname(manifest_path), ## Updating for new dir structure
-                                basename(string(artifact
-                                                [["metadata_parquet"]], "metadata_parquet")))
+  metadata_parquet <- .orbFilePath(
+                                  string(artifact
+                                        [["metadata_parquet"]], "metadata_parquet"),
+                                  manifest_path)
 
   if (!metadata_parquet %in% files$path) {
     rlang::abort(paste0(
@@ -455,12 +462,13 @@ listORBs <- function(root = NULL) {
 #'
 #' @details
 #' Uses the manifest whose `amRml_input` is ready and whose producer run
-#' finished last, with a message if more than one is ready. The ORB must be
-#' where that manifest says, with every declared file present at its recorded
-#' size. If it is not, `readORB()` stops with an error; it never falls back to
-#' an older manifest, which would read older data. Feature tables are the
-#' declared parquet files with the columns `genome_id`, `value` and one feature
-#' ID column such as `gene` or `Pfam`.
+#' finished last, with a message if more than one is ready. Recorded file
+#' paths are resolved by filename within the manifest's directory, so an ORB
+#' can be moved between directories and platforms. Every declared file must be
+#' present at its recorded size. Otherwise, `readORB()` stops with an error;
+#' it never falls back to an older manifest, which would read older data.
+#' Feature tables are the declared parquet files with the columns `genome_id`,
+#' `value` and one feature ID column such as `gene` or `Pfam`.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus one of:

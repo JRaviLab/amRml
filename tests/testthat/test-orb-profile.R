@@ -91,39 +91,29 @@ test_that("a genome recorded as both Resistant and Susceptible for a drug is an 
   expect_equal(err$observed$conflicts, tibble::tibble(genome_id = "g1", drug_abbr = "DRA"))
 })
 
-# Genomes missing from a feature table
+# Sparse feature tables may omit genomes whose feature values are all zero.
 
-test_that("genomes missing from a feature table are excluded, with the tables lacking them", {
+test_that("genomes absent from a sparse feature table remain profiled", {
   parquets <- fxDefaultParquets()
   parquets$gene_count <- parquets$gene_count[parquets$gene_count$genome_id != "g5", ]
-
-  expect_message(profile <- fxProfile(parquets = parquets), "missing_features: 1")
-
-  expect_equal(profile$genomes$genome_id, c("g1", "g2", "g3", "g4"))
-  expect_false("g5" %in% profile$phenotypes$genome_id)
-  expect_equal(profile$excluded_genomes$reason, "missing_features")
-  expect_equal(profile$excluded_genomes$missing_from, "gene")
+  expect_silent(profile <- fxProfile(parquets = parquets))
+  expect_equal(profile$genomes$genome_id, fxGenomes())
+  expect_true("g5" %in% profile$phenotypes$genome_id)
+  expect_equal(nrow(profile$excluded_genomes), 0L)
 })
 
-# Excluded genomes
-
-test_that("every genome is either profiled or excluded with one reason", {
+test_that("only genomes without a usable phenotype are excluded", {
   metadata <- fxMetadataRows(
-    genome = c("g1", "g2", "g3"),
-    drug = "DRA",
+    genome = c("g1", "g2", "g3"), drug = "DRA",
     phenotype = c("Resistant", "Intermediate", "Susceptible")
   )
-
   expect_message(
     profile <- fxProfile(metadata, fxParquetsFor(c("g1", "g2"))),
-    "2 genomes are excluded"
+    "1 genomes are excluded"
   )
-
-  excluded <- profile$excluded_genomes
-  expect_equal(profile$genomes$genome_id, "g1")
-  expect_equal(excluded$genome_id, c("g2", "g3"))
-  expect_equal(excluded$reason, c("no_usable_phenotype", "missing_features"))
-  expect_equal(excluded$missing_from, c(NA, "gene, widget"))
+  expect_equal(profile$genomes$genome_id, c("g1", "g3"))
+  expect_equal(profile$excluded_genomes$genome_id, "g2")
+  expect_equal(profile$excluded_genomes$reason, "no_usable_phenotype")
 })
 
 test_that("an ORB with no genome left to profile is an error that lists the reasons", {

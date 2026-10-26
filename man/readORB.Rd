@@ -23,12 +23,13 @@ Validates the ORB in \code{path} and returns an object describing it.
 }
 \details{
 Uses the manifest whose \code{amRml_input} is ready and whose producer run
-finished last, with a message if more than one is ready. The ORB must be
-where that manifest says, with every declared file present at its recorded
-size. If it is not, \code{readORB()} stops with an error; it never falls back to
-an older manifest, which would read older data. Feature tables are the
-declared parquet files with the columns \code{genome_id}, \code{value} and one feature
-ID column such as \code{gene} or \code{Pfam}.
+finished last, with a message if more than one is ready. Recorded file
+paths are resolved by filename within the manifest's directory, so an ORB
+can be moved between directories and platforms. Every declared file must be
+present at its recorded size. Otherwise, \code{readORB()} stops with an error;
+it never falls back to an older manifest, which would read older data.
+Feature tables are the declared parquet files with the columns \code{genome_id},
+\code{value} and one feature ID column such as \code{gene} or \code{Pfam}.
 }
 \section{Errors}{
 

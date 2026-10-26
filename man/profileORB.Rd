@@ -26,8 +26,7 @@ and \code{mdr} status (\code{"mdr"}, \code{"not_mdr"} or \code{"undetermined"}).
 \item \code{targets}: genome counts per target and stratum value; \code{stratum} is NA
 for the whole dataset.
 \item \code{excluded_genomes}: each excluded genome and its \code{reason}
-(\code{"no_usable_phenotype"} or \code{"missing_features"}), with the feature types
-it is \code{missing_from}.
+(\code{"no_usable_phenotype"}).
 }
 }
 \description{
@@ -37,9 +36,10 @@ the whole dataset and within each value of each stratum (year and country).
 }
 \details{
 A genome is excluded, and listed with the reason, if it has no Resistant or
-Susceptible row or is missing from a feature table. A class is Resistant if
-any member drug is, and otherwise Susceptible. Repeated rows for a genome and
-drug count once if they agree; if they disagree, profiling stops.
+Susceptible row. A class is Resistant if any member drug is, and otherwise
+Susceptible. Repeated rows for a genome and drug count once if they agree;
+if they disagree, profiling stops. Missing feature rows represent zeros in
+sparse feature tables.
 
 A genome is MDR (target \code{mdr}, Resistant) if it is Resistant in at least
 \code{mdr_min_classes} drug classes, and not MDR (Susceptible) if it was tested in
@@ -61,7 +61,7 @@ All errors have class \code{amrml_error}, plus one of:
 \item \code{amrml_metadata_columns_missing}: the metadata lacks a needed column.
 \item \code{amrml_phenotype_conflict}: a genome is recorded as both Resistant and
 Susceptible for a drug.
-\item \code{amrml_no_labelled_genomes}: no genome in every feature table has a
+\item \code{amrml_no_labelled_genomes}: no genome has a
 usable phenotype.
 \item \code{amrml_stratum_inconsistent}: a genome has two values for a stratum.
 }

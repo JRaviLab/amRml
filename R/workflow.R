@@ -9,7 +9,8 @@
 #'
 #' @details
 #' Everything goes to `out_dir`: `eligibility.parquet`, `matrices.parquet`,
-#' `matrices/`, `tasks.parquet` and `results/`. amRdata's files are only read.
+#' `features/`, `matrix_index.rds`, `workflow.rds`, `tasks.parquet` and `results/`.
+#' amRdata's files are only read.
 #'
 #' @param orb_dir An amRdata ORB directory.
 #' @param out_dir Folder to write to. By default a new run folder,
@@ -28,15 +29,20 @@
 #' @param overwrite Replace an earlier run's matrices and results in `out_dir`;
 #'   if `FALSE`, an `out_dir` holding earlier output is refused. The default run
 #'   folder is always new.
-#' @param BPPARAM BiocParallel backend passed to [fitModels()]. Defaults to a
-#'   eight-worker cluster with 128 chunks of work to chew through.
+#' @param resume Resume interrupted model fitting in an existing `out_dir`,
+#'   using its saved matrices and completed task groups, or reopen unchanged
+#'   completed results. Supply the same modeling arguments and the exact run
+#'   folder (e.g. `<ORB>/amRml/<date-time>/`); `BPPARAM` may be changed.
+#'   `overwrite` must be `FALSE`.
+#' @param BPPARAM Passed to [fitModels()]. May be changed when resuming.
 #' @param reuse_fits Passed to [fitModels()]; reuse compatible cross-drug fits.
 #'
 #' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...).
 #'
 #' @section Errors:
-#' Any error from the stages it runs, all with class `amrml_error`.
+#' Errors from any stage, including `amrml_invalid_argument` for mismatched resume
+#' settings, propagate to the caller.
 #'
 #' @examples
 #' \dontrun{
@@ -58,27 +64,62 @@ runModelingWorkflow <- function(orb_dir,
                                 overwrite = FALSE,
                                 BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
                                 reuse_fits = TRUE,
-                                feature_types = "standard") {
+                                feature_types = "standard",
+                                resume = FALSE) {
   call <- rlang::current_env()
-
   # Checked first, so a bad value doesn't surface after the matrices are built.
   .checkArgSeeds(seeds, call = call)
   .checkArgLabels(labels, call = call)
-  .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel::SnowParam()", call = call)
+  .checkArgFlag(overwrite, "overwrite", call = call)
+  .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
   .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
   .checkArgFlag(reuse_fits, "reuse_fits", call = call)
+  .checkArgFlag(resume, "resume", call = call)
+  if (resume && (is.null(out_dir) || overwrite)) {
+    .amrAbort("invalid_argument", "Resuming requires `out_dir` and `overwrite = FALSE`.", call = call)
+  }
 
-  orb <- readORB(orb_dir)
-  out_dir <- out_dir %||% .defaultOutDir(orb$directory)
-  eligibility <- eligibleScopes(
-    profileORB(orb, mdr_min_classes = mdr_min_classes),
-    modes = modes, min_genomes = min_genomes, n_fold = n_fold,
+  settings <- list(
+    orb_dir = normalizePath(orb_dir, winslash = "/", mustWork = TRUE),
+    modes = modes, seeds = as.integer(seeds), labels = labels,
+    min_genomes = min_genomes, n_fold = n_fold,
     min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
-    min_label_genomes = min_label_genomes
+    min_label_genomes = min_label_genomes, mdr_min_classes = mdr_min_classes,
+    reuse_fits = reuse_fits, feature_types = feature_types
   )
-  built <- buildMatrices(planMatrices(eligibility, feature_types = feature_types), out_dir, overwrite = overwrite)
-  arrow::write_parquet(eligibility$scopes, file.path(out_dir, "eligibility.parquet"))
+  if (resume) {
+    snapshot <- file.path(out_dir, "workflow.rds")
+    if (!file.exists(snapshot)) {
+      .amrAbort("invalid_argument", "No saved workflow state was found; this run cannot be resumed.", call = call)
+    }
+    saved <- readRDS(snapshot)
+    if (!identical(saved$settings, settings) ||
+        !identical(normalizePath(saved$built$out_dir, winslash = "/", mustWork = TRUE),
+                   normalizePath(out_dir, winslash = "/", mustWork = TRUE))) {
+      .amrAbort("invalid_argument", "The saved workflow does not match these arguments or output directory.", call = call)
+    }
+    built <- saved$built
+  } else {
+    orb <- readORB(orb_dir)
+    out_dir <- out_dir %||% .defaultOutDir(orb$directory)
+    eligibility <- eligibleScopes(
+      profileORB(orb, mdr_min_classes = mdr_min_classes),
+      modes = modes, min_genomes = min_genomes, n_fold = n_fold,
+      min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
+      min_label_genomes = min_label_genomes
+    )
+    built <- buildMatrices(planMatrices(eligibility, feature_types = feature_types),
+                           out_dir, overwrite = overwrite)
+    out_dir <- built$out_dir
+    arrow::write_parquet(eligibility$scopes, file.path(out_dir, "eligibility.parquet"))
+    # Save the original task inputs so an interrupted run can be resumed without
+    # rebuilding matrices or reassigning its genome splits.
+    .saveFitCheckpoint(list(settings = settings, built = built), file.path(out_dir, "workflow.rds"))
+  }
 
-  fitModels(expandTasks(built, seeds = seeds, labels = labels),
-            overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits)
+  fit <- fitModels(
+    expandTasks(built, seeds = seeds, labels = labels),
+    overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume
+  )
+  fit
 }

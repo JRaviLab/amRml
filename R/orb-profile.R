@@ -203,9 +203,10 @@
 #'
 #' @details
 #' A genome is excluded, and listed with the reason, if it has no Resistant or
-#' Susceptible row or is missing from a feature table. A class is Resistant if
-#' any member drug is, and otherwise Susceptible. Repeated rows for a genome and
-#' drug count once if they agree; if they disagree, profiling stops.
+#' Susceptible row. A class is Resistant if any member drug is, and otherwise
+#' Susceptible. Repeated rows for a genome and drug count once if they agree;
+#' if they disagree, profiling stops. Missing feature rows represent zeros in
+#' sparse feature tables.
 #'
 #' A genome is MDR (target `mdr`, Resistant) if it is Resistant in at least
 #' `mdr_min_classes` drug classes, and not MDR (Susceptible) if it was tested in
@@ -226,7 +227,7 @@
 #' * `amrml_metadata_columns_missing`: the metadata lacks a needed column.
 #' * `amrml_phenotype_conflict`: a genome is recorded as both Resistant and
 #'   Susceptible for a drug.
-#' * `amrml_no_labelled_genomes`: no genome in every feature table has a
+#' * `amrml_no_labelled_genomes`: no genome has a
 #'   usable phenotype.
 #' * `amrml_stratum_inconsistent`: a genome has two values for a stratum.
 #'
@@ -246,8 +247,7 @@
 #'   * `targets`: genome counts per target and stratum value; `stratum` is NA
 #'     for the whole dataset.
 #'   * `excluded_genomes`: each excluded genome and its `reason`
-#'     (`"no_usable_phenotype"` or `"missing_features"`), with the feature types
-#'     it is `missing_from`.
+#'     (`"no_usable_phenotype"`).
 #'
 #' @examples
 #' \dontrun{
