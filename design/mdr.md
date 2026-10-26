@@ -107,9 +107,9 @@ MDR uses the existing scope builders, so it gets scopes in every mode with a
 grouping of `none`, `year` or `country`. The drug-grouped modes (`cross_drug`,
 `lodo`) only take `unit == "drug"` rows, so they leave MDR out with no change.
 
-New argument `min_label_genomes = 25` (old `min_n`). Per MDR scope:
+New argument `min_mdr_label_genomes = 25` (old `min_n`). Per MDR scope:
 
-1. Keep the labels with at least `min_label_genomes` **training** genomes, and
+1. Keep the labels with at least `min_mdr_label_genomes` **training** genomes, and
    drop the scope's genomes (train and test) with any other label. On the whole
    dataset this gives exactly old amRml's genome set. Doing it per scope keeps a
    label with 3 genomes in one year from breaking that year's folds.

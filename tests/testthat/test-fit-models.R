@@ -29,7 +29,7 @@ fxCombinationFit <- function(n = 20, env = parent.frame()) {
   data <- fxLabelled(n)
   eligibility <- fxEligibility(
     data$metadata, modes = "vanilla", parquets = data$parquets,
-    min_genomes = n, n_fold = 2, min_label_genomes = n, env = env
+    min_genomes = n, n_fold = 2, min_mdr_label_genomes = n, env = env
   )
   eligibility$scopes <- eligibility$scopes[eligibility$scopes$target == "resistant_classes", ]
   eligibility$members <- eligibility$members[eligibility$members$target == "resistant_classes", ]

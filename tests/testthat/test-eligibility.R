@@ -138,7 +138,7 @@ test_that("vanilla scopes are the profile's whole-dataset counts", {
   expect_true(all(is.na(scopes$test_n_genomes)))
 
   # The MDR combination target counts only the genomes its label filter keeps: here none,
-  # since its one label has 5 genomes, under min_label_genomes.
+  # since its one label has 5 genomes, under min_mdr_label_genomes.
   combination <- scopes$target == "resistant_classes"
   expect_equal(scopes$n_genomes[!combination], whole$n_genomes[!combination])
   expect_equal(scopes$n_resistant[!combination], whole$n_resistant[!combination])
@@ -387,7 +387,7 @@ fxCombinationScopes <- function(eligibility, mode_id) {
 test_that("a combination scope drops labels with too few training genomes, and their genomes", {
   eligibility <- fxEligibility(
     fxCombinations(4, 3, 2),
-    modes = "vanilla", min_genomes = 4, n_fold = 2, min_label_genomes = 3
+    modes = "vanilla", min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3
   )
   scope <- fxCombinationScopes(eligibility, "vanilla")
 
@@ -403,7 +403,7 @@ test_that("a combination scope drops labels with too few training genomes, and t
 test_that("a combination scope with one label left is single_phenotype", {
   eligibility <- fxEligibility(
     fxCombinations(4, 1, 1),
-    modes = "vanilla", min_genomes = 2, n_fold = 2, min_label_genomes = 3
+    modes = "vanilla", min_genomes = 2, n_fold = 2, min_mdr_label_genomes = 3
   )
   scope <- fxCombinationScopes(eligibility, "vanilla")
 
@@ -420,7 +420,7 @@ test_that("a cross test set drops genomes whose label the training set doesn't k
   eligibility <- fxEligibility(
     metadata,
     modes = "cross_year", min_genomes = 4, n_fold = 2, min_test_genomes = 2,
-    min_label_genomes = 3
+    min_mdr_label_genomes = 3
   )
   scopes <- fxCombinationScopes(eligibility, "cross_year")
   y1_to_y2 <- scopes[scopes$train_group == "Y1", ]

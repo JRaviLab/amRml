@@ -14,7 +14,7 @@ runModelingWorkflow(
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
-  min_label_genomes = 25,
+  min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
   overwrite = FALSE,
   BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
@@ -36,7 +36,7 @@ runModelingWorkflow(
 \item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
 \code{\link[=expandTasks]{expandTasks()}}.}
 
-\item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_label_genomes}{Passed to
+\item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_mdr_label_genomes}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
 \item{mdr_min_classes}{Passed to \code{\link[=profileORB]{profileORB()}}: fewest drug classes a genome

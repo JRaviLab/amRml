@@ -122,10 +122,10 @@
   .asMembers(train, test)
 }
 
-# Multi-class scopes keep the labels with at least `min_label_genomes` training genomes, and
+# Multi-class scopes keep the labels with at least `min_mdr_label_genomes` training genomes, and
 # drop every genome, training or test, with another label: a test genome whose label the
 # model never trained on can't be predicted. Other scopes keep every genome.
-.keepLabels <- function(members, min_label_genomes) {
+.keepLabels <- function(members, min_mdr_label_genomes) {
   members$kept <- TRUE
   multiclass <- .isMulticlass(members$unit, members$target)
   if (!any(multiclass)) {
@@ -135,7 +135,7 @@
   keys <- c(.SCOPE_KEYS, "phenotype")
   train <- members[multiclass & members$role == "train", keys]
   n <- dplyr::count(train, dplyr::across(dplyr::all_of(keys)))
-  labels <- n[n$n >= min_label_genomes, keys]
+  labels <- n[n$n >= min_mdr_label_genomes, keys]
   key <- function(x) do.call(paste, c(unname(as.list(x[keys])), sep = "\r"))
   members$kept[multiclass] <- key(members[multiclass, ]) %in% key(labels)
   members
@@ -331,7 +331,7 @@
 #' @details
 #' Counts are of genomes, each with one phenotype. In the MDR combination target
 #' (`resistant_classes`), each combination is a label: a scope keeps the labels
-#' with at least `min_label_genomes` training genomes and drops the genomes,
+#' with at least `min_mdr_label_genomes` training genomes and drops the genomes,
 #' training or test, with any other (`n_dropped`, `test_n_dropped`). It then
 #' needs 2 labels, and its rarest label must fill the folds; its test set needs
 #' only `min_test_genomes`. A drug or class needs 2 of a
@@ -352,7 +352,7 @@
 #' @param n_fold Number of cross-validation folds.
 #' @param min_test_genomes Fewest genomes a separate test set needs.
 #' @param min_test_minority Fewest of the rarer phenotype a test set needs.
-#' @param min_label_genomes Fewest training genomes an MDR combination needs to
+#' @param min_mdr_label_genomes Fewest training genomes an MDR combination needs to
 #'   stay a label in a scope (old amRml's `min_n`).
 #'
 #' @return An `amr_eligibility` list:
@@ -376,7 +376,7 @@ eligibleScopes <- function(profile,
                            n_fold = 5,
                            min_test_genomes = 5,
                            min_test_minority = 2,
-                           min_label_genomes = 25) {
+                           min_mdr_label_genomes = 25) {
   call <- rlang::current_env()
 
   # Check the arguments.
@@ -385,7 +385,7 @@ eligibleScopes <- function(profile,
   .checkArgCount(n_fold, "n_fold", min = 2, call = call)
   .checkArgCount(min_test_genomes, "min_test_genomes", call = call)
   .checkArgCount(min_test_minority, "min_test_minority", call = call)
-  .checkArgCount(min_label_genomes, "min_label_genomes", call = call)
+  .checkArgCount(min_mdr_label_genomes, "min_mdr_label_genomes", call = call)
   modes <- modes %||% .MODES$mode_id
   .checkArgModes(modes, call = call)
 
@@ -394,7 +394,7 @@ eligibleScopes <- function(profile,
     n_fold = n_fold,
     min_test_genomes = min_test_genomes,
     min_test_minority = min_test_minority,
-    min_label_genomes = min_label_genomes,
+    min_mdr_label_genomes = min_mdr_label_genomes,
     holdout = .CV_HOLDOUT
   )
 
@@ -408,7 +408,7 @@ eligibleScopes <- function(profile,
   judged <- lapply(seq_len(nrow(runnable)), function(i) {
     mode <- runnable[i, , drop = FALSE]
     built <- .buildScopes(mode, profile)
-    built$members <- .keepLabels(built$members, settings$min_label_genomes)
+    built$members <- .keepLabels(built$members, settings$min_mdr_label_genomes)
     decisions <- .judgeScopes(built, mode, profile, settings)
     eligible <- decisions[decisions$eligible, .SCOPE_KEYS]
     list(
@@ -476,7 +476,7 @@ print.amr_eligibility <- function(x, ...) {
   combination <- x$scopes[.isMulticlass(x$scopes$unit, x$scopes$target), , drop = FALSE]
   cat(
     "  MDR      : ", x$profile$settings$mdr_min_classes, "+ classes; combination labels need ",
-    s$min_label_genomes, " training genomes",
+    s$min_mdr_label_genomes, " training genomes",
     if (nrow(combination)) {
       paste0("; ", sum(combination$eligible), " of ", nrow(combination), " combination scopes eligible")
     },

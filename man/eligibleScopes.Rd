@@ -11,7 +11,7 @@ eligibleScopes(
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
-  min_label_genomes = 25
+  min_mdr_label_genomes = 25
 )
 }
 \arguments{
@@ -27,7 +27,7 @@ eligibleScopes(
 
 \item{min_test_minority}{Fewest of the rarer phenotype a test set needs.}
 
-\item{min_label_genomes}{Fewest training genomes an MDR combination needs to
+\item{min_mdr_label_genomes}{Fewest training genomes an MDR combination needs to
 stay a label in a scope (old amRml's \code{min_n}).}
 }
 \value{
@@ -51,7 +51,7 @@ built or fitted.
 \details{
 Counts are of genomes, each with one phenotype. In the MDR combination target
 (\code{resistant_classes}), each combination is a label: a scope keeps the labels
-with at least \code{min_label_genomes} training genomes and drops the genomes,
+with at least \code{min_mdr_label_genomes} training genomes and drops the genomes,
 training or test, with any other (\code{n_dropped}, \code{test_n_dropped}). It then
 needs 2 labels, and its rarest label must fill the folds; its test set needs
 only \code{min_test_genomes}. A drug or class needs 2 of a

@@ -22,7 +22,7 @@
 #' @param seeds Passed to [expandTasks()].
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
 #'   [expandTasks()]. 
-#' @param min_genomes,n_fold,min_test_genomes,min_test_minority,min_label_genomes Passed to
+#' @param min_genomes,n_fold,min_test_genomes,min_test_minority,min_mdr_label_genomes Passed to
 #'   [eligibleScopes()].
 #' @param mdr_min_classes Passed to [profileORB()]: fewest drug classes a genome
 #'   must be Resistant in to be MDR; at least 2.
@@ -59,7 +59,7 @@ runModelingWorkflow <- function(orb_dir,
                                 n_fold = 5,
                                 min_test_genomes = 5,
                                 min_test_minority = 2,
-                                min_label_genomes = 25,
+                                min_mdr_label_genomes = 25,
                                 mdr_min_classes = 2,
                                 overwrite = FALSE,
                                 BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
@@ -84,7 +84,7 @@ runModelingWorkflow <- function(orb_dir,
     modes = modes, seeds = as.integer(seeds), labels = labels,
     min_genomes = min_genomes, n_fold = n_fold,
     min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
-    min_label_genomes = min_label_genomes, mdr_min_classes = mdr_min_classes,
+    min_mdr_label_genomes = min_mdr_label_genomes, mdr_min_classes = mdr_min_classes,
     reuse_fits = reuse_fits, feature_types = feature_types
   )
   if (resume) {
@@ -106,7 +106,7 @@ runModelingWorkflow <- function(orb_dir,
       profileORB(orb, mdr_min_classes = mdr_min_classes),
       modes = modes, min_genomes = min_genomes, n_fold = n_fold,
       min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
-      min_label_genomes = min_label_genomes
+      min_mdr_label_genomes = min_mdr_label_genomes
     )
     built <- buildMatrices(planMatrices(eligibility, feature_types = feature_types),
                            out_dir, overwrite = overwrite)
