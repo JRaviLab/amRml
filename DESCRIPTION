@@ -32,17 +32,28 @@ Suggests:
     knitr,
     rmarkdown,
     testthat (>= 3.0.0),
-    tools,
-    withr
+    tools
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
     arrow,
+    BiocFileCache,
+    BiocParallel,
     dplyr,
+    glmnet,
     jsonlite,
     Matrix,
+    parsnip,
+    recipes,
     rlang,
-    tibble
+    rsample,
+    sparsevctrs,
+    tibble,
+    tidyselect,
+    tune,
+    withr,
+    workflows,
+    yardstick
 biocViews:
     Software,
     Classification,
