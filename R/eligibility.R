@@ -242,6 +242,27 @@
   )
 }
 
+# For each multi-class scope, how many drug classes its kept training genomes are resistant
+# to. Fewer than two means its labels are one class or Susceptible: that class's model again.
+.labelClassCounts <- function(members, profile) {
+  phenotypes <- profile$phenotypes
+  resistant <- phenotypes[
+    phenotypes$unit == "drug_class" & phenotypes$phenotype == "Resistant",
+    c("genome_id", "target")
+  ]
+  names(resistant) <- c("genome_id", "class")
+  kept <- members[
+    .isMulticlass(members$unit, members$target) & members$kept & members$role == "train",
+    c(.SCOPE_KEYS, "genome_id")
+  ]
+  classes <- dplyr::inner_join(kept, resistant, by = "genome_id", relationship = "many-to-many")
+  dplyr::summarise(
+    dplyr::group_by(classes, dplyr::across(dplyr::all_of(.SCOPE_KEYS))),
+    n_label_classes = dplyr::n_distinct(.data$class),
+    .groups = "drop"
+  )
+}
+
 # Each scope's first failed rule, or NA if it passes them all.
 .firstFailedRule <- function(scopes, mode, settings, has_test) {
   # A class with data for only one of its drugs is that drug's model again.
@@ -254,6 +275,8 @@
     multiclass, scopes$n_rarest, pmin(scopes$n_resistant, scopes$n_susceptible)
   )
   single <- ifelse(multiclass, scopes$n_labels < 2, rarer == 0)
+  # A scope with no resistant kept genome has no count (NA), so fewer than two too.
+  one_class <- multiclass & !(!is.na(scopes$n_label_classes) & scopes$n_label_classes >= 2)
   enough_for_cv <- if (has_test) {
     rarer >= settings$n_fold
   } else {
@@ -269,6 +292,7 @@
   failed <- list(
     duplicate_class = duplicate,
     single_phenotype = single,
+    single_class_labels = one_class,
     too_few_genomes = scopes$n_genomes < settings$min_genomes,
     too_few_for_cv = !enough_for_cv,
     test_too_small = !test_ok
@@ -300,6 +324,7 @@
   has_test <- mode$LOO || mode$cross_test
   scopes <- .scopeCounts(built$members, has_test)
   scopes <- dplyr::left_join(scopes, .classDrugCounts(built$members, profile), by = .SCOPE_KEYS)
+  scopes <- dplyr::left_join(scopes, .labelClassCounts(built$members, profile), by = .SCOPE_KEYS)
   scopes$rule_id <- .firstFailedRule(scopes, mode, settings, has_test)
   decisions <- scopes[c(.SCOPE_KEYS, counts, "rule_id")]
 
@@ -333,7 +358,8 @@
 #' (`resistant_classes`), each combination is a label: a scope keeps the labels
 #' with at least `min_mdr_label_genomes` training genomes and drops the genomes,
 #' training or test, with any other (`n_dropped`, `test_n_dropped`). It then
-#' needs 2 labels, and its rarest label must fill the folds; its test set needs
+#' needs 2 labels involving at least 2 drug classes (otherwise it repeats a
+#' class model), and its rarest label must fill the folds; its test set needs
 #' only `min_test_genomes`. A drug or class needs 2 of a
 #' mode's groups (3 for leave-one-out) to get scopes, and a stratified one needs
 #' 2 eligible groups. A scope fails, in order, if it's a class with data for only

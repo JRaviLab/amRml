@@ -412,6 +412,27 @@ test_that("a combination scope with one label left is single_phenotype", {
   expect_false(any(eligibility$members$target == "resistant_classes"))
 })
 
+test_that("a combination scope whose labels involve one class is skipped", {
+  # CLX-only and Susceptible genomes: the labels are CLX and Susceptible, the CLX model again.
+  one_class <- fxEligibility(
+    fxCombinations(4, 0, 4),
+    modes = "vanilla", min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3
+  )
+  scope <- fxCombinationScopes(one_class, "vanilla")
+
+  expect_equal(scope$n_labels, 2)
+  expect_equal(scope$rule_id, "single_class_labels")
+  expect_false(any(one_class$members$target == "resistant_classes"))
+
+  # A whole dataset tested on one class: no combination model, and no yes/no MDR model either.
+  metadata <- rbind(fxRows(40, 40, drug = "DRA"), fxRows(40, 40, drug = "DRB"))
+  eligibility <- fxEligibility(metadata, modes = "vanilla", min_mdr_label_genomes = 25)
+  scopes <- fxScopes(eligibility, "vanilla")
+
+  expect_equal(scopes$rule_id[scopes$target == "resistant_classes"], "single_class_labels")
+  expect_false("mdr" %in% scopes$target)
+})
+
 test_that("a cross test set drops genomes whose label the training set doesn't keep", {
   metadata <- rbind(
     fxCombinations(3, 3, 0, from = 1, year_bin = "Y1"),

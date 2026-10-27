@@ -53,7 +53,8 @@ Counts are of genomes, each with one phenotype. In the MDR combination target
 (\code{resistant_classes}), each combination is a label: a scope keeps the labels
 with at least \code{min_mdr_label_genomes} training genomes and drops the genomes,
 training or test, with any other (\code{n_dropped}, \code{test_n_dropped}). It then
-needs 2 labels, and its rarest label must fill the folds; its test set needs
+needs 2 labels involving at least 2 drug classes (otherwise it repeats a
+class model), and its rarest label must fill the folds; its test set needs
 only \code{min_test_genomes}. A drug or class needs 2 of a
 mode's groups (3 for leave-one-out) to get scopes, and a stratified one needs
 2 eligible groups. A scope fails, in order, if it's a class with data for only

@@ -115,6 +115,10 @@ New argument `min_mdr_label_genomes = 25` (old `min_n`). Per MDR scope:
    label with 3 genomes in one year from breaking that year's folds.
 2. Then apply the usual rules, with "phenotype" meaning label:
    - `single_phenotype`: fewer than 2 labels kept.
+   - `single_class_labels`: the kept labels involve fewer than 2 drug classes
+     (e.g. only `CLX` and `Susceptible`), so the model repeats that class's model.
+     This covers a dataset tested on one class only, where the yes/no target
+     also has no model (every genome is `undetermined`). (Suggested by Abhirupa.)
    - `too_few_genomes`: fewer than `min_genomes` genomes kept.
    - `too_few_for_cv`: the rarest kept label can't fill `n_fold` folds after the
      holdout. With 25 genomes per label this always passes.
