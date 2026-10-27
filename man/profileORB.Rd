@@ -4,19 +4,25 @@
 \alias{profileORB}
 \title{Profile an amRdata ORB}
 \usage{
-profileORB(orb)
+profileORB(orb, mdr_min_classes = 2)
 }
 \arguments{
 \item{orb}{An \code{amr_orb} from \code{\link[=readORB]{readORB()}}.}
+
+\item{mdr_min_classes}{Fewest drug classes a genome must be Resistant in to
+be MDR; at least 2.}
 }
 \value{
 An \code{amr_orb_profile} list:
 \itemize{
 \item \code{orb}: the ORB profiled.
 \item \code{genomes}: each profiled genome and its strata values.
-\item \code{phenotypes}: each genome's phenotype per \code{unit} (drug or drug class) and
-\code{target}.
+\item \code{phenotypes}: each genome's phenotype per \code{unit} (drug, drug class or
+mdr) and \code{target}.
 \item \code{drug_classes}: each profiled drug and its \code{class}.
+\item \code{mdr}: each profiled genome's \code{n_classes_tested}, \code{n_classes_resistant}
+and \code{mdr} status (\code{"mdr"}, \code{"not_mdr"} or \code{"undetermined"}).
+\item \code{settings}: \code{mdr_min_classes}.
 \item \code{targets}: genome counts per target and stratum value; \code{stratum} is NA
 for the whole dataset.
 \item \code{excluded_genomes}: each excluded genome and its \code{reason}
@@ -24,9 +30,9 @@ for the whole dataset.
 }
 }
 \description{
-Labels each genome Resistant or Susceptible per drug and per drug class, and
-counts the genomes behind each target, over the whole dataset and within each
-value of each stratum (year and country).
+Labels each genome Resistant or Susceptible per drug, per drug class and for
+multidrug resistance (MDR), and counts the genomes behind each target, over
+the whole dataset and within each value of each stratum (year and country).
 }
 \details{
 A genome is excluded, and listed with the reason, if it has no Resistant or
@@ -34,6 +40,18 @@ Susceptible row. A class is Resistant if any member drug is, and otherwise
 Susceptible. Repeated rows for a genome and drug count once if they agree;
 if they disagree, profiling stops. Missing feature rows represent zeros in
 sparse feature tables.
+
+A genome is MDR (target \code{mdr}, Resistant) if it is Resistant in at least
+\code{mdr_min_classes} drug classes, and not MDR (Susceptible) if it was tested in
+at least that many classes but is Resistant in fewer. A genome tested in
+fewer classes can't be ruled out, so it is \code{"undetermined"} in \verb{$mdr} and has
+no \code{mdr} phenotype.
+
+Target \code{resistant_classes} labels each genome with its combination of
+resistant classes, joined with \verb{_} in radix order (e.g. \code{"MAC_PEN_TMD"}), or
+\code{"Susceptible"}, as amRdata's column of that name does. Every genome tested in
+a class gets one, as in old amRml. In \code{targets}, \code{n_resistant} counts its
+genomes with any resistant class.
 }
 \section{Errors}{
 

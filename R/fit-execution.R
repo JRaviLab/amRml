@@ -14,7 +14,7 @@
           task = task, path = job$paths[[j]],
           rows = job$rows[[j]], columns = job$columns[[j]],
           encoding = job$encoding[[j]], cache = cache,
-          fitted = shared_fit, return_fitted = keep_fit
+          fitted = shared_fit, return_fitted = keep_fit, multi = job$multi[[j]]
         ),
         .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
         .rng_sample_kind = "Rejection"
@@ -40,6 +40,7 @@
     rows = index$rows[index$matrix_scopes[positions]],
     columns = index$columns[positions],
     encoding = matrices$encoding[positions],
+    multi = .isMulticlass(matrices$unit[positions], matrices$target[positions]),
     checkpoint = checkpoint
   )
 }
@@ -109,19 +110,20 @@
     performance = tibble::tibble(
       task_id = character(), num_obs = integer(), res_prop = numeric(),
       n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
-      model = character(), n_feats_returned = integer(), n_fold = integer(),
+      n_labels = integer(), model = character(), n_feats_returned = integer(),
+      n_fold = integer(),
       fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
       spec = numeric(), sens = numeric(), log2_apop = numeric(), f1 = numeric(),
       bal_acc = numeric(), auprc = numeric(), run_time_sec = numeric(),
       seed = integer(), date = character()
     ),
     importance = tibble::tibble(
-      task_id = character(), Variable = character(),
+      task_id = character(), label = character(), Variable = character(),
       Importance = numeric(), Sign = character()
     ),
     predictions = tibble::tibble(
       task_id = character(), genome_id = character(), truth = character(),
-      predicted = character(), prob_resistant = numeric()
+      predicted = character(), prob_resistant = numeric(), prob_predicted = numeric()
     )
   )
 }
@@ -228,7 +230,12 @@
 #'   keeps old amRml's columns and rounding, adding `auprc`;
 #'   `n_feat` counts the matrix's features (the recipe may drop more).
 #'   `importance` has old amRml's `Variable`, `Importance` and `Sign` ("POS"
-#'   points to Susceptible).
+#'   points to Susceptible), plus `label`: for the MDR combination target,
+#'   which multinomial regression fits with coefficients per label, the label
+#'   a row's coefficient belongs to, and "POS" points to it (`NA` otherwise).
+#'   For that target, `performance` has only `mcc` and `nmcc`, as in old amRml,
+#'   and `res_prop` and `prob_resistant` are `NA`. `n_labels` counts each
+#'   task's labels and `prob_predicted` is the predicted label's probability.
 #'
 #' @section Errors:
 #' Invalid arguments or incompatible resume inputs raise `amrml_invalid_argument`.

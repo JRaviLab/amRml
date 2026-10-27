@@ -34,7 +34,12 @@ An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
 keeps old amRml's columns and rounding, adding \code{auprc};
 \code{n_feat} counts the matrix's features (the recipe may drop more).
 \code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
-points to Susceptible).
+points to Susceptible), plus \code{label}: for the MDR combination target,
+which multinomial regression fits with coefficients per label, the label
+a row's coefficient belongs to, and "POS" points to it (\code{NA} otherwise).
+For that target, \code{performance} has only \code{mcc} and \code{nmcc}, as in old amRml,
+and \code{res_prop} and \code{prob_resistant} are \code{NA}. \code{n_labels} counts each
+task's labels and \code{prob_predicted} is the predicted label's probability.
 }
 \description{
 Fits tasks from \code{\link[=expandTasks]{expandTasks()}} in parallel with old amRml's method:
