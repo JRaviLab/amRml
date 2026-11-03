@@ -21,11 +21,13 @@ views. Opened read-only.}
 Invisibly, a list containing the per-target summary and output directory.
 }
 \description{
-Build a fixed ORB cluster-pair graph with real and shuffled feature evidence,
-model reliability, and separate connected functional annotations. Does not
-refit models. Gene and protein models already use cluster predictors;
-protein cluster IDs are named by CD-HIT representatives. Functional
-annotations do not increase either endpoint's feature score.
+Build a fixed ORB dyad graph with real and shuffled feature evidence, model
+reliability, and separate connected functional annotations. Paired dyads
+require evidence from both endpoints; gene-only and protein-only dyads are
+scored from their one available endpoint. Does not refit models. Gene and
+protein models already use cluster predictors; protein cluster IDs are named
+by CD-HIT representatives. Functional annotations do not increase either
+endpoint's feature score.
 }
 \details{
 Undefined MCC is provisionally replaced by zero only when the saved
