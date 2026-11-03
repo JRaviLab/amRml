@@ -76,8 +76,15 @@ testthat::test_that("task-based ORB network export preserves unsupported and shu
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = file.path(orb, "fixture_parquet.duckdb"))
-  DBI::dbWriteTable(con, "dyads", data.frame(gene = "g1", protein = "fig|1.peg.1"))
-  DBI::dbWriteTable(con, "protein_members", data.frame(member = "member1", cluster = "fig|1.peg.1"))
+  DBI::dbWriteTable(con, "dyads", data.frame(
+    gene = c("g1", "g2", NA),
+    protein = c("fig|1.peg.1", NA, "fig|1.peg.2"),
+    dyad_type = c("paired", "gene_only", "protein_only")
+  ))
+  DBI::dbWriteTable(con, "protein_members", data.frame(
+    member = c("member1", "member2"),
+    cluster = c("fig|1.peg.1", "fig|1.peg.2")
+  ))
   DBI::dbWriteTable(con, "dyad_ann_pfam", data.frame(cluster = "fig|1.peg.1", feature = "PF.1"))
   for (view in c("dyad_ann_cog", "dyad_ann_amr", "dyad_ann_defense")) {
     DBI::dbWriteTable(con, view,
@@ -104,6 +111,18 @@ testthat::test_that("task-based ORB network export preserves unsupported and shu
                                    feature_type == "protein" ~ "fig.1.peg.1",
                                    TRUE ~ "PF.1"),
       Importance = 1, Sign = "NEG")
+  importance <- dplyr::bind_rows(
+    importance,
+    tasks |>
+      dplyr::left_join(matrices, by = "matrix_id") |>
+      dplyr::filter(feature_type %in% c("gene", "protein")) |>
+      dplyr::transmute(
+        task_id,
+        Variable = dplyr::if_else(feature_type == "gene", "g2", "fig.1.peg.2"),
+        Importance = 1,
+        Sign = "NEG"
+      )
+  )
   predictions <- tidyr::crossing(task_id = tasks$task_id,
                                  genome_id = c("x", "y")) |>
     dplyr::mutate(truth = dplyr::if_else(genome_id == "x", "Resistant", "Susceptible"),
@@ -115,27 +134,40 @@ testthat::test_that("task-based ORB network export preserves unsupported and shu
   arrow::write_parquet(predictions, file.path(run, "results/predictions.parquet"))
 
   testthat::expect_no_warning(result <- exportNetwork(run, orb, out))
+  testthat::expect_equal(result$summary$n_distinct_high_priority_dyads, 3)
   testthat::expect_equal(result$summary$n_distinct_high_priority_pairs, 1)
   provenance <- arrow::read_parquet(file.path(out, "network_provenance.parquet"))
   testthat::expect_equal(provenance$n_cluster_pairs, 1)
+  testthat::expect_equal(provenance$n_dyads, 3)
+  testthat::expect_equal(provenance$n_gene_only_dyads, 1)
+  testthat::expect_equal(provenance$n_protein_only_dyads, 1)
   testthat::expect_equal(provenance$core_threshold, 0.75)
   ids <- arrow::read_parquet(file.path(out, "protein_cluster_id_crosswalk.parquet"))
-  testthat::expect_equal(ids$model_feature, "fig.1.peg.1")
-  testthat::expect_equal(ids$protein_cluster, "fig|1.peg.1")
-  testthat::expect_true(ids$in_orb_graph)
+  testthat::expect_setequal(ids$model_feature, c("fig.1.peg.1", "fig.1.peg.2"))
+  testthat::expect_setequal(ids$protein_cluster, c("fig|1.peg.1", "fig|1.peg.2"))
+  testthat::expect_true(all(ids$in_orb_graph))
   cluster_rows <- arrow::read_parquet(file.path(out, "gene_protein_seed_evidence.parquet"))
   testthat::expect_true(all(cluster_rows$n_returned_features == 1L))
-  testthat::expect_true(all(cluster_rows$node_id[cluster_rows$feature_type == "protein"] == "fig|1.peg.1"))
+  testthat::expect_setequal(
+    cluster_rows$node_id[cluster_rows$feature_type == "protein"],
+    c("fig|1.peg.1", "fig|1.peg.2")
+  )
   testthat::expect_false(file.exists(file.path(out, "gene_protein_projected_seed_evidence.parquet")))
   graph <- arrow::read_parquet(file.path(out, "cluster_pair_network_evidence.parquet"))
-  testthat::expect_equal(nrow(graph), 2)
-  testthat::expect_true(graph$high_priority[graph$labels == "real"])
-  testthat::expect_false(graph$high_priority[graph$labels == "shuffled"])
-  testthat::expect_true(all(graph$pair_robust75))
-  testthat::expect_true(all(graph$protein_evidence_origin == "direct_protein_cluster_model"))
+  testthat::expect_equal(nrow(graph), 6)
+  testthat::expect_true(all(graph$high_priority[graph$labels == "real"]))
+  testthat::expect_false(any(graph$high_priority[graph$labels == "shuffled"]))
+  testthat::expect_true(all(graph$dyad_robust75))
+  testthat::expect_true(all(graph$pair_robust75 == (graph$dyad_type == "paired")))
+  testthat::expect_true(all(is.na(graph$protein_evidence_origin[graph$dyad_type == "gene_only"])))
+  testthat::expect_true(all(
+    graph$protein_evidence_origin[graph$dyad_type != "gene_only"] ==
+      "direct_protein_cluster_model"
+  ))
   neighbors <- arrow::read_parquet(file.path(out, "cluster_annotation_neighbor_evidence.parquet"))
   testthat::expect_equal(nrow(neighbors), 2)
   testthat::expect_true(all(neighbors$returned_nonzero))
+  testthat::expect_equal(result$summary$n_high_priority_dyad_encoding_records, 3L)
   testthat::expect_equal(result$summary$n_high_priority_pair_encoding_records, 1L)
   testthat::expect_equal(result$summary$n_distinct_real_robust_pairs, 1L)
   testthat::expect_setequal(list.files(out), c(
@@ -148,7 +180,8 @@ testthat::test_that("task-based ORB network export preserves unsupported and shu
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = file.path(orb, "fixture_parquet.duckdb"))
   DBI::dbExecute(con, "DELETE FROM dyads")
   DBI::dbWriteTable(con, "dyads", data.frame(
-    gene = c("g1", "g2"), protein = c("member1", "fig|1.peg.2")
+    gene = c("g1", "g2"), protein = c("member1", "fig|1.peg.2"),
+    dyad_type = c("paired", "paired")
   ), append = TRUE)
   DBI::dbDisconnect(con)
   testthat::expect_error(exportNetwork(run, orb, file.path(root, "legacy")),

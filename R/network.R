@@ -93,11 +93,13 @@
 
 #' Export MAGIC gene-protein cluster networks for amRviz
 #'
-#' Build a fixed ORB cluster-pair graph with real and shuffled feature evidence,
-#' model reliability, and separate connected functional annotations. Does not
-#' refit models. Gene and protein models already use cluster predictors;
-#' protein cluster IDs are named by CD-HIT representatives. Functional
-#' annotations do not increase either endpoint's feature score.
+#' Build a fixed ORB dyad graph with real and shuffled feature evidence, model
+#' reliability, and separate connected functional annotations. Paired dyads
+#' require evidence from both endpoints; gene-only and protein-only dyads are
+#' scored from their one available endpoint. Does not refit models. Gene and
+#' protein models already use cluster predictors; protein cluster IDs are named
+#' by CD-HIT representatives. Functional annotations do not increase either
+#' endpoint's feature score.
 #'
 #' @param run_dir Completed modeling run with tasks.parquet, matrices.parquet,
 #'   results/performance.parquet, results/importance.parquet, and predictions.
@@ -238,11 +240,26 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     if (!all(needed %in% DBI::dbListTables(con))) {
       stop("ORB lacks the cluster dyads or protein_members relation.", call. = FALSE)
     }
+    dyad_fields <- DBI::dbListFields(con, "dyads")
+    if (!all(c("gene", "protein", "dyad_type") %in% dyad_fields)) {
+      stop("ORB dyads lack the gene, protein, or dyad_type field; rebuild the ORB dyads.",
+           call. = FALSE)
+    }
     pairs <- DBI::dbGetQuery(con,
-      "SELECT DISTINCT CAST(gene AS VARCHAR) AS gene_cluster, CAST(protein AS VARCHAR) AS protein_cluster FROM dyads")
-    if (!nrow(pairs) || anyNA(pairs) ||
+      "SELECT DISTINCT CAST(gene AS VARCHAR) AS gene_cluster,
+              CAST(protein AS VARCHAR) AS protein_cluster,
+              CAST(dyad_type AS VARCHAR) AS dyad_type
+       FROM dyads")
+    expected_type <- dplyr::case_when(
+      !is.na(pairs$gene_cluster) & !is.na(pairs$protein_cluster) ~ "paired",
+      !is.na(pairs$gene_cluster) ~ "gene_only",
+      !is.na(pairs$protein_cluster) ~ "protein_only",
+      TRUE ~ NA_character_
+    )
+    if (!nrow(pairs) || anyNA(pairs$dyad_type) || anyNA(expected_type) ||
+        any(pairs$dyad_type != expected_type) ||
         anyDuplicated(pairs[c("gene_cluster", "protein_cluster")])) {
-      stop("Invalid ORB cluster-pair graph.", call. = FALSE)
+      stop("Invalid ORB dyad graph or dyad_type classification.", call. = FALSE)
     }
     # Check that each dyad's protein ID is a known CD-HIT cluster representative.
     # Representatives can have "fig|" IDs just like protein members, so the ID
@@ -250,6 +267,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     unknown <- DBI::dbGetQuery(con,
       "SELECT COUNT(*) AS n FROM (
          SELECT DISTINCT CAST(protein AS VARCHAR) AS cluster FROM dyads
+         WHERE protein IS NOT NULL
          EXCEPT
          SELECT DISTINCT CAST(cluster AS VARCHAR) AS cluster FROM protein_members
        )")$n[[1L]]
@@ -277,8 +295,12 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   scopes <- metadata |>
     dplyr::distinct(unit, target, labels, encoding)
   graph <- dplyr::cross_join(scopes, pairs)
-  graph$gene_degree <- as.integer(table(pairs$gene_cluster)[graph$gene_cluster])
-  graph$protein_degree <- as.integer(table(pairs$protein_cluster)[graph$protein_cluster])
+  graph$gene_degree <- dplyr::if_else(
+    is.na(graph$gene_cluster), 0L,
+    as.integer(table(pairs$gene_cluster)[graph$gene_cluster]), missing = 0L)
+  graph$protein_degree <- dplyr::if_else(
+    is.na(graph$protein_cluster), 0L,
+    as.integer(table(pairs$protein_cluster)[graph$protein_cluster]), missing = 0L)
   for (typ in c("gene", "protein")) {
     n <- nodes |>
       dplyr::filter(feature_type == typ) |>
@@ -310,23 +332,39 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     dplyr::mutate(
       gene_representation_supported = dplyr::coalesce(gene_representation_supported, FALSE),
       protein_representation_supported = dplyr::coalesce(protein_representation_supported, FALSE),
-      pair_robust75 = gene_robust75 & protein_robust75,
-      pair_reliability_supported = gene_representation_supported & protein_representation_supported,
-      priority_under_reliability = pair_robust75 & pair_reliability_supported,
+      dyad_robust75 = (!is.na(gene_cluster) | !is.na(protein_cluster)) &
+        (is.na(gene_cluster) | gene_robust75) &
+        (is.na(protein_cluster) | protein_robust75),
+      dyad_reliability_supported =
+        (is.na(gene_cluster) | gene_representation_supported) &
+        (is.na(protein_cluster) | protein_representation_supported),
+      # Retain literal pair metrics for consumers that specifically require
+      # evidence from both endpoints. Orphan priority uses the dyad metrics.
+      pair_robust75 = dyad_type == "paired" & dyad_robust75,
+      pair_reliability_supported =
+        dyad_type == "paired" & dyad_reliability_supported,
+      priority_under_reliability =
+        dyad_robust75 & dyad_reliability_supported,
       high_priority = labels == "real" & priority_under_reliability,
-      protein_evidence_origin = "direct_protein_cluster_model"
+      protein_evidence_origin = dplyr::if_else(
+        is.na(protein_cluster), NA_character_, "direct_protein_cluster_model")
     )
   background <- graph |>
     dplyr::filter(labels == "shuffled") |>
-    dplyr::select(unit, target, encoding, gene_cluster, protein_cluster,
+    dplyr::select(unit, target, encoding, gene_cluster, protein_cluster, dyad_type,
+                  shuffled_dyad_robust75 = dyad_robust75,
+                  shuffled_dyad_reliability_supported = priority_under_reliability,
                   shuffled_pair_robust75 = pair_robust75,
-                  shuffled_pair_reliability_supported = priority_under_reliability)
+                  shuffled_pair_reliability_supported = pair_reliability_supported)
   real <- graph |>
     dplyr::filter(labels == "real") |>
     dplyr::left_join(background,
-      by = c("unit", "target", "encoding", "gene_cluster", "protein_cluster"),
+      by = c("unit", "target", "encoding", "gene_cluster", "protein_cluster", "dyad_type"),
       relationship = "one-to-one") |>
     dplyr::mutate(
+      shuffled_dyad_robust75 = dplyr::coalesce(shuffled_dyad_robust75, FALSE),
+      shuffled_dyad_reliability_supported =
+        dplyr::coalesce(shuffled_dyad_reliability_supported, FALSE),
       shuffled_pair_robust75 = dplyr::coalesce(shuffled_pair_robust75, FALSE),
       shuffled_pair_reliability_supported = dplyr::coalesce(shuffled_pair_reliability_supported, FALSE)
     )
@@ -334,12 +372,12 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   # pairs. Include robust real-label pairs even if their models did not pass the
   # reliability check, so annotation context remains available for review.
   robust_pairs <- real |>
-    dplyr::filter(pair_robust75)
+    dplyr::filter(dyad_robust75)
 
   # Retrieve ORB annotations for protein clusters connected to robust pairs.
   # Keep Pfam, COG, AMRFinder, and DefenseCas links separate from the endpoint
   # scores: a cluster with many annotations does not gain extra importance.
-  neighbor_clusters <- unique(robust_pairs$protein_cluster)
+  neighbor_clusters <- unique(stats::na.omit(robust_pairs$protein_cluster))
   neighbor_links <- local({
     old_wd <- getwd()
     on.exit(setwd(old_wd), add = TRUE)
@@ -407,22 +445,36 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   by_target <- real |>
     dplyr::group_by(unit, target) |>
     dplyr::summarise(
-      n_fixed_pair_encoding_records = dplyr::n(),
+      n_fixed_dyad_encoding_records = dplyr::n(),
+      n_real_robust_dyad_encoding_records = sum(dyad_robust75),
+      n_high_priority_dyad_encoding_records = sum(high_priority),
+      n_robust_dyad_encoding_records_also_shuffled =
+        sum(dyad_robust75 & shuffled_dyad_robust75),
+      n_distinct_real_robust_dyads = dplyr::n_distinct(
+        gene_cluster[dyad_robust75], protein_cluster[dyad_robust75]),
+      n_distinct_high_priority_dyads = dplyr::n_distinct(
+        gene_cluster[high_priority], protein_cluster[high_priority]),
+      n_fixed_pair_encoding_records = sum(dyad_type == "paired"),
       n_real_robust_pair_encoding_records = sum(pair_robust75),
-      n_high_priority_pair_encoding_records = sum(high_priority),
+      n_high_priority_pair_encoding_records =
+        sum(high_priority & dyad_type == "paired"),
       n_robust_pair_encoding_records_also_shuffled =
         sum(pair_robust75 & shuffled_pair_robust75),
       n_distinct_real_robust_pairs = dplyr::n_distinct(
         gene_cluster[pair_robust75], protein_cluster[pair_robust75]),
       n_distinct_high_priority_pairs = dplyr::n_distinct(
-        gene_cluster[high_priority], protein_cluster[high_priority]),
+        gene_cluster[high_priority & dyad_type == "paired"],
+        protein_cluster[high_priority & dyad_type == "paired"]),
       .groups = "drop"
     )
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   provenance <- data.frame(
     modeling_run = run_dir,
     orb_directory = orb_dir,
-    n_cluster_pairs = nrow(pairs),
+    n_dyads = nrow(pairs),
+    n_cluster_pairs = sum(pairs$dyad_type == "paired"),
+    n_gene_only_dyads = sum(pairs$dyad_type == "gene_only"),
+    n_protein_only_dyads = sum(pairs$dyad_type == "protein_only"),
     n_fitted_tasks = nrow(metadata),
     core_threshold = core_threshold,
     min_supported_seeds = 2L,
@@ -456,9 +508,9 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   arrow::write_parquet(cluster_rows,
     file.path(out_dir, "gene_protein_seed_evidence.parquet"))
 
-  message("MAGIC network export: ", nrow(pairs), " fixed cluster pairs; ",
-          sum(real$high_priority), " high-priority pair/encoding records (",
-          sum(by_target$n_distinct_high_priority_pairs), " distinct pairs).\n",
+  message("MAGIC network export: ", nrow(pairs), " fixed dyads; ",
+          sum(real$high_priority), " high-priority dyad/encoding records (",
+          sum(by_target$n_distinct_high_priority_dyads), " distinct dyads).\n",
           "Outputs: ", out_dir)
   invisible(list(summary = by_target, out_dir = out_dir))
 }
