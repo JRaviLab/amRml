@@ -2,30 +2,44 @@
 
 # Feature evidence and model reliability scoring
 
+# Identity columns shared by the merged vanilla and cross-test exports.
+.modelPerformanceKeys <- function(perf) {
+  c("species", intersect(c("drug_label", "drug_or_class", "drug", "test_drug",
+    "strat_label", "strat_value", "strat_value_test", "leaveout_strat_value"),
+    names(perf)), "feature_type", "feature_subtype", "seed")
+}
+
 #' Assess model reliability using real-label and shuffled-label MCC
 #'
 #' Compare each model's real-label MCC with the shuffled-label MCC from the
 #' same seed and with the average shuffled MCC plus one standard deviation (SD)
 #' for the same drug, feature type, and encoding. A seed supports the model only
-#' when its real-label MCC is positive and exceeds both comparisons.
+#' when its real-label MCC has the requested sign and exceeds both comparisons
+#' in that direction.
 #' At least two defined shuffled MCC values are needed to calculate the SD.
 #'
 #' @param all_performance_parquet Path to the merged model-performance Parquet file.
 #' @param min_supported_seeds Number of supporting seeds required (default 2).
+#' @param direction `"positive"` (default) requires real MCC above zero, its
+#'   matched shuffled MCC, and shuffled mean + SD. `"negative"` requires real
+#'   MCC below zero, its matched shuffled MCC, and shuffled mean - SD. Cross-test
+#'   train/test scope columns are retained when forming comparisons.
 #' @return List with reliability results by representation and MCC comparisons
 #'   by seed. Missing MCC values are not replaced with zero.
 #' @export
 assessModelReliability <- function(all_performance_parquet,
-                                  min_supported_seeds = 2L) {
+                                  min_supported_seeds = 2L,
+                                  direction = c("positive", "negative")) {
+  direction <- match.arg(direction)
+  sign <- if (direction == "positive") 1 else -1
   stopifnot(file.exists(all_performance_parquet))
   if (length(min_supported_seeds) != 1L || is.na(min_supported_seeds) ||
       min_supported_seeds < 1L || min_supported_seeds != as.integer(min_supported_seeds))
     stop("min_supported_seeds must be a positive integer.", call. = FALSE)
   
-  keys <- c("species", "drug_label", "drug_or_class", "feature_type",
-            "feature_subtype", "seed")
-  rep_keys <- head(keys, -1L)
   perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
+  keys <- .modelPerformanceKeys(perf)
+  rep_keys <- head(keys, -1L)
   if (!all(c(keys, "shuffled", "mcc") %in% names(perf)))
     stop("Performance must contain scope, seed, shuffled and mcc columns.", call. = FALSE)
   if (anyNA(perf[c(keys, "shuffled")]) ||
@@ -47,7 +61,8 @@ assessModelReliability <- function(all_performance_parquet,
       sd_shuffled_mcc = if (n_shuffled_defined >= 2L) stats::sd(mcc, na.rm = TRUE) else NA_real_,
       .groups = "drop"
     ) |>
-    dplyr::mutate(shuffled_upper = mean_shuffled_mcc + sd_shuffled_mcc)
+    dplyr::mutate(shuffled_upper = mean_shuffled_mcc + sd_shuffled_mcc,
+                  shuffled_lower = mean_shuffled_mcc - sd_shuffled_mcc)
   
   real <- perf |>
     dplyr::filter(!shuffled) |>
@@ -63,12 +78,12 @@ assessModelReliability <- function(all_performance_parquet,
     dplyr::mutate(
       assessable_pair = !is.na(mcc_real) & !is.na(mcc_shuffled) &
         !is.na(shuffled_upper),
-      # Count this seed as supporting the model only if real-label MCC is
-      # positive and exceeds both its matched shuffled MCC and the shuffled
-      # average plus one SD. Missing MCC values cannot provide support
+      # Require the requested sign and separation from both the paired null
+      # and the directional mean +/- SD baseline. Missing values cannot support.
       above_background = dplyr::coalesce(
-        assessable_pair & mcc_real > 0 & mcc_real > mcc_shuffled &
-          mcc_real > shuffled_upper, FALSE
+        assessable_pair & sign * mcc_real > 0 &
+          sign * (mcc_real - mcc_shuffled) > 0 &
+          sign * (mcc_real - mean_shuffled_mcc) > sd_shuffled_mcc, FALSE
       )
     )
   
@@ -86,6 +101,7 @@ assessModelReliability <- function(all_performance_parquet,
       .groups = "drop"
     ) |>
     dplyr::mutate(
+      direction = direction,
       evidence_status = dplyr::case_when(
         n_supported_seeds >= min_supported_seeds ~ "supported",
         n_paired_assessable < min_supported_seeds ~ "insufficient",
@@ -199,8 +215,12 @@ summarizeFeatureEvidence <- function(scored_top_features,
 #' Filter model fits to those passing quality thresholds
 #'
 #' @param all_performance_parquet The path to the 'all performance parquet' file
-#' @param MCC_threshold The minimum non-shuffled MCC required to keep a model fit (default is \code{NULL}, no filtering)
-#' @param compare_to_shuffled Logical indicating whether to require the non-shuffled MCC to exceed (outperform) the shuffled-label MCC for the same fit (default is \code{TRUE}). A fit with no shuffled counterpart (\code{shuffled_MCC} is \code{NA} after pivoting) always passes this check regardless.
+#' @param MCC_threshold Minimum real MCC magnitude in the selected direction,
+#'   or `NULL` for no magnitude threshold.
+#' @param compare_to_shuffled Require a defined shuffled counterpart and a real
+#'   MCC farther in the selected direction (default `TRUE`).
+#' @param direction Select positive or negative signal; `MCC_threshold`, when
+#'   supplied, is a nonnegative magnitude in the selected direction.
 #'
 #' @returns a tibble of model fits (one row per species, drug_label, drug_or_class, seed, feature_type, feature_subtype, model, fit_penalty, fit_mixture) that pass the requested quality thresholds, with \code{nonshuffled_MCC}, \code{shuffled_MCC}, and \code{MCC_diff} columns added. This does not pick a single "best" fit per group; it filters out fits that fail the MCC/shuffled-comparison criteria, so multiple passing fits per group can remain.
 #'
@@ -211,7 +231,8 @@ summarizeFeatureEvidence <- function(scored_top_features,
 #' }
 filterOptimalModel <- function(all_performance_parquet,
   MCC_threshold = NULL,
-  compare_to_shuffled = TRUE)
+  compare_to_shuffled = TRUE,
+  direction = c("positive", "negative"))
   {
   stopifnot(file.exists(all_performance_parquet))
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
@@ -220,29 +241,30 @@ filterOptimalModel <- function(all_performance_parquet,
     stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
   }
 
-  all_perf |>
-    dplyr::select(
-      species, drug_label, drug_or_class,
-      seed, feature_type, feature_subtype,
-      model, fit_penalty, fit_mixture,
-      shuffled, mcc
-    ) |>
-    tidyr::pivot_wider(
-      names_from = shuffled,
-      values_from = mcc,
-      names_prefix = "shuffled_"
-    ) |>
-    dplyr::rename(
-      nonshuffled_MCC = shuffled_FALSE,
-      shuffled_MCC = shuffled_TRUE
-    ) |>
-    dplyr::filter(!is.na(nonshuffled_MCC)) |>
-    dplyr::mutate(
-      MCC_diff = nonshuffled_MCC - shuffled_MCC
-    ) |>
+  direction <- match.arg(direction)
+  if (!is.null(MCC_threshold) &&
+      (length(MCC_threshold) != 1L || !is.numeric(MCC_threshold) ||
+       !is.finite(MCC_threshold) || MCC_threshold < 0 || MCC_threshold > 1)) {
+    stop("MCC_threshold must be NULL or a magnitude in [0, 1].", call. = FALSE)
+  }
+  keys <- c(.modelPerformanceKeys(all_perf), "model")
+  if (anyNA(all_perf[c(keys, "shuffled")]) ||
+      anyDuplicated(all_perf[c(keys, "shuffled")])) {
+    stop("Performance has missing or duplicate fit identities.", call. = FALSE)
+  }
+  real <- all_perf |>
+    dplyr::filter(!shuffled) |>
+    dplyr::select(dplyr::all_of(keys), fit_penalty, fit_mixture, nonshuffled_MCC = mcc)
+  shuffled <- all_perf |>
+    dplyr::filter(shuffled) |>
+    dplyr::select(dplyr::all_of(keys), shuffled_MCC = mcc)
+  sign <- if (direction == "positive") 1 else -1
+  dplyr::left_join(real, shuffled, by = keys, relationship = "one-to-one") |>
+    dplyr::mutate(MCC_diff = nonshuffled_MCC - shuffled_MCC) |>
     dplyr::filter(
-      if (!is.null(MCC_threshold)) (nonshuffled_MCC >= MCC_threshold) else TRUE,
-      if (compare_to_shuffled) (MCC_diff > 0 | is.na(shuffled_MCC)) else TRUE
+      !is.na(nonshuffled_MCC), sign * nonshuffled_MCC > 0,
+      if (!is.null(MCC_threshold)) sign * nonshuffled_MCC >= MCC_threshold else TRUE,
+      if (compare_to_shuffled) !is.na(shuffled_MCC) & sign * MCC_diff > 0 else TRUE
     )
 }
 

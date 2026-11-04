@@ -50,7 +50,8 @@ rescoreFeatures <- function(fit, ...) {
 
   # Complete any merged-result export before changing into the ORB directory
   merged <- file.path(
-    fit$built$out_dir, "merged", c("all_perf.parquet", "all_top_features.parquet")
+    .runPaths(fit$built$out_dir)$merged,
+    c("all_perf.parquet", "all_top_features.parquet")
   )
   if (!all(file.exists(merged))) {
     exportMergedResults(fit, overwrite = TRUE)

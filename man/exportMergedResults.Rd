@@ -9,10 +9,10 @@ exportMergedResults(fit, overwrite = FALSE)
 \arguments{
 \item{fit}{An \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}.}
 
-\item{overwrite}{Replace files already in the output folder's \verb{merged/}.}
+\item{overwrite}{Replace files already in the output folder's \verb{results/merged/}.}
 }
 \value{
-The written paths, invisibly; the files are in \verb{<out_dir>/merged/}.
+The written paths, invisibly; the files are in \verb{<out_dir>/results/merged/}.
 }
 \description{
 Writes a fit's performance and top features as the merged tables old amRml's
@@ -34,7 +34,7 @@ Left out: old amRml's \code{filename}, \code{train_prop}, \code{val_prop} and
 \section{Errors}{
 
 All errors have class \code{amrml_error}, plus \code{amrml_invalid_argument}: \code{fit}
-is not from \code{\link[=fitModels]{fitModels()}}, or \verb{merged/} already has files and \code{overwrite} is
+is not from \code{\link[=fitModels]{fitModels()}}, or \verb{results/merged/} already has files and \code{overwrite} is
 \code{FALSE}.
 }
 

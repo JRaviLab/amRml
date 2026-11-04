@@ -127,11 +127,12 @@ testthat::test_that("task-based ORB network export preserves unsupported and shu
                                  genome_id = c("x", "y")) |>
     dplyr::mutate(truth = dplyr::if_else(genome_id == "x", "Resistant", "Susceptible"),
                   predicted = truth)
-  arrow::write_parquet(matrices, file.path(run, "matrices.parquet"))
-  arrow::write_parquet(tasks, file.path(run, "tasks.parquet"))
-  arrow::write_parquet(performance, file.path(run, "results/performance.parquet"))
-  arrow::write_parquet(importance, file.path(run, "results/importance.parquet"))
-  arrow::write_parquet(predictions, file.path(run, "results/predictions.parquet"))
+  paths <- .runPaths(run)
+  .writeParquet(matrices, paths$matrices)
+  .writeParquet(tasks, paths$tasks)
+  .writeParquet(performance, paths$performance)
+  .writeParquet(importance, paths$importance)
+  .writeParquet(predictions, paths$predictions)
 
   testthat::expect_no_warning(result <- exportNetwork(run, orb, out))
   testthat::expect_equal(result$summary$n_distinct_high_priority_dyads, 3)
@@ -171,12 +172,21 @@ testthat::test_that("task-based ORB network export preserves unsupported and shu
   testthat::expect_equal(result$summary$n_high_priority_pair_encoding_records, 1L)
   testthat::expect_equal(result$summary$n_distinct_real_robust_pairs, 1L)
   testthat::expect_setequal(list.files(out), c(
+    "manifest.json", "fitted_tasks.parquet", "model_reliability_by_seed.parquet",
     "network_provenance.parquet", "feature_returned_seed_evidence.parquet",
     "gene_protein_cluster_node_evidence.parquet", "annotation_node_evidence.parquet",
     "cluster_pair_network_evidence.parquet", "cluster_annotation_neighbor_evidence.parquet",
     "model_reliability.parquet", "reliability_mcc_audit.parquet",
     "protein_cluster_id_crosswalk.parquet", "gene_protein_seed_evidence.parquet"
   ))
+  manifest <- jsonlite::read_json(file.path(out, "manifest.json"))
+  testthat::expect_identical(manifest$manifest_type, "amR_ml_network")
+  network <- manifest$artifacts$amRviz_network
+  testthat::expect_equal(network$network$defaults$core_threshold, 0.75)
+  testthat::expect_true(network$network$coverage$all_dyads_retained)
+  testthat::expect_true(all(file.exists(file.path(out, unlist(network$tables)))))
+  testthat::expect_equal(nrow(arrow::read_parquet(file.path(out, network$tables$fitted_tasks))),
+                         nrow(tasks))
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = file.path(orb, "fixture_parquet.duckdb"))
   DBI::dbExecute(con, "DELETE FROM dyads")
   DBI::dbWriteTable(con, "dyads", data.frame(

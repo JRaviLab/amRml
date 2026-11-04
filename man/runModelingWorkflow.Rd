@@ -5,62 +5,80 @@
 \title{Run the modeling workflow}
 \usage{
 runModelingWorkflow(
-  orb_dir,
+  orb_dir = NULL,
+  feature_types = "standard",
+  model_types = NULL,
+  threads = 1L,
   out_dir = NULL,
-  modes = NULL,
   seeds = 123L,
   labels = c("real", "shuffled"),
-  save_fits = TRUE,
-  BPPARAM = .defaultBPPARAM(),
+  save_fits = FALSE,
+  save_state = FALSE,
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
-  min_mdr_label_genomes = 25,
-  mdr_min_classes = 2,
   overwrite = FALSE,
   reuse_fits = TRUE,
-  feature_types = "standard",
-  resume = FALSE
+  resume = FALSE,
+  BPPARAM = NULL,
+  min_fold_minority = 2,
+  min_analysis_minority = 8,
+  min_mdr_label_genomes = 25,
+  mdr_min_classes = 2
 )
 }
 \arguments{
-\item{orb_dir}{An amRdata ORB directory.}
+\item{orb_dir}{An amRdata ORB directory. If \code{NULL}, discover registered ORBs
+interactively: use the only usable ORB, or prompt to select among several.
+Required in non-interactive sessions.}
+
+\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
+\code{"full"}, or an explicit character vector of ORB feature types.
+Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+
+\item{model_types}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
+
+\item{threads}{Number of parallel workers. Default \code{1} runs serially. Larger
+values use multicore workers on Unix and socket workers on Windows.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
-
-\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
 
 \item{seeds}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
 
 \item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
 \code{\link[=expandTasks]{expandTasks()}}.}
 
-\item{save_fits}{Passed to \code{\link[=fitModels]{fitModels()}}. Must match when resuming.}
+\item{save_fits}{Retain fitted model RDS files. Default \code{FALSE}.}
 
-\item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
+\item{save_state}{Retain internal RDS matrix stores and resume state after a
+successful workflow. Default \code{FALSE}; failed or interrupted workflows keep
+state so they can be resumed. Both flags must match when resuming.}
 
-\item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_mdr_label_genomes}{Passed to
+\item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_fold_minority, min_analysis_minority}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
-
-\item{mdr_min_classes}{Minimum resistant classes for MDR, passed to \code{\link[=profileORB]{profileORB()}}.}
 
 \item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
 folder is always new.}
 
-\item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
-
-\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
-\code{"full"}, or an explicit character vector of ORB feature types.
-Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+\item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug,
+cross-year, and cross-country fits.}
 
 \item{resume}{Resume interrupted model fitting in an existing \code{out_dir},
 using its saved matrices and completed task groups, or reopen unchanged
 completed results. Supply the same modeling arguments and the exact run
 folder (e.g. \verb{<ORB>/amRml/<date-time>/}); \code{BPPARAM} may be changed.
+If \code{orb_dir} is omitted, it is taken from the saved workflow.
 \code{overwrite} must be \code{FALSE}.}
+
+\item{BPPARAM}{Optional advanced BiocParallel backend, passed to \code{\link[=fitModels]{fitModels()}}.
+Supply either \code{threads} or \code{BPPARAM}. May be changed when resuming.}
+
+\item{min_mdr_label_genomes}{Minimum training genomes per MDR combination label, passed to \code{\link[=eligibleScopes]{eligibleScopes()}}.}
+
+\item{mdr_min_classes}{Minimum resistant classes for MDR, passed to \code{\link[=profileORB]{profileORB()}}.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
@@ -73,10 +91,13 @@ can also be called on its own. By default every task is fitted on both the real
 and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
-Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},
-\verb{features/}, \code{matrix_index.rds}, \code{workflow.rds}, \code{tasks.parquet}, \code{run.json},
-\verb{results/} (including \verb{results/models/} when \code{save_fits = TRUE}), and \verb{merged/} from
-\code{\link[=exportMergedResults]{exportMergedResults()}}. amRdata's files are only read.
+Everything goes to \code{out_dir}: \code{manifest.json}, planning tables in \verb{metadata/},
+and durable model outputs in \verb{results/} (including \verb{models/} when
+\code{save_fits = TRUE} and \verb{merged/} from \code{\link[=exportMergedResults]{exportMergedResults()}}). Sparse stores
+and resume files are temporary in \verb{state/}; successful workflows remove them
+unless \code{save_state = TRUE}. amRdata's files are only read.
+Live progress reports completed task counts and elapsed minutes:seconds.
+Progress and completion counts are also recorded as manifest events.
 }
 \section{Errors}{
 
@@ -86,7 +107,8 @@ settings, propagate to the caller.
 
 \examples{
 \dontrun{
-fit <- runModelingWorkflow("path/to/amRdata/output", "path/to/output")
+fit <- runModelingWorkflow("path/to/amRdata/output", feature_types = "standard",
+                           threads = 8, out_dir = "path/to/output")
 fit$performance
 }
 }
