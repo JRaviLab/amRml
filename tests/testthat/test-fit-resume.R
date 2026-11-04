@@ -1,15 +1,21 @@
 test_that("dense and sparse fits agree across serial, sockets and reuse settings", {
   skip_on_cran()
+  # Socket workers load amRml from the library, so with devtools::load_all() they can't
+  # find internal functions, or run an older installed version. Compare sockets only
+  # when amRml itself is installed, as in R CMD check.
+  use_sockets <- !exists(".__DEVTOOLS__", envir = asNamespace("amRml"), inherits = FALSE)
   for (sparse in c(FALSE, TRUE)) {
     tasks <- fxFitTasks(sparse = sparse)
     serial <- fxRunFit(tasks, BPPARAM = BiocParallel::SerialParam())
-    sockets <- fxRunFit(tasks, overwrite = TRUE,
-                       BPPARAM = BiocParallel::SnowParam(workers = 2L, tasks = 2L))
     independent <- fxRunFit(tasks, overwrite = TRUE, reuse_fits = FALSE,
                            BPPARAM = BiocParallel::SerialParam())
     expect_true(all(serial$tasks$status == "fitted"))
-    expect_equal(fxComparableFit(serial), fxComparableFit(sockets))
     expect_equal(fxComparableFit(serial), fxComparableFit(independent))
+    if (use_sockets) {
+      sockets <- fxRunFit(tasks, overwrite = TRUE,
+                         BPPARAM = BiocParallel::SnowParam(workers = 2L, tasks = 2L))
+      expect_equal(fxComparableFit(serial), fxComparableFit(sockets))
+    }
   }
 })
 
