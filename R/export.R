@@ -148,13 +148,13 @@
 #' `auprc`), which stay in `results/`.
 #'
 #' @param fit An `amr_fit` from [fitModels()].
-#' @param overwrite Replace files already in the output folder's `merged/`.
+#' @param overwrite Replace files already in the output folder's `results/merged/`.
 #'
-#' @return The written paths, invisibly; the files are in `<out_dir>/merged/`.
+#' @return The written paths, invisibly; the files are in `<out_dir>/results/merged/`.
 #'
 #' @section Errors:
 #' All errors have class `amrml_error`, plus `amrml_invalid_argument`: `fit`
-#' is not from [fitModels()], or `merged/` already has files and `overwrite` is
+#' is not from [fitModels()], or `results/merged/` already has files and `overwrite` is
 #' `FALSE`.
 #'
 #' @examples
@@ -166,7 +166,7 @@ exportMergedResults <- function(fit, overwrite = FALSE) {
   call <- rlang::current_env()
   .checkArgClass(fit, "fit", "amr_fit", "fitModels()", call = call)
   .checkArgFlag(overwrite, "overwrite", call = call)
-  merged <- file.path(fit$built$out_dir, "merged")
+  merged <- .runPaths(fit$built$out_dir)$merged
   if (length(list.files(merged)) && !overwrite) {
     .amrAbort(
       "invalid_argument",
@@ -179,7 +179,8 @@ exportMergedResults <- function(fit, overwrite = FALSE) {
   unlink(merged, recursive = TRUE)
   dir.create(merged)
   metadata <- .exportMetadata(fit)
-  # MDR coefficients remain in native results, retaining their class labels.
+  # MDR coefficients may be label-specific. Preserve them in native results,
+  # rather than collapsing labels into the binary compatibility export.
   metadata <- metadata[metadata$unit != "mdr", ]
   # The seed comes from the tasks, so top features get it too.
   performance <- fit$performance[names(fit$performance) != "seed"]
@@ -190,10 +191,10 @@ exportMergedResults <- function(fit, overwrite = FALSE) {
     files <- file.path(merged, .exportFiles(mode))
     mode_metadata <- metadata[metadata$mode_id == mode_id, ]
 
-    arrow::write_parquet(.exportRows(performance, mode_metadata, layout$perf), files[[1]])
+    .writeParquet(.exportRows(performance, mode_metadata, layout$perf), files[[1]])
     written <- c(written, files[[1]])
     if (!is.null(layout$top)) {
-      arrow::write_parquet(.exportRows(fit$importance, mode_metadata, layout$top), files[[2]])
+      .writeParquet(.exportRows(fit$importance, mode_metadata, layout$top), files[[2]])
       written <- c(written, files[[2]])
     }
   }

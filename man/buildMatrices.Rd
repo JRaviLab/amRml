@@ -16,11 +16,11 @@ buildMatrices(plan, out_dir = NULL, overwrite = FALSE)
 \value{
 An \code{amr_matrices} list: \code{eligibility}, \code{out_dir}, \code{matrices}, and
 \code{storage = "shared_sparse"}. The \code{file} column points to a shared feature
-store rather than a scope-specific Parquet file. \code{matrix_index.rds} records
+store rather than a scope-specific Parquet file. \code{state/matrix_index.rds} records
 membership rows and selected feature column indices per matrix
 }
 \description{
-Writes each sparse count matrix per feature type in \verb{features/}.
+Writes each sparse count matrix per feature type in \verb{state/features/}.
 Binary encoding and scope-specific feature selection are indexed without
 materializing matrices for speed. amRdata's files in the ORB are only read.
 }

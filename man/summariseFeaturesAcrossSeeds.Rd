@@ -4,15 +4,18 @@
 \alias{summariseFeaturesAcrossSeeds}
 \title{Summarize a feature's scoring across seeds}
 \usage{
-summariseFeaturesAcrossSeeds(scored_top_features)
+summariseFeaturesAcrossSeeds(scored_top_features, seed_inventory = NULL)
 }
 \arguments{
 \item{scored_top_features}{The tibble of scored top features with their contribution, rank, and rank score within each seed generated from \code{scoreFeaturesWithinSeed()}}
+
+\item{seed_inventory}{Optional fitted real-label scope/seed table before quality
+filtering. Used as the per-representation seed denominator.}
 }
 \value{
 a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_subtype/variable, with:
 \itemize{
-\item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_top_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
+\item \code{seed_ratio}: the number of seeds the feature appears in, divided by the number of fitted seeds in its species/drug/feature-type/encoding representation. When supplied, \code{seed_inventory} includes seeds before model-quality filtering.
 \item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
 \item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
 \item \code{median_contribution}: median of \code{contribution} across seeds. (\code{mean_contribution} is not currently computed.)
