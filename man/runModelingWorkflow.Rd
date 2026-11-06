@@ -10,6 +10,8 @@ runModelingWorkflow(
   modes = NULL,
   seeds = 123L,
   labels = c("real", "shuffled"),
+  save_fits = TRUE,
+  BPPARAM = .defaultBPPARAM(),
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
@@ -17,7 +19,6 @@ runModelingWorkflow(
   min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
   overwrite = FALSE,
-  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
   reuse_fits = TRUE,
   feature_types = "standard",
   resume = FALSE
@@ -36,17 +37,18 @@ runModelingWorkflow(
 \item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
 \code{\link[=expandTasks]{expandTasks()}}.}
 
+\item{save_fits}{Passed to \code{\link[=fitModels]{fitModels()}}. Must match when resuming.}
+
+\item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
+
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_mdr_label_genomes}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
-\item{mdr_min_classes}{Passed to \code{\link[=profileORB]{profileORB()}}: fewest drug classes a genome
-must be Resistant in to be MDR; at least 2.}
+\item{mdr_min_classes}{Minimum resistant classes for MDR, passed to \code{\link[=profileORB]{profileORB()}}.}
 
 \item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
 folder is always new.}
-
-\item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
 
 \item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
 
@@ -72,8 +74,9 @@ and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
 Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},
-\verb{features/}, \code{matrix_index.rds}, \code{workflow.rds}, \code{tasks.parquet} and \verb{results/}.
-amRdata's files are only read.
+\verb{features/}, \code{matrix_index.rds}, \code{workflow.rds}, \code{tasks.parquet}, \code{run.json},
+\verb{results/} (including \verb{results/models/} when \code{save_fits = TRUE}), and \verb{merged/} from
+\code{\link[=exportMergedResults]{exportMergedResults()}}. amRdata's files are only read.
 }
 \section{Errors}{
 

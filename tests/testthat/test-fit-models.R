@@ -92,3 +92,21 @@ test_that("the print counts tasks by drug, drug class and MDR", {
 
   expect_output(print(fit), "by target: 0 drug, 0 drug class, 1 MDR")
 })
+
+
+test_that("MDR coefficients retain labels in native results and stay out of binary exports", {
+  fit <- fxCombinationFit()
+  native <- fit$importance
+  expect_true("label" %in% names(.emptyFitResults()$importance))
+  expect_true(all(native$label %in% c("CLX", "CLX_CLY", "Susceptible")))
+  written <- exportMergedResults(fit)
+  expect_length(written, 0L)
+  expect_identical(fit$importance, native)
+  expect_equal(arrow::read_parquet(file.path(fit$built$out_dir, "results", "importance.parquet")), native)
+
+  # Even three otherwise complete real/shuffled pairs are not binary drug evidence.
+  paired <- expandTasks(fit$built, seeds = 1:3, labels = c("real", "shuffled"))
+  fit$tasks <- paired$tasks
+  fit$tasks$status <- "fitted"
+  expect_error(rescoreFeatures(fit), class = "amrml_invalid_argument")
+})
