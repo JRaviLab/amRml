@@ -8,7 +8,7 @@ fitModels(
   tasks,
   save_fits = FALSE,
   save_state = FALSE,
-  BPPARAM = BiocParallel::bpparam(),
+  BPPARAM = .defaultBPPARAM(),
   overwrite = FALSE,
   reuse_fits = TRUE,
   resume = FALSE

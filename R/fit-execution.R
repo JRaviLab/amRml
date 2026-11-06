@@ -345,7 +345,7 @@
 #' }
 #' @export
 fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
-                      BPPARAM = BiocParallel::bpparam(), overwrite = FALSE,
+                      BPPARAM = .defaultBPPARAM(), overwrite = FALSE,
                       reuse_fits = TRUE, resume = FALSE) {
   call <- rlang::current_env()
   started <- Sys.time()

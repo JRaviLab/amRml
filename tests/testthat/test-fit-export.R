@@ -245,3 +245,21 @@ test_that("failed tuning retains its collected notes on the error", {
   expect_gt(nrow(error$amr_notes), 0L)
   expect_true(any(error$amr_notes$type == "error"))
 })
+
+
+test_that("default fitting uses socket workers inside Positron instead of forking", {
+  skip_on_os("windows")
+  withr::local_envvar(c(POSITRON = "1", RSTUDIO = ""))
+  local_mocked_bindings(bpparam = function(...) BiocParallel::MulticoreParam(2),
+                       .package = "BiocParallel")
+  check <- .checkArgClass
+  local_mocked_bindings(.checkArgClass = function(value, name, ...) {
+    if (name == "BPPARAM") {
+      expect_s4_class(value, "SnowParam")
+      expect_equal(BiocParallel::bpnworkers(value), 2)
+      stop("IDE backend checked")
+    }
+    check(value, name, ...)
+  })
+  expect_error(fitModels(structure(list(), class = "amr_tasks")), "IDE backend checked")
+})
