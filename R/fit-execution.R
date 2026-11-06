@@ -129,7 +129,7 @@
       seed = integer(), date = character()
     ),
     importance = tibble::tibble(
-      task_id = character(), species = character(), Variable = character(),
+      task_id = character(), species = character(), label = character(), Variable = character(),
       Importance = numeric(), Sign = character()
     ),
     predictions = tibble::tibble(

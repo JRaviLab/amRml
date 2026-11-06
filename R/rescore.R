@@ -32,7 +32,8 @@ rescoreFeatures <- function(fit, ...) {
   .checkArgClass(fit, "fit", "amr_fit", "fitModels()", call = call)
 
   modes <- .taskModes(fit$tasks, fit$built$matrices)
-  vanilla <- fit$tasks[modes %in% "vanilla" & fit$tasks$status == "fitted", ]
+  unit <- fit$built$matrices$unit[match(fit$tasks$matrix_id, fit$built$matrices$matrix_id)]
+  vanilla <- fit$tasks[modes %in% "vanilla" & unit != "mdr" & fit$tasks$status == "fitted", ]
   if (!all(c("real", "shuffled") %in% vanilla$labels)) {
     .amrAbort(
       "invalid_argument",
