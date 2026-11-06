@@ -73,6 +73,8 @@
   "The class has data for only one of its drugs.",
   "single_phenotype",           "eligibility", "scope",
   "Training genomes have one phenotype only.",
+  "single_class_labels",        "eligibility", "scope",
+  "MDR combination labels involve fewer than two drug classes, so it repeats a class model.",
   "too_few_genomes",            "eligibility", "scope",
   "Too few training genomes.",
   "too_few_for_cv",             "eligibility", "scope",

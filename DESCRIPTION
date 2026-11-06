@@ -37,6 +37,7 @@ VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
     arrow,
+    BiocFileCache,
     BiocParallel,
     dplyr,
     glmnet,
@@ -46,8 +47,9 @@ Imports:
     recipes,
     rlang,
     rsample,
+    sparsevctrs,
     tibble,
-    tidyr,
+    tidyselect,
     tune,
     withr,
     workflows,
