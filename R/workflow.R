@@ -8,6 +8,12 @@
 #' and the shuffled labels; `labels = "real"` skips the shuffled controls.
 #'
 #' @details
+#' The default `execution = "fit"` runs the complete workflow locally using
+#' `threads` or `BPPARAM`. SLURM arrays are an opt-in advanced workflow: explicitly
+#' prepare a run, invoke [runTaskChunk()] from user-managed batch jobs, then call
+#' [collectTaskArray()]. SLURM environment variables do not change the default
+#' execution path, and the package does not submit scheduler jobs.
+#'
 #' Everything goes to `out_dir`: `manifest.json`, planning tables in `metadata/`,
 #' and durable model outputs in `results/` (including `models/` when
 #' `save_fits = TRUE` and `merged/` from [exportMergedResults()]). Sparse stores
@@ -48,6 +54,13 @@
 #'   `overwrite` must be `FALSE`.
 #' @param BPPARAM Optional advanced BiocParallel backend, passed to [fitModels()].
 #'   Supply either `threads` or `BPPARAM`. May be changed when resuming.
+#' @param execution Advanced options for HPC job arrays. `"fit"` runs the full 
+#'   workflow normally (default). `"prepare"` builds shared matrices and an array 
+#'   plan without fitting. Run [runTaskChunk()] for each saved chunk, then 
+#'   [collectTaskArray()] to finish exports. `"collect"` with `resume = TRUE` 
+#'   gathers only completed checkpoints.
+#' @param n_chunks Maximum number of nonempty array chunks when preparing.
+#'   Fewer chunks assign more fit groups to each worker; see [runTaskChunk()].
 #' @param mdr_min_classes Minimum resistant classes for MDR, passed to [profileORB()].
 #' @param min_mdr_label_genomes Minimum training genomes per MDR combination label, passed to [eligibleScopes()].
 #' @param reuse_fits Passed to [fitModels()]; reuse compatible cross-drug,
@@ -61,7 +74,8 @@
 #'   at least three fitted real/shuffled seed pairs exist in a vanilla scope.
 #'   Default `TRUE`. Expected empty results are recorded without failing the run.
 #'
-#' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
+#' @return Preparation returns a plan with tasks, chunks and fit settings.
+#'   Otherwise the `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
 #'   the discovery result when available; `$rescoring_status` records the outcome.
 #'   Rescoring tables and `discovery.rds` are saved in `results/rescoring/`, with
@@ -74,7 +88,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' fit <- runModelingWorkflow("path/to/amRdata/output", feature_types = "standard",
+#' fit <- runModelingWorkflow("path/to/amRdata/output/orb", feature_types = "standard",
 #'                            threads = 8, out_dir = "path/to/output")
 #' fit$performance
 #' }
@@ -101,7 +115,9 @@ runModelingWorkflow <- function(orb_dir = NULL,
                                 min_mdr_label_genomes = 25,
                                 mdr_min_classes = 2,
                                 easy_mode = FALSE,
-                                rescore = TRUE) {
+                                rescore = TRUE,
+                                execution = c("fit", "prepare", "collect"),
+                                n_chunks = 100L) {
   call <- rlang::current_env()
   started <- Sys.time()
   .checkArgFlag(easy_mode, "easy_mode", call = call)
@@ -144,6 +160,11 @@ runModelingWorkflow <- function(orb_dir = NULL,
   .checkArgFlag(resume, "resume", call = call)
   .checkArgFlag(save_fits, "save_fits", call = call)
   .checkArgFlag(save_state, "save_state", call = call)
+  execution <- match.arg(execution)
+  .checkArgCount(n_chunks, "n_chunks", call = call)
+  if ((execution == "collect" && !resume) || (execution == "prepare" && resume)) {
+    .amrAbort("invalid_argument", "Collect requires resume = TRUE; prepare requires resume = FALSE.", call = call)
+  }
   if (resume && (is.null(out_dir) || overwrite)) {
     .amrAbort("invalid_argument", "Resuming requires `out_dir` and `overwrite = FALSE`.", call = call)
   }
@@ -323,8 +344,17 @@ runModelingWorkflow <- function(orb_dir = NULL,
   fit <- fitModels(
     tasks,
     save_fits = save_fits, save_state = TRUE,
-    overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume
+    overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume,
+    execution = execution, n_chunks = n_chunks
   )
+  if (execution == "prepare") {
+    .manifestEvent(manifest_path, "Array prepared; waiting for workers and collection.",
+                   details = list(n_chunks = length(fit$chunks)))
+    .manifestFinish(manifest_path, status = "prepared")
+    run_failed <- FALSE
+    message("Prepared ", length(fit$chunks), " array chunks in ", out_dir)
+    return(invisible(fit))
+  }
   paths <- .runPaths(out_dir)
   fit_outputs <- c(paths$tasks, paths$performance, paths$importance, paths$predictions, paths$notes)
   if (save_fits) fit_outputs <- c(fit_outputs, list.files(paths$models, full.names = TRUE))

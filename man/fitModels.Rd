@@ -11,7 +11,10 @@ fitModels(
   BPPARAM = .defaultBPPARAM(),
   overwrite = FALSE,
   reuse_fits = TRUE,
-  resume = FALSE
+  resume = FALSE,
+  group_subset = NULL,
+  execution = c("fit", "prepare", "worker", "collect"),
+  n_chunks = 100L
 )
 }
 \arguments{
@@ -41,9 +44,22 @@ cross-country tasks with identical training inputs, seeds, and fold settings.}
 unchanged completed fit. The task plan, matrix files and \code{reuse_fits}
 setting must match the original run.
 \code{save_fits} and \code{save_state} must also match.}
+
+\item{group_subset}{Group indices; required only for \code{execution = "worker"}.
+Use the saved chunk map rather than recomputing group numbers.}
+
+\item{execution}{Execution phase: \code{"fit"} (default), \code{"prepare"} to save an
+array plan, \code{"worker"} to checkpoint selected groups only, or \code{"collect"}
+to publish results after every group has finished. Workers and collection
+require \code{resume = TRUE}. See \code{\link[=runTaskChunk]{runTaskChunk()}} and \code{\link[=collectTaskArray]{collectTaskArray()}}.}
+
+\item{n_chunks}{Maximum number of array chunks when preparing.
+Fewer chunks assign more fit groups to each worker; see \code{\link[=runTaskChunk]{runTaskChunk()}}.}
 }
 \value{
-An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
+Preparation invisibly returns a plan (\code{tasks}, \code{chunks}, and fit
+settings); workers return a list of group IDs. Otherwise an \code{amr_fit} list,
+also written to the output folder: \code{tasks} (with
 \code{status}, \code{rule_id} and \code{message}; \code{results/tasks.parquet}), \code{performance},
 \code{importance}, \code{predictions}, and \code{notes} (\verb{results/}), and the \code{built} matrices.
 Notes retain tuning diagnostics and task warnings/messages, with task IDs,

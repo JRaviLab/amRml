@@ -129,3 +129,21 @@ test_that("dominant features cross the cumulative cutoff and seed counts precede
   expect_error(runFeatureDyadDiscovery(t, p, con),
                "No features passed", class = "amrml_no_rescoring_evidence")
 })
+
+
+test_that("array collection runs automatic rescoring with saved three-seed settings", {
+  local_mocked_bindings(.tuningGrid = fxSmallGrid)
+  orb <- fxRescoringOrb()
+  out <- file.path(withr::local_tempdir(), "run")
+  args <- fxWorkflowArgs(orb, out)
+  plan <- do.call(runModelingWorkflow, c(args, list(execution = "prepare", n_chunks = 2)))
+  expect_setequal(unique(plan$tasks$tasks$seed), c(123L, 456L, 789L))
+  expect_false(dir.exists(file.path(out, "results", "rescoring")))
+  for (id in seq_along(plan$chunks)) runTaskChunk(out, id)
+  local_mocked_bindings(.fitModel = function(...) stop("collection must not refit"))
+  fit <- collectTaskArray(out)
+  expect_identical(fit$rescoring_status$status, "success")
+  expect_s3_class(fit$rescoring, "feature_dyad_discovery")
+  expect_true("geneA" %in% fit$rescoring$features$top$variable)
+  expect_true(file.exists(file.path(out, "results", "rescoring", "discovery.rds")))
+})
