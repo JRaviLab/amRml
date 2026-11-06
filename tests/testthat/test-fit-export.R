@@ -86,10 +86,10 @@ test_that("workflow validates threads and constructs the requested backend", {
                "Supply either", class = "amrml_invalid_argument")
   local_mocked_bindings(.checkArgClass = function(value, name, ...) {
     expect_equal(name, "BPPARAM")
-    expect_equal(BiocParallel::bpnworkers(value), 8)
+    expect_equal(BiocParallel::bpnworkers(value), 2)
     stop("backend checked")
   })
-  expect_error(runModelingWorkflow(threads = 8), "backend checked")
+  expect_error(runModelingWorkflow(threads = 2), "backend checked")
 })
 
 test_that("full feature selection warns before writing when struct is available", {
