@@ -237,7 +237,10 @@
 #'   `save_fits` must also match.
 #'
 #' @param BPPARAM A `BiocParallelParam`, e.g. `BiocParallel::MulticoreParam(4)`,
-#'   or `BiocParallel::SerialParam()` to fit one task at a time.
+#'   or `BiocParallel::SerialParam()` to fit one task at a time. The default is
+#'   `BiocParallel::bpparam()`, except that inside Positron or RStudio, which
+#'   cannot fork the R session, it is a `SnowParam` with the same number of
+#'   workers. Workers are fresh R processes, so amRml must be installed.
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
 #'   `status`, `rule_id` and `message`; `tasks.parquet`), `performance`,
 #'   `importance` and `predictions` (`results/`), and the `built` matrices. In
@@ -259,7 +262,7 @@
 #' }
 #' @export
 fitModels <- function(tasks, save_fits = TRUE,
-                      BPPARAM = BiocParallel::bpparam(), overwrite = FALSE,
+                      BPPARAM = .defaultBPPARAM(), overwrite = FALSE,
                       reuse_fits = TRUE, resume = FALSE) {
   call <- rlang::current_env()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)

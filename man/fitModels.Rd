@@ -7,7 +7,7 @@
 fitModels(
   tasks,
   save_fits = TRUE,
-  BPPARAM = BiocParallel::bpparam(),
+  BPPARAM = .defaultBPPARAM(),
   overwrite = FALSE,
   reuse_fits = TRUE,
   resume = FALSE
@@ -22,7 +22,10 @@ the fitted workflow (\code{fit}) and the \code{features} its predictors \code{x1
 Must match the interrupted run when resuming.}
 
 \item{BPPARAM}{A \code{BiocParallelParam}, e.g. \code{BiocParallel::MulticoreParam(4)},
-or \code{BiocParallel::SerialParam()} to fit one task at a time.}
+or \code{BiocParallel::SerialParam()} to fit one task at a time. The default is
+\code{BiocParallel::bpparam()}, except that inside Positron or RStudio, which
+cannot fork the R session, it is a \code{SnowParam} with the same number of
+workers. Workers are fresh R processes, so amRml must be installed.}
 
 \item{overwrite}{Replace results already in the output folder.}
 
