@@ -271,7 +271,7 @@
 
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes. `multi` says
 # whether the task's target is multi-class.
-.fitTask <- function(task, path, rows, columns, encoding, cache,
+.fitTask <- function(task, path, species, rows, columns, encoding, cache,
                      fitted = NULL, return_fitted = FALSE, multi = FALSE) {
   started <- Sys.time()
   matrix <- .readMatrixWide(path, rows, columns, encoding, cache)
