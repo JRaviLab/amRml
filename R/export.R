@@ -179,7 +179,8 @@ exportMergedResults <- function(fit, overwrite = FALSE) {
   unlink(merged, recursive = TRUE)
   dir.create(merged)
   metadata <- .exportMetadata(fit)
-  # MDR coefficients remain in native results, retaining their class labels.
+  # MDR coefficients may be label-specific. Preserve them in native results,
+  # rather than collapsing labels into the binary compatibility export.
   metadata <- metadata[metadata$unit != "mdr", ]
   # The seed comes from the tasks, so top features get it too.
   performance <- fit$performance[names(fit$performance) != "seed"]

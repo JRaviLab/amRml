@@ -39,7 +39,7 @@ topFeaturesPerDrugOrClass(
 
 \item{cv_threshold}{The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean. A feature present in every seed (\code{seed_ratio == 1}) always passes this check regardless of its \code{rank_score_cv} — including when \code{rank_score_cv} is \code{NA}, which happens whenever a group has only a single seed}
 
-\item{cumulative_contribution_threshold}{The cumulative-contribution cutoff, in [0, 1] (default is \code{0.75}, i.e. 75\%). Keep only features with \code{median_cum_contrib <= cumulative_contribution_threshold}}
+\item{cumulative_contribution_threshold}{The cumulative-contribution cutoff, in [0, 1] (default is \code{0.75}, i.e. 75\%). Keep the smallest ranked prefix reaching this share, including the feature that crosses the threshold, using \code{median_prior_cum_contrib < cumulative_contribution_threshold}}
 
 \item{seed_ratio_threshold}{If not \code{NULL} (the default), keep only features whose \code{seed_ratio} exactly equals this value}
 
@@ -55,7 +55,7 @@ The first pass keeps rows where all of the following hold, evaluated together ag
 \item \code{seed_ratio == 1} OR \code{rank_score_cv <= cv_threshold} (see \code{cv_threshold}),
 \item \code{in_core} is TRUE,
 \item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
-\item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
+\item \code{median_prior_cum_contrib < cumulative_contribution_threshold}, and
 \item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}, computed separately per (species, drug_label, drug_or_class) group.
 }
 Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.

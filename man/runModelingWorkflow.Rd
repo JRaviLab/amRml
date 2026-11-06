@@ -10,7 +10,7 @@ runModelingWorkflow(
   model_types = NULL,
   threads = 1L,
   out_dir = NULL,
-  seeds = 123L,
+  seeds = c(123L, 456L, 789L),
   labels = c("real", "shuffled"),
   save_fits = FALSE,
   save_state = FALSE,
@@ -25,7 +25,9 @@ runModelingWorkflow(
   min_fold_minority = 2,
   min_analysis_minority = 8,
   min_mdr_label_genomes = 25,
-  mdr_min_classes = 2
+  mdr_min_classes = 2,
+  easy_mode = FALSE,
+  rescore = TRUE
 )
 }
 \arguments{
@@ -45,7 +47,8 @@ values use multicore workers on Unix and socket workers on Windows.}
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
 
-\item{seeds}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
+\item{seeds}{Seeds passed to \code{\link[=expandTasks]{expandTasks()}}. Normal mode defaults to
+\code{c(123L, 456L, 789L)}; easy mode defaults to \code{123L}.}
 
 \item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
 \code{\link[=expandTasks]{expandTasks()}}.}
@@ -79,10 +82,23 @@ Supply either \code{threads} or \code{BPPARAM}. May be changed when resuming.}
 \item{min_mdr_label_genomes}{Minimum training genomes per MDR combination label, passed to \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
 \item{mdr_min_classes}{Minimum resistant classes for MDR, passed to \code{\link[=profileORB]{profileORB()}}.}
+
+\item{easy_mode}{Run a preview with vanilla models, the \code{"quick"} feature
+preset (available gene, protein, Pfam tables), real labels, and one seed.
+Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
+and cross-validation are unchanged; automatic rescoring is skipped.}
+
+\item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
+at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+Default \code{TRUE}. Expected empty results are recorded without failing the run.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
-reached from it (\verb{$built}, \verb{$built$eligibility}, ...).
+reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
+the discovery result when available; \verb{$rescoring_status} records the outcome.
+Rescoring tables and \code{discovery.rds} are saved in \verb{results/rescoring/}, with
+provenance and skip/empty reasons in the manifest. This uses returned-feature
+ranking, not the separate candidate-aware scoring helper or network export.
 }
 \description{
 Runs every stage on an ORB: \code{\link[=readORB]{readORB()}}, \code{\link[=profileORB]{profileORB()}}, \code{\link[=eligibleScopes]{eligibleScopes()}},

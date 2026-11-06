@@ -412,11 +412,13 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
 #' collapsing the per-seed rows from `scoreFeaturesWithinSeed()` down to one
 #' row per feature.
 #'
+#' @param seed_inventory Optional fitted real-label scope/seed table before quality
+#'   filtering. Used as the per-representation seed denominator.
 #' @param scored_top_features The tibble of scored top features with their contribution, rank, and rank score within each seed generated from `scoreFeaturesWithinSeed()`
 #'
 #' @returns a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_subtype/variable, with:
 #' \itemize{
-#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_top_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
+#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the number of fitted seeds in its species/drug/feature-type/encoding representation. When supplied, \code{seed_inventory} includes seeds before model-quality filtering.
 #'   \item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
 #'   \item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
 #'   \item \code{median_contribution}: median of \code{contribution} across seeds. (\code{mean_contribution} is not currently computed.)
@@ -433,12 +435,13 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
 #' \dontrun{
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 #' }
-summariseFeaturesAcrossSeeds <- function(scored_top_features) {
-
-  # find max number of seeds
-  max_seeds <- scored_top_features |>
-    dplyr::summarise(n_seeds = dplyr::n_distinct(seed)) |>
-    dplyr::pull(n_seeds)
+summariseFeaturesAcrossSeeds <- function(scored_top_features, seed_inventory = NULL) {
+  scope <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype")
+  if (is.null(seed_inventory)) seed_inventory <- scored_top_features
+  counts <- seed_inventory |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(scope))) |>
+    dplyr::summarise(n_seeds = dplyr::n_distinct(seed), .groups = "drop")
+  scored_top_features <- dplyr::left_join(scored_top_features, counts, by = scope)
 
   feature_summary <- scored_top_features |>
     dplyr::group_by(
@@ -450,7 +453,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
       variable
     ) |>
     dplyr::summarise(
-      seed_ratio = dplyr::n_distinct(seed) / max_seeds,
+      seed_ratio = dplyr::n_distinct(seed) / dplyr::first(n_seeds),
 
       mean_rank_score = mean(rank_score, na.rm = TRUE),
       median_rank_score = median(rank_score, na.rm = TRUE),
@@ -468,6 +471,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 
       median_contribution = median(contribution, na.rm = TRUE),
       median_cum_contrib = median(cum_contrib, na.rm = TRUE),
+      median_prior_cum_contrib = median(cum_contrib - contribution, na.rm = TRUE),
 
       in_core_consistent = dplyr::n_distinct(in_core) == 1,
       in_core = if (in_core_consistent) dplyr::first(in_core) else FALSE,
@@ -489,7 +493,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 #' @inheritParams scoreFeaturesWithinSeed
 #' @param rank_score_quantile A value in \[0, 1\] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}, where the quantile is computed separately within each (species, drug_label, drug_or_class) group (with \code{na.rm = TRUE}) — so a feature is compared only against other features from the same drug/class, not against the whole panel. This means a drug/class with weaker or more diffuse signal overall can still contribute its own top features, rather than being crowded out by drugs/classes with stronger or more concentrated signal. As with the other conditions listed below, this is not restricted to rows that already pass them: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original data, so this threshold does not narrow as other conditions are applied
 #' @param cv_threshold The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean. A feature present in every seed (\code{seed_ratio == 1}) always passes this check regardless of its \code{rank_score_cv} — including when \code{rank_score_cv} is \code{NA}, which happens whenever a group has only a single seed
-#' @param cumulative_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%). Keep only features with \code{median_cum_contrib <= cumulative_contribution_threshold}
+#' @param cumulative_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%). Keep the smallest ranked prefix reaching this share, including the feature that crosses the threshold, using \code{median_prior_cum_contrib < cumulative_contribution_threshold}
 #' @param seed_ratio_threshold If not \code{NULL} (the default), keep only features whose \code{seed_ratio} exactly equals this value
 #' @param found_in_both_subtypes Logical indicating whether to additionally restrict to features that survive the filters above in both the binary and counts \code{feature_subtype} (default is \code{FALSE})
 #' @param compare_median_to_sd_rank_score Logical indicating whether to additionally require \code{median_rank_score > rank_score_sd} (default is \code{FALSE})
@@ -501,7 +505,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 #'   \item \code{seed_ratio == 1} OR \code{rank_score_cv <= cv_threshold} (see \code{cv_threshold}),
 #'   \item \code{in_core} is TRUE,
 #'   \item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
-#'   \item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
+#'   \item \code{median_prior_cum_contrib < cumulative_contribution_threshold}, and
 #'   \item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}, computed separately per (species, drug_label, drug_or_class) group.
 #' }
 #' Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.
@@ -537,7 +541,9 @@ topFeaturesPerDrugOrClass <- function(
     compare_to_shuffled = compare_to_shuffled
   )
 
-  feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
+  seed_inventory <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
+    dplyr::filter(!shuffled)
+  feature_summary <- summariseFeaturesAcrossSeeds(scored_features, seed_inventory)
 
   top_filtered_features <- feature_summary |>
     dplyr::group_by(species, drug_label, drug_or_class) |>
@@ -550,7 +556,7 @@ topFeaturesPerDrugOrClass <- function(
       seed_ratio == 1 | rank_score_cv <= cv_threshold, # rank_score_cv can be NA if there is only one seed.
       in_core,
       sign_consistent,
-      median_cum_contrib <= cumulative_contribution_threshold,
+      median_prior_cum_contrib < cumulative_contribution_threshold,
       median_rank_score >= rank_score_cutoff
     ) |>
     dplyr::select(-rank_score_cutoff) |>
@@ -902,7 +908,7 @@ runFeatureDyadDiscovery <- function(
   )
 
   if (nrow(qualified_models) == 0) {
-    stop(
+    .noRescoringEvidence(
       "No model fits passed the requested model-quality criteria."
     )
   }
@@ -988,7 +994,7 @@ runFeatureDyadDiscovery <- function(
   )
 
   if (nrow(top_features) == 0) {
-    stop(
+    .noRescoringEvidence(
       "No features passed the requested feature-selection criteria."
     )
   }

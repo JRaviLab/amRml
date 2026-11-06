@@ -27,7 +27,8 @@
 #' @param feature_types Feature types to model: `"quick"`, `"standard"` (default),
 #'   `"full"`, or an explicit character vector of ORB feature types.
 #'   Selected before matrices are planned or built; see [planMatrices()].
-#' @param seeds Passed to [expandTasks()].
+#' @param seeds Seeds passed to [expandTasks()]. Normal mode defaults to
+#'   `c(123L, 456L, 789L)`; easy mode defaults to `123L`.
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
 #'   [expandTasks()]. 
 #' @param save_fits Retain fitted model RDS files. Default `FALSE`.
@@ -52,8 +53,20 @@
 #' @param reuse_fits Passed to [fitModels()]; reuse compatible cross-drug,
 #'   cross-year, and cross-country fits.
 #'
+#' @param easy_mode Run a preview with vanilla models, the `"quick"` feature
+#'   preset (available gene, protein, Pfam tables), real labels, and one seed.
+#'   Default `FALSE`. Conflicting explicit arguments are rejected. Model fitting
+#'   and cross-validation are unchanged; automatic rescoring is skipped.
+#' @param rescore Automatically run [rescoreFeatures()] after merged export when
+#'   at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+#'   Default `TRUE`. Expected empty results are recorded without failing the run.
+#'
 #' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
-#'   reached from it (`$built`, `$built$eligibility`, ...).
+#'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
+#'   the discovery result when available; `$rescoring_status` records the outcome.
+#'   Rescoring tables and `discovery.rds` are saved in `results/rescoring/`, with
+#'   provenance and skip/empty reasons in the manifest. This uses returned-feature
+#'   ranking, not the separate candidate-aware scoring helper or network export.
 #'
 #' @section Errors:
 #' Errors from any stage, including `amrml_invalid_argument` for mismatched resume
@@ -71,7 +84,7 @@ runModelingWorkflow <- function(orb_dir = NULL,
                                 model_types = NULL,
                                 threads = 1L,
                                 out_dir = NULL,
-                                seeds = 123L,
+                                seeds = c(123L, 456L, 789L),
                                 labels = c("real", "shuffled"),
                                 save_fits = FALSE,
                                 save_state = FALSE,
@@ -86,9 +99,32 @@ runModelingWorkflow <- function(orb_dir = NULL,
                                 min_fold_minority = 2,
                                 min_analysis_minority = 8,
                                 min_mdr_label_genomes = 25,
-                                mdr_min_classes = 2) {
+                                mdr_min_classes = 2,
+                                easy_mode = FALSE,
+                                rescore = TRUE) {
   call <- rlang::current_env()
   started <- Sys.time()
+  .checkArgFlag(easy_mode, "easy_mode", call = call)
+  .checkArgFlag(rescore, "rescore", call = call)
+  if (easy_mode) {
+    if ((!missing(feature_types) && !identical(feature_types, "quick")) ||
+        (!missing(model_types) && !identical(model_types, "vanilla")) ||
+        (!missing(labels) && !identical(labels, "real")) ||
+        (!missing(seeds) && length(seeds) != 1L)) {
+      .amrAbort("invalid_argument", paste0(
+        "Easy mode requires feature_types = \"quick\", model_types = \"vanilla\", ",
+        "labels = \"real\", and a single seed. Use easy_mode = FALSE to customize these settings."
+      ), call = call)
+    }
+    feature_types <- "quick"
+    model_types <- "vanilla"
+    labels <- "real"
+    if (missing(seeds)) seeds <- 123L
+    message("Easy mode fits vanilla gene, protein, and Pfam domain models using one seed, ",
+            "without shuffled-label controls or MAGIC rescoring. ",
+            "We recommend following these runs with more rigorous analyses, ",
+            "using 3 or more seeds, shuffled label controls, and additional features.")
+  }
   .checkArgCount(threads, "threads", call = call)
   if (!is.null(BPPARAM) && !missing(threads)) {
     .amrAbort("invalid_argument", "Supply either `threads` or `BPPARAM`, not both.", call = call)
@@ -123,6 +159,9 @@ runModelingWorkflow <- function(orb_dir = NULL,
       ), call = call)
     }
     saved <- readRDS(snapshot)
+    # The normal default changed from one seed to three. Reuse the saved seeds
+    # when the caller omits them, including for legacy interrupted workflows.
+    if (missing(seeds) && !easy_mode) seeds <- saved$settings$seeds
     if (is.null(orb_dir)) orb_dir <- saved$settings$orb_dir
   }
   if (is.null(orb_dir)) orb_dir <- .selectORB(call, argument = "orb_dir")
@@ -134,8 +173,8 @@ runModelingWorkflow <- function(orb_dir = NULL,
     min_test_genomes = min_test_genomes, min_test_minority = min_test_minority,
     min_fold_minority = min_fold_minority, min_analysis_minority = min_analysis_minority,
     reuse_fits = reuse_fits, feature_types = feature_types, save_fits = save_fits,
-    save_state = save_state,
-    min_mdr_label_genomes = min_mdr_label_genomes, mdr_min_classes = mdr_min_classes
+        min_mdr_label_genomes = min_mdr_label_genomes, mdr_min_classes = mdr_min_classes,
+    save_state = save_state, easy_mode = easy_mode, rescore = rescore
   )
   # Legacy snapshots already have an eligibility plan. Preserve their settings
   # when resuming without an explicit request to change the new CV thresholds.
@@ -147,6 +186,8 @@ runModelingWorkflow <- function(orb_dir = NULL,
   }
   if (resume && is.null(saved$settings$min_mdr_label_genomes) && missing(min_mdr_label_genomes)) settings$min_mdr_label_genomes <- NULL
   if (resume && is.null(saved$settings$mdr_min_classes) && missing(mdr_min_classes)) settings$mdr_min_classes <- NULL
+  if (resume && is.null(saved$settings$easy_mode) && missing(easy_mode)) settings$easy_mode <- NULL
+  if (resume && is.null(saved$settings$rescore) && missing(rescore)) settings$rescore <- NULL
   manifest_path <- NULL
   run_failed <- TRUE
   on.exit(
@@ -320,6 +361,10 @@ runModelingWorkflow <- function(orb_dir = NULL,
   merged <- list.files(paths$merged, recursive = TRUE, full.names = TRUE)
   .manifestStage(manifest_path, "export_merged_results", outputs = merged,
                  metrics = list(n_files = length(merged)))
+
+  fit <- .rescoreWorkflow(fit, manifest_path, enabled = rescore && !easy_mode,
+                          reason = if (easy_mode) "Easy mode does not run MAGIC rescoring." else
+                            "Feature rescoring was disabled with rescore = FALSE.")
 
   if (!save_state) unlink(paths$state, recursive = TRUE)
 

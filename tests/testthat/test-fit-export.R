@@ -133,6 +133,10 @@ test_that("workflow resume finishes a failed export without refitting", {
   legacy <- readRDS(snapshot)
   legacy$settings$min_fold_minority <- NULL
   legacy$settings$min_analysis_minority <- NULL
+  legacy$settings$easy_mode <- NULL
+  legacy$settings$rescore <- NULL
+  # An omitted seed must retain the legacy single-seed plan after the default change.
+  resume_args$seeds <- NULL
   .saveFitCheckpoint(legacy, snapshot)
   fit <- do.call(runModelingWorkflow, c(resume_args, list(resume = TRUE)))
   expect_true(all(fit$tasks$status == "fitted"))
