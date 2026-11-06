@@ -91,6 +91,12 @@
 }
 
 .runFitGroup <- function(job, ...) {
+  if (!is.null(job$lock)) {
+    if (!dir.create(job$lock, showWarnings = FALSE)) {
+      stop("Task group is running or has a stale lock: ", job$lock, call. = FALSE)
+    }
+    on.exit(unlink(job$lock, recursive = TRUE), add = TRUE)
+  }
   .runTaskGroup(job, ...)
   nrow(job$tasks)
 }
@@ -314,13 +320,22 @@
 #'   unchanged completed fit. The task plan, matrix files and `reuse_fits`
 #'   setting must match the original run.
 #'   `save_fits` and `save_state` must also match.
-#'
+#' @param execution Execution phase: `"fit"` (default), `"prepare"` to save an
+#'   array plan, `"worker"` to checkpoint selected groups only, or `"collect"`
+#'   to publish results after every group has finished. Workers and collection
+#'   require `resume = TRUE`. See [runTaskChunk()] and [collectTaskArray()].
+#' @param group_subset Group indices; required only for `execution = "worker"`.
+#'   Use the saved chunk map rather than recomputing group numbers.
+#' @param n_chunks Maximum number of array chunks when preparing.
+#'   Fewer chunks assign more fit groups to each worker; see [runTaskChunk()].
 #' @param BPPARAM A `BiocParallelParam`, e.g. `BiocParallel::MulticoreParam(4)`,
 #'   or `BiocParallel::SerialParam()` to fit one task at a time. The default is
 #'   `BiocParallel::bpparam()`, except that inside Positron or RStudio, which
 #'   cannot fork the R session, it is a `SnowParam` with the same number of
 #'   workers. Workers are fresh R processes, so amRml must be installed.
-#' @return An `amr_fit` list, also written to the output folder: `tasks` (with
+#' @return Preparation invisibly returns a plan (`tasks`, `chunks`, and fit
+#'   settings); workers return a list of group IDs. Otherwise an `amr_fit` list,
+#'   also written to the output folder: `tasks` (with
 #'   `status`, `rule_id` and `message`; `results/tasks.parquet`), `performance`,
 #'   `importance`, `predictions`, and `notes` (`results/`), and the `built` matrices.
 #'   Notes retain tuning diagnostics and task warnings/messages, with task IDs,
@@ -346,7 +361,10 @@
 #' @export
 fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
                       BPPARAM = .defaultBPPARAM(), overwrite = FALSE,
-                      reuse_fits = TRUE, resume = FALSE) {
+                      reuse_fits = TRUE, resume = FALSE,
+                      group_subset = NULL,
+                      execution = c("fit", "prepare", "worker", "collect"),
+                      n_chunks = 100L) {
   call <- rlang::current_env()
   started <- Sys.time()
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
@@ -356,6 +374,19 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   .checkArgFlag(resume, "resume", call = call)
   .checkArgFlag(save_fits, "save_fits", call = call)
   .checkArgFlag(save_state, "save_state", call = call)
+  .checkArgGroupSubset(group_subset, call)
+  execution <- match.arg(execution)
+  .checkArgCount(n_chunks, "n_chunks", call = call)
+  if ((execution == "worker") != !is.null(group_subset)) {
+    .amrAbort("invalid_argument",
+              "`group_subset` is required only for `execution = \"worker\"`.", call = call)
+  }
+  if (execution %in% c("worker", "collect") && !resume) {
+    .amrAbort("invalid_argument", "Workers and collection require `resume = TRUE`.", call = call)
+  }
+  if (execution == "prepare" && resume) {
+    .amrAbort("invalid_argument", "Preparation requires `resume = FALSE`.", call = call)
+  }
   if (resume && overwrite) {
     .amrAbort("invalid_argument", "`resume` and `overwrite` cannot both be TRUE.", call = call)
   }
@@ -373,6 +404,7 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   listed$status <- rep("fitted", nrow(listed))
   listed$rule_id <- rep(NA_character_, nrow(listed))
   listed$message <- rep(NA_character_, nrow(listed))
+  if (execution == "worker") message("Array worker: loading matrix index and checking task groups.")
   index <- readRDS(paths$matrix_index)
   groups <- if (reuse_fits) {
     .fitTaskGroups(listed, tasks$built$matrices, index)
@@ -397,18 +429,26 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
       groups <- saved_groups
     }
   }
+  if (!is.null(group_subset) && any(group_subset > length(groups))) {
+    .amrAbort("invalid_argument", "`group_subset` contains invalid group indices.", call = call)
+  }
+  array_path <- file.path(checkpoint_dir, "array.rds")
+  if (execution == "fit" && file.exists(array_path)) {
+    .amrAbort("invalid_argument", "This is an array run; please use `collectTaskArray()` to finish!", call = call)
+  }
+  if (execution == "worker") message("Array worker: verifying shared input checksums.")
   manifest <- .fitCheckpointManifest(tasks, groups, reuse_fits, save_fits, save_state)
   if (resume) {
     if (!file.exists(manifest_path)) return(.readCompletedFit(tasks, manifest, call))
     if (!identical(readRDS(manifest_path), manifest)) {
       .amrAbort("invalid_argument",
-                "Saved fits do not match these tasks, settings or matrix files; cannot resume.",
+                "Saved fits don't match these tasks, settings or matrices; can't resume.",
                 call = call)
     }
   } else {
     if (dir.exists(checkpoint_dir) && !overwrite) {
       .amrAbort("invalid_argument",
-                "Task checkpoints already exist; use `resume = TRUE` to reuse them.", call = call)
+                "Task checkpoints already exist! Use `resume = TRUE` to reuse.", call = call)
     }
     unlink(checkpoint_dir, recursive = TRUE)
     dir.create(checkpoint_dir, recursive = TRUE)
@@ -417,21 +457,41 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   model_dir <- file.path(checkpoint_dir, "models")
   if (save_fits) dir.create(model_dir, showWarnings = FALSE)
   group_paths <- file.path(checkpoint_dir, sprintf("group-%06d.rds", seq_along(groups)))
-  recovered <- which(file.exists(group_paths))
+  if (execution == "prepare") {
+    plan <- list(tasks = tasks, chunks = .splitGroupIds(length(groups), n_chunks),
+                 save_fits = save_fits, save_state = save_state, reuse_fits = reuse_fits)
+    .saveFitCheckpoint(plan, array_path)
+    return(invisible(plan))
+  }
+  selected <- if (execution == "worker") sort(unique(as.integer(group_subset))) else seq_along(groups)
+  if (execution == "collect") {
+    if (length(list.files(checkpoint_dir, pattern = "^(chunk|group)-.*[.]lock$"))) {
+      stop("Array workers are still active; collect after they have exited.", call. = FALSE)
+    }
+    missing <- which(!file.exists(group_paths))
+    if (length(missing)) stop("Cannot collect: missing task groups: ",
+                              paste(missing, collapse = ", "), call. = FALSE)
+  }
+  recovered <- selected[file.exists(group_paths[selected])]
   # Validate recovered groups before scheduling more work.
   for (g in recovered) {
     .readFitCheckpoint(group_paths[[g]], listed$task_id[groups[[g]]], model_dir, save_fits)
   }
-  pending <- which(!file.exists(group_paths))
+  pending <- selected[!file.exists(group_paths[selected])]
   if (resume) message(length(recovered), " task groups recovered; ",
                       length(pending), " task groups remaining.")
   jobs <- lapply(pending, function(g) {
-    .fitGroupJob(groups[[g]], listed, tasks$built$matrices, index, out_dir, group_paths[[g]])
+    job <- .fitGroupJob(groups[[g]], listed, tasks$built$matrices, index, out_dir, group_paths[[g]])
+    if (execution == "worker") job$lock <- paste0(group_paths[[g]], ".lock")
+    job
   })
   # An empty cache is sent once; each worker populates its own copy across groups.
   cache <- new.env(parent = emptyenv())
   n_recovered <- sum(lengths(groups[recovered]))
-  report <- .fitProgressReporter(started, paths$manifest, nrow(listed))
+  report <- .fitProgressReporter(
+    started, if (execution == "worker") "" else paths$manifest,
+    sum(lengths(groups[selected]))
+  )
   report(n_recovered)
   if (length(jobs)) {
     next_job <- local({
@@ -451,6 +511,8 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
     )
     report(completed, finish = TRUE)
   } else report(n_recovered, finish = TRUE)
+
+  if (execution == "worker") return(invisible(list(groups = selected)))
 
   outcomes <- vector("list", nrow(listed))
   for (g in seq_along(groups)) {
@@ -505,7 +567,7 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   .restoreFitResults(staging, out_dir, produced)
   unlink(checkpoint_dir, recursive = TRUE)
   if (!save_state) unlink(paths$state, recursive = TRUE)
-  
+
   n_collapsed <- sum(fit$performance$collapsed_model, na.rm = TRUE)
   
   n_all_susceptible <- sum(fit$performance$prediction_behavior ==

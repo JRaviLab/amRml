@@ -167,3 +167,16 @@
 
   invisible(TRUE)
 }
+
+# Worker groups have to be finite and non-zero integer indices
+.checkArgGroupSubset <- function(group_subset, call) {
+  if (is.null(group_subset)) return(invisible(NULL))
+  if (!is.numeric(group_subset) || !length(group_subset) ||
+      any(!is.finite(group_subset)) || any(group_subset < 1) ||
+      any(group_subset > .Machine$integer.max) ||
+      any(group_subset != round(group_subset))) {
+    .amrAbort("invalid_argument",
+              "`group_subset` must be NULL or positive integer group indices.", call = call)
+  }
+  invisible(NULL)
+}

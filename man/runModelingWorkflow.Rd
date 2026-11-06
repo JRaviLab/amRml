@@ -27,7 +27,9 @@ runModelingWorkflow(
   min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
   easy_mode = FALSE,
-  rescore = TRUE
+  rescore = TRUE,
+  execution = c("fit", "prepare", "collect"),
+  n_chunks = 100L
 )
 }
 \arguments{
@@ -91,9 +93,19 @@ and cross-validation are unchanged; automatic rescoring is skipped.}
 \item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
 at least three fitted real/shuffled seed pairs exist in a vanilla scope.
 Default \code{TRUE}. Expected empty results are recorded without failing the run.}
+
+\item{execution}{Advanced options for HPC job arrays. \code{"fit"} runs the full
+workflow normally (default). \code{"prepare"} builds shared matrices and an array
+plan without fitting. Run \code{\link[=runTaskChunk]{runTaskChunk()}} for each saved chunk, then
+\code{\link[=collectTaskArray]{collectTaskArray()}} to finish exports. \code{"collect"} with \code{resume = TRUE}
+gathers only completed checkpoints.}
+
+\item{n_chunks}{Maximum number of nonempty array chunks when preparing.
+Fewer chunks assign more fit groups to each worker; see \code{\link[=runTaskChunk]{runTaskChunk()}}.}
 }
 \value{
-The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
+Preparation returns a plan with tasks, chunks and fit settings.
+Otherwise the \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
 reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
 the discovery result when available; \verb{$rescoring_status} records the outcome.
 Rescoring tables and \code{discovery.rds} are saved in \verb{results/rescoring/}, with
@@ -107,6 +119,12 @@ can also be called on its own. By default every task is fitted on both the real
 and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
+The default \code{execution = "fit"} runs the complete workflow locally using
+\code{threads} or \code{BPPARAM}. SLURM arrays are an opt-in advanced workflow: explicitly
+prepare a run, invoke \code{\link[=runTaskChunk]{runTaskChunk()}} from user-managed batch jobs, then call
+\code{\link[=collectTaskArray]{collectTaskArray()}}. SLURM environment variables do not change the default
+execution path, and the package does not submit scheduler jobs.
+
 Everything goes to \code{out_dir}: \code{manifest.json}, planning tables in \verb{metadata/},
 and durable model outputs in \verb{results/} (including \verb{models/} when
 \code{save_fits = TRUE} and \verb{merged/} from \code{\link[=exportMergedResults]{exportMergedResults()}}). Sparse stores
@@ -123,7 +141,7 @@ settings, propagate to the caller.
 
 \examples{
 \dontrun{
-fit <- runModelingWorkflow("path/to/amRdata/output", feature_types = "standard",
+fit <- runModelingWorkflow("path/to/amRdata/output/orb", feature_types = "standard",
                            threads = 8, out_dir = "path/to/output")
 fit$performance
 }
