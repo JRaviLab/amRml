@@ -29,6 +29,9 @@
       }),
       error = function(e) {
         task_notes <<- dplyr::bind_rows(task_notes, e$amr_notes)
+        .fitDiagnostic(job$diagnostics, if (.isMemoryError(conditionMessage(e))) "oom_error" else "task_error",
+                       list(task_id = task$task_id, group = basename(job$checkpoint),
+                            error = conditionMessage(e)))
         list(error = conditionMessage(e))
       }
     )
@@ -92,12 +95,21 @@
 
 .runFitGroup <- function(job, ...) {
   if (!is.null(job$lock)) {
-    if (!dir.create(job$lock, showWarnings = FALSE)) {
-      stop("Task group is running or has a stale lock: ", job$lock, call. = FALSE)
-    }
+    .acquireFitLock(job$lock, "Task group")
     on.exit(unlink(job$lock, recursive = TRUE), add = TRUE)
   }
-  .runTaskGroup(job, ...)
+  details <- list(group = basename(job$checkpoint), task_ids = job$tasks$task_id,
+                  matrix_ids = job$tasks$matrix_id, matrix_files = unique(job$paths),
+                  r_heap_used_mb = sum(gc(full = FALSE)[, 2]))
+  .fitDiagnostic(job$diagnostics, "group_start", details)
+  message("Running ", details$group, ": ", paste(details$matrix_ids, collapse = ", "),
+          " (R heap ", details$r_heap_used_mb, " MiB).")
+  tryCatch(.runTaskGroup(job, ...), error = function(e) {
+    .fitDiagnostic(job$diagnostics, if (.isMemoryError(conditionMessage(e))) "oom_error" else "group_error",
+                   list(group = details$group, error = conditionMessage(e)))
+    stop(e)
+  })
+  .fitDiagnostic(job$diagnostics, "group_complete", list(group = details$group))
   nrow(job$tasks)
 }
 
@@ -112,7 +124,8 @@
     columns = index$columns[positions],
     encoding = matrices$encoding[positions],
     multi = .isMulticlass(matrices$unit[positions], matrices$target[positions]),
-    checkpoint = checkpoint
+    checkpoint = checkpoint,
+    diagnostics = file.path(out_dir, "diagnostics")
   )
 }
 
@@ -295,9 +308,9 @@
 #' after an interruption. Checkpoints are removed after results are written.
 #' Use `resume = TRUE` with the same tasks and output directory to reuse them.
 #' Each task runs under its own seed. A task that errors is recorded as
-#' `fit_failed`, and one with undefined metrics as `metrics_undefined`; the rest
-#' carry on. A shuffled task permutes the training matrix's labels before the
-#' split.
+#' `fit_failed` or `fit_oom` for memory pressure errors, and one with undefined
+#' metrics as `metrics_undefined`; the rest carry on. A shuffled task permutes
+#' the training matrix's labels before the split.
 #' Progress is reported by the parent process as checkpointed task groups return.
 #' Counts include failed tasks and recovered checkpoints; the final summary lists
 #' fitted and failed tasks separately. Elapsed time covers the current invocation.
@@ -466,7 +479,8 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   selected <- if (execution == "worker") sort(unique(as.integer(group_subset))) else seq_along(groups)
   if (execution == "collect") {
     if (length(list.files(checkpoint_dir, pattern = "^(chunk|group)-.*[.]lock$"))) {
-      stop("Array workers are still active; collect after they have exited.", call. = FALSE)
+      stop("Array workers may be still active, or stale locks remain; ",
+           "inspect lock owner.json files and confirm jobs have exited before recovery.", call. = FALSE)
     }
     missing <- which(!file.exists(group_paths))
     if (length(missing)) stop("Cannot collect: missing task groups: ",
@@ -525,7 +539,7 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
     outcome <- outcomes[[i]]
     if (!is.null(outcome[["error"]])) {
       listed$status[[i]] <- "failed"
-      listed$rule_id[[i]] <- "fit_failed"
+      listed$rule_id[[i]] <- if (.isMemoryError(outcome$error)) "fit_oom" else "fit_failed"
       listed$message[[i]] <- outcome$error
       outcomes[i] <- list(NULL)
     } else if (!is.na(outcome$undefined)) {

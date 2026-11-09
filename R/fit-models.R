@@ -427,7 +427,7 @@
     n_feat = length(matrix$features),
     n_labels = length(labels),
     model = "LR",
-    n_feats_returned = nrow(importance),
+    n_feats_returned = dplyr::n_distinct(importance$Variable),
     n_fold = task$n_fold,
     fit_penalty = fitted$penalty,
     fit_mixture = fitted$mixture,

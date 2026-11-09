@@ -170,3 +170,46 @@ test_that("the default workflow stays local when SLURM variables are present", {
   expect_true(file.exists(file.path(.runPaths(out)$merged, "all_perf.parquet")))
   expect_false(file.exists(file.path(.runPaths(out)$checkpoints, "array.rds")))
 })
+
+
+test_that("lock metadata identifies owners without removing existing locks", {
+  lock <- file.path(withr::local_tempdir(), "chunk.lock")
+  withr::local_envvar(SLURM_ARRAY_JOB_ID = "321", SLURM_ARRAY_TASK_ID = "7")
+  .acquireFitLock(lock, "Chunk")
+  owner <- jsonlite::read_json(file.path(lock, "owner.json"))
+  expect_identical(owner$array_job_id, "321")
+  expect_identical(owner$array_task_id, "7")
+  expect_equal(owner$pid, Sys.getpid())
+  expect_error(.acquireFitLock(lock, "Chunk"), "321")
+  expect_true(dir.exists(lock))
+})
+
+test_that("allocation failures retain task identity and durable diagnostics", {
+  tasks <- fxFitTasks()
+  local_mocked_bindings(.fitTask = function(...) stop("cannot allocate vector of size 8 Gb"))
+  fit <- suppressWarnings(fitModels(tasks, save_state = FALSE))
+  expect_true(all(fit$tasks$status == "failed"))
+  expect_true(all(fit$tasks$rule_id == "fit_oom"))
+  expect_identical(fit$tasks$task_id, tasks$tasks$task_id)
+  directory <- file.path(tasks$built$out_dir, "diagnostics")
+  lines <- unlist(lapply(list.files(directory, full.names = TRUE), readLines))
+  records <- lapply(lines, jsonlite::fromJSON)
+  events <- vapply(records, `[[`, character(1), "event")
+  expect_equal(sum(events == "oom_error"), nrow(tasks$tasks))
+  starts <- records[events == "group_start"]
+  expect_true(all(vapply(starts, function(x) length(x$matrix_ids) > 0L, logical(1))))
+  expect_true(all(vapply(starts, function(x) is.numeric(x$r_heap_used_mb), logical(1))))
+  expect_false(dir.exists(.runPaths(tasks$built$out_dir)$state))
+})
+
+
+test_that("memory-limit errors are recognized and diagnostic failures do not replace fit errors", {
+  expect_true(.isMemoryError("vector memory limit of 16.0 Gb reached, see mem.maxVSize()"))
+  expect_true(.isMemoryError("std::bad_alloc"))
+  expect_false(.isMemoryError("Model fitting failed: no usable predictors"))
+  blocker <- tempfile(tmpdir = withr::local_tempdir())
+  writeLines("file, not a directory", blocker)
+  withr::local_options(warn = 2)
+  expect_message(.fitDiagnostic(file.path(blocker, "logs"), "task_error"),
+                 "Could not write fit diagnostics")
+})

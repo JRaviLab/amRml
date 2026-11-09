@@ -134,16 +134,24 @@ summarizeFeatureEvidence <- function(scored_top_features,
                                               candidate_inventory) {
   keys <- c("species", "drug_label", "drug_or_class", "feature_type",
             "feature_subtype", "seed")
+  # Older binary inventories have no label column, and multiclass inventories
+  # must explicitly identify the outcome for every candidate row
+  if ("label" %in% names(scored_top_features)) {
+    if (!"label" %in% names(candidate_inventory) && all(is.na(scored_top_features$label))) {
+      candidate_inventory$label <- NA_character_
+    }
+    keys <- c(keys, "label")
+  }
   feature_keys <- c(keys, "variable")
-  scope <- c("species", "drug_label", "drug_or_class", "feature_type",
-             "feature_subtype")
+  scope <- setdiff(keys, "seed")
   by_feature <- c(scope, "variable")
   if (!is.data.frame(scored_top_features) || !is.data.frame(candidate_inventory) ||
       !all(c(feature_keys, "contribution", "in_core", "sign") %in% names(scored_top_features)) ||
       !all(feature_keys %in% names(candidate_inventory)))
     stop("Expected per-seed coefficients and candidate-by-fitted-seed inventory.", call. = FALSE)
   if (!nrow(scored_top_features) || !nrow(candidate_inventory) ||
-      anyNA(scored_top_features[feature_keys]) || anyNA(candidate_inventory[feature_keys]) ||
+      anyNA(scored_top_features[setdiff(feature_keys, "label")]) ||
+      anyNA(candidate_inventory[setdiff(feature_keys, "label")]) ||
       anyDuplicated(scored_top_features[feature_keys]) ||
       anyDuplicated(candidate_inventory[feature_keys]))
     stop("Missing/duplicate candidate or returned-feature identities.", call. = FALSE)
@@ -311,6 +319,8 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
   all_top_features <- arrow::read_parquet(normalizePath(all_top_features_parquet)) |>
     dplyr::filter(!shuffled, !feature_type %in% exclude_feature_types)
 
+  if (!"label" %in% names(all_top_features)) all_top_features$label <- NA_character_
+
   if (filter_model) {
     filtered_model <- filterOptimalModel(
       normalizePath(all_performance_parquet),
@@ -347,7 +357,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
   # add different layers of scoring to the features within each seed
   scored_top_features <- all_top_features |>
     dplyr::select(
-      species, drug_label, drug_or_class, seed,
+      species, drug_label, drug_or_class, label, seed,
       feature_type, feature_subtype, variable = Variable,
       importance = Importance, sign = Sign
     ) |>
@@ -366,7 +376,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
     dplyr::group_by(
       species,
       drug_label,
-      drug_or_class,
+      drug_or_class, label,
       feature_type,
       feature_subtype,
       seed
@@ -381,6 +391,8 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
     dplyr::mutate(
       rank = rank(dplyr::desc(contribution), ties.method = "average"),
       n_features = dplyr::n(),
+      # Multinomial counts must be per label, not all coefficient rows.
+      feat_return_ratio = n_features / n_feat,
       rank_score = dplyr::if_else(
         n_features > 1,
         (n_features - rank) / (n_features - 1),
@@ -436,6 +448,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 #' }
 summariseFeaturesAcrossSeeds <- function(scored_top_features, seed_inventory = NULL) {
+  if (!"label" %in% names(scored_top_features)) scored_top_features$label <- NA_character_
   scope <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype")
   if (is.null(seed_inventory)) seed_inventory <- scored_top_features
   counts <- seed_inventory |>
@@ -447,7 +460,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features, seed_inventory = N
     dplyr::group_by(
       species,
       drug_label,
-      drug_or_class,
+      drug_or_class, label,
       feature_type,
       feature_subtype,
       variable
@@ -546,7 +559,7 @@ topFeaturesPerDrugOrClass <- function(
   feature_summary <- summariseFeaturesAcrossSeeds(scored_features, seed_inventory)
 
   top_filtered_features <- feature_summary |>
-    dplyr::group_by(species, drug_label, drug_or_class) |>
+    dplyr::group_by(species, drug_label, drug_or_class, label) |>
     dplyr::mutate(
       rank_score_cutoff = quantile(median_rank_score, rank_score_quantile, na.rm = TRUE)
     ) |>
@@ -560,7 +573,7 @@ topFeaturesPerDrugOrClass <- function(
       median_rank_score >= rank_score_cutoff
     ) |>
     dplyr::select(-rank_score_cutoff) |>
-    dplyr::group_by(species, drug_label, drug_or_class, feature_type, variable) |>
+    dplyr::group_by(species, drug_label, drug_or_class, label, feature_type, variable) |>
     dplyr::mutate(
       n_subtype = dplyr::n_distinct(feature_subtype),
       subtype_csv = paste(sort(unique(feature_subtype)), collapse = ",")
@@ -597,6 +610,8 @@ summariseDyads <- function(top_filtered_features,
   {
   stopifnot(is.data.frame(top_filtered_features))
   stopifnot(inherits(dyad_con, "DBIConnection"))
+
+  if (!"label" %in% names(top_filtered_features)) top_filtered_features$label <- NA_character_
 
   # Query the ORB only for the selected features. Its virtual mapping may
   # contain millions of feature-to-dyad links, so avoid loading all of them
@@ -636,9 +651,9 @@ summariseDyads <- function(top_filtered_features,
   top_dyads <- selected_features |>
     dplyr::left_join(dyad_feature, by = "feature", relationship = "many-to-many") |>
     dplyr::filter(!is.na(dyad)) |>
-    dplyr::select(species, drug_label, drug_or_class, feature_type_subtype, dyad, feature, sign,
+    dplyr::select(species, drug_label, drug_or_class, label, feature_type_subtype, dyad, feature, sign,
       median_rank_score, median_contribution, subtype_csv) |>
-    dplyr::group_by(species, drug_label, drug_or_class, dyad) |>
+    dplyr::group_by(species, drug_label, drug_or_class, label, dyad) |>
     dplyr::summarise(
       frequency = dplyr::n(),
       n_variables = dplyr::n_distinct(feature),
@@ -1031,7 +1046,7 @@ runFeatureDyadDiscovery <- function(
     dplyr::group_by(
       species,
       drug_label,
-      drug_or_class
+      drug_or_class, label
     ) |>
     dplyr::mutate(
       contribution_cutoff = stats::quantile(
@@ -1088,6 +1103,8 @@ runFeatureDyadDiscovery <- function(
     ) |>
     dplyr::summarise(
       n_drug_or_class = dplyr::n_distinct(drug_or_class),
+      n_outcomes = dplyr::n_distinct(drug_or_class, label),
+      labels_csv = paste(sort(unique(label[!is.na(label)])), collapse = ", "),
       drug_or_class_csv = paste(
         sort(unique(drug_or_class)),
         collapse = ", "
@@ -1128,7 +1145,7 @@ runFeatureDyadDiscovery <- function(
 
   shared_features <- feature_sharedness |>
     dplyr::filter(
-      n_drug_or_class >= min_models_shared
+      n_outcomes >= min_models_shared
     ) |>
     dplyr::arrange(
       species,
@@ -1146,7 +1163,7 @@ runFeatureDyadDiscovery <- function(
   # -------------------------------------------------------------------------
 
   unique_feature_ids <- feature_sharedness |>
-    dplyr::filter(n_drug_or_class == 1) |>
+    dplyr::filter(n_outcomes == 1) |>
     dplyr::select(
       species,
       drug_label,
@@ -1192,7 +1209,7 @@ runFeatureDyadDiscovery <- function(
     dplyr::group_by(
       species,
       drug_label,
-      drug_or_class
+      drug_or_class, label
     ) |>
     dplyr::mutate(
       dyad_score_cutoff = stats::quantile(
@@ -1229,6 +1246,8 @@ runFeatureDyadDiscovery <- function(
     ) |>
     dplyr::summarise(
       n_drug_or_class = dplyr::n_distinct(drug_or_class),
+      n_outcomes = dplyr::n_distinct(drug_or_class, label),
+      labels_csv = paste(sort(unique(label[!is.na(label)])), collapse = ", "),
       drug_or_class_csv = paste(
         sort(unique(drug_or_class)),
         collapse = ", "
@@ -1268,7 +1287,7 @@ runFeatureDyadDiscovery <- function(
 
   shared_dyads <- dyad_sharedness |>
     dplyr::filter(
-      n_drug_or_class >= min_models_shared
+      n_outcomes >= min_models_shared
     ) |>
     dplyr::arrange(
       species,
@@ -1286,7 +1305,7 @@ runFeatureDyadDiscovery <- function(
   # -------------------------------------------------------------------------
 
   unique_dyad_ids <- dyad_sharedness |>
-    dplyr::filter(n_drug_or_class == 1) |>
+    dplyr::filter(n_outcomes == 1) |>
     dplyr::select(
       species,
       drug_label,
@@ -1362,6 +1381,12 @@ runFeatureDyadDiscovery <- function(
       min_models_shared = min_models_shared
     )
   )
+
+  for (group in c("features", "dyads")) {
+    comparison <- .compareOutcomeEvidence(result[[group]]$top,
+      if (group == "features") c("feature_type", "variable") else "dyad")
+    result[[group]] <- c(result[[group]], comparison)
+  }
 
   class(result) <- c(
     "feature_dyad_discovery",

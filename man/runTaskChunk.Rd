@@ -17,78 +17,27 @@ runTaskChunk(
 
 \item{threads}{Number of R workers in this array element. Default \code{1} keeps
 the full job memory allocation available to one fit. Must not exceed
-\code{SLURM_CPUS_PER_TASK} when set. Limit BLAS/OpenMP threads in the batch script.}
+\code{SLURM_CPUS_PER_TASK} when set. Limit BLAS/OpenMP threads in the batch script.
+Currently, modeling logic is single-threaded and will not benefit from extra
+CPU resources.}
 }
 \value{
 Invisibly, a list of the completed group IDs.
 }
 \description{
-Each workers writes their own checkpoints and models. They are forbidden from
-meddling in other workers' result tables or updating anything that doesn't belong
-strictly to them. Completed groups are skipped on a retry.
-A directory lock rejects simultaneous attempts on the same chunk. After a
-killed job, remove stale locks after confirming that job has exited! Never
-change the plan or inputs while workers run. Prepare and collect with
-The Coordinator outside of the array. Startup messages identify plan loading,
-task grouping, and each worker validates the full run's shared inputs before
-fitting its chunk. Model progress advances when a complete fit group is checkpointed.
+Runs a saved chunk from \code{fitModels(execution = "prepare")} or
+\code{\link[=runModelingWorkflowHPC]{runModelingWorkflowHPC()}}. Completed fit groups are skipped on retries.
+Workers write only their own checkpoints and models; shared results are
+written during collection. Do not change the plan or inputs while jobs run.
 }
-\section{Batching}{
-
-Choose \code{n_chunks} during preparation.
-For 400 independent models, \code{n_chunks = 4} gives 4 chunks of 100 models.
-A group may contain several models that share a fitted model.
-With \code{threads = 1}, the R process handles its groups sequentially and reuses
-its feature-store cache. Checkpoints are written after each group, so retries
-skip completed groups within a partially finished chunk. Chunk assignments are
-fixed when preparing. You must use a new run directory to change the chunk
-count, and please please leave the saved plan unchanged while jobs are running.
+\details{
+Directory locks stop workers from simultaneously fiddling with a chunk. A lock's
+\code{owner.json} records hostname, PID, time and SLURM IDs. Confirm a job has exited
+before removing a stale lock. Group diagnostics are retained in
+\verb{diagnostics/worker-*.jsonl}, including task/matrix IDs and R heap use.
+R memory errors are recorded as \code{fit_oom}.
 }
-
-\section{SLURM submission}{
-
-Every cluster is a special snowflake, so you must supply your own batch script.
-Prepare once. For example:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{plan <- runModelingWorkflow(
-  orb_dir = "/bug/orb",
-  out_dir = "/bug/orb/run", 
-  execution = "prepare", # Used only when batching to prep for an array!
-  n_chunks = 4L # How many batches total to split your models into
-)
-
-length(plan$chunks) # What do you actually get?
-}\if{html}{\out{</div>}}
-
-Save a script such as \code{bug-fit.sbatch}, add your partition, account, walltime,
-and environment activation parameters appropriate for your cluster. e.g.,
-
-\if{html}{\out{<div class="sourceCode bash">}}\preformatted{#!/bin/bash
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
-#SBATCH --mem-per-cpu=3000M
-#SBATCH --output=amRml-\%A_\%a.out
-#SBATCH --error=amRml-\%A_\%a.err
-# Activate your R environment containing installed amRml here!
-export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-export VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1
-run_dir="$\{1:?Pass a prepared run directory for processing\}"
-Rscript -e 'amRml::runTaskChunk(commandArgs(TRUE)[[1]])' "$run_dir"
-}\if{html}{\out{</div>}}
-
-Submit using the actual number of chunks (4 in this example):
-
-\if{html}{\out{<div class="sourceCode bash">}}\preformatted{sbatch --array=1-4\%2 bug-fit.sbatch /bug/orb/run
-}\if{html}{\out{</div>}}
-
-Once all workers end successfully, you have to collect in a compute allocation
-using the same R environment:
-
-\if{html}{\out{<div class="sourceCode bash">}}\preformatted{Rscript -e 'amRml::collectTaskArray(commandArgs(TRUE)[[1]])' /bug/orb/run
-}\if{html}{\out{</div>}}
-
-Collection requires all group checkpoints. A successful exit can still hold
-failed model fits, so you can inspect your collected task table for failures.
+\seealso{
+\code{\link[=runModelingWorkflowHPC]{runModelingWorkflowHPC()}} for preparation, generated SLURM runners,
+bounded OOM error retries and collection.
 }
-

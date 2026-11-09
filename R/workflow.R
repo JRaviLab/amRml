@@ -79,7 +79,9 @@
 #'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
 #'   the discovery result when available; `$rescoring_status` records the outcome.
 #'   Rescoring tables and `discovery.rds` are saved in `results/rescoring/`, with
-#'   provenance and skip/empty reasons in the manifest. This uses returned-feature
+#'   provenance and skip/empty reasons in the manifest. Binary MDR and individual
+#'   resistance-combination labels are included. Cross-target tables compare
+#'   shared MDR, drug and class feature/dyad memberships. This uses returned-feature
 #'   ranking, not the separate candidate-aware scoring helper or network export.
 #'
 #' @section Errors:

@@ -38,4 +38,7 @@ feature scores are not approximated from the matrix-wide feature count;
 node tables here report observed returned-coefficient evidence instead.
 Writes Parquet evidence tables and a network manifest describing default
 filters, scoring rules, and the evidence needed to recompute filters in amRviz.
+MDR combination evidence retains its coefficient label throughout normalization,
+recurrence and endpoint joins: both endpoints must support the same label.
+Model reliability remains an assessment of the whole fitted model.
 }

@@ -12,17 +12,31 @@ rescoreFeatures(fit, ..., min_seeds = 3L)
 \item{...}{Feature rescoring's thresholds, passed to \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}.}
 
 \item{min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla
-drug, feature type, and encoding. Default \code{3L}.}
+target, feature type, and encoding. Default \code{3L}.}
 }
 \value{
 The \code{feature_dyad_discovery} list from \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}.
 }
 \description{
 Runs feature rescoring (\code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}) on a fit: its vanilla
-models' merged results, from \code{\link[=exportMergedResults]{exportMergedResults()}}, and the ORB's
+models' native performance and label-specific coefficients, and the ORB's
 virtual \code{dyad_feature} relation. Feature rescoring needs real and shuffled
 labels and several seeds, e.g.
 from \code{runModelingWorkflow(orb_dir, model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
+}
+\details{
+Binary MDR is scored like a single-drug target. Combination coefficients are
+normalized, ranked and summarized independently for each \code{label}; model
+quality is assessed once per fitted model. Binary \code{POS} points toward
+susceptibility; multinomial \code{POS} points toward its coefficient label.
+Cross-target overlap compares feature membership without requiring equal signs.
+The \code{features} and \code{dyads} lists include \code{membership},
+\code{outcomes}, \code{cross_model_sharedness}, \code{mdr_shared}, and
+pairwise \code{overlap} tables. Counts distinguish outcome labels from parent
+model targets and collapse binary/counts copies of the same molecular feature.
+Overlap covers selected feature sets; absence is not proof of biological absence.
+\code{models$label_diagnostics} reports one-versus-rest counts and MCC for each
+combination label and fitted task, separately from overall model quality.
 }
 \section{Errors}{
 

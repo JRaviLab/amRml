@@ -109,7 +109,9 @@ Otherwise the \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every e
 reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
 the discovery result when available; \verb{$rescoring_status} records the outcome.
 Rescoring tables and \code{discovery.rds} are saved in \verb{results/rescoring/}, with
-provenance and skip/empty reasons in the manifest. This uses returned-feature
+provenance and skip/empty reasons in the manifest. Binary MDR and individual
+resistance-combination labels are included. Cross-target tables compare
+shared MDR, drug and class feature/dyad memberships. This uses returned-feature
 ranking, not the separate candidate-aware scoring helper or network export.
 }
 \description{

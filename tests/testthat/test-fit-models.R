@@ -82,6 +82,9 @@ test_that("importance is per label, and predictions carry the predicted label's 
 
   expect_true(all(fit$importance$label %in% c("CLX", "CLX_CLY", "Susceptible")))
   expect_true("geneX" %in% fit$importance$Variable)
+  expect_equal(fit$performance$n_feats_returned,
+    dplyr::n_distinct(fit$importance$Variable))
+  expect_gt(nrow(fit$importance), fit$performance$n_feats_returned)
   expect_true(all(is.na(fit$predictions$prob_resistant)))
   expect_true(all(fit$predictions$prob_predicted >= 1 / 3 & fit$predictions$prob_predicted <= 1))
   expect_true(all(fit$predictions$truth %in% c("CLX", "CLX_CLY", "Susceptible")))
@@ -104,11 +107,11 @@ test_that("MDR coefficients retain labels in native results and stay out of bina
   expect_identical(fit$importance, native)
   expect_equal(arrow::read_parquet(file.path(fit$built$out_dir, "results", "importance.parquet")), native)
 
-  # Even three otherwise complete real/shuffled pairs are not binary drug evidence.
+  # Native MDR rescoring accepts complete pairs while binary exports stay unchanged.
   paired <- expandTasks(fit$built, seeds = 1:3, labels = c("real", "shuffled"))
   fit$tasks <- paired$tasks
   fit$tasks$status <- "fitted"
-  expect_error(rescoreFeatures(fit), class = "amrml_invalid_argument")
+  expect_equal(nrow(.rescoreScopes(fit)), nrow(fit$built$matrices))
 })
 
 

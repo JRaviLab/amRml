@@ -88,9 +88,9 @@ Each completed task group is saved in \verb{state/fit-checkpoints/} so it can be
 after an interruption. Checkpoints are removed after results are written.
 Use \code{resume = TRUE} with the same tasks and output directory to reuse them.
 Each task runs under its own seed. A task that errors is recorded as
-\code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
-carry on. A shuffled task permutes the training matrix's labels before the
-split.
+\code{fit_failed} or \code{fit_oom} for memory pressure errors, and one with undefined
+metrics as \code{metrics_undefined}; the rest carry on. A shuffled task permutes
+the training matrix's labels before the split.
 Progress is reported by the parent process as checkpointed task groups return.
 Counts include failed tasks and recovered checkpoints; the final summary lists
 fitted and failed tasks separately. Elapsed time covers the current invocation.
