@@ -13,7 +13,10 @@
 #' `results/` (including `results/models/` when `save_fits = TRUE`), and `merged/` from
 #' [exportMergedResults()]. amRdata's files are only read.
 #'
-#' @param orb_dir An amRdata ORB directory.
+#' @param orb_dir An amRdata ORB directory. If `NULL` (the default), the ORB is chosen
+#'   from the registered ORBs as [readORB()] does, which needs an interactive session when
+#'   several are registered. When resuming, `NULL` uses the ORB saved in `out_dir`, or asks
+#'   you to choose one if that directory no longer exists.
 #' @param out_dir Folder to write to. By default a new run folder,
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
@@ -51,7 +54,7 @@
 #' fit$performance
 #' }
 #' @export
-runModelingWorkflow <- function(orb_dir,
+runModelingWorkflow <- function(orb_dir = NULL,
                                 out_dir = NULL,
                                 modes = NULL,
                                 seeds = 123L,
@@ -82,6 +85,23 @@ runModelingWorkflow <- function(orb_dir,
     .amrAbort("invalid_argument", "Resuming requires `out_dir` and `overwrite = FALSE`.", call = call)
   }
 
+  if (resume) {
+    snapshot <- file.path(out_dir, "workflow.rds")
+    if (!file.exists(snapshot)) {
+      .amrAbort("invalid_argument", "No saved workflow state was found; this run cannot be resumed.", call = call)
+    }
+    saved <- readRDS(snapshot)
+    # No ORB given: use the one the run was started on, or choose one if it has moved.
+    if (is.null(orb_dir)) {
+      orb_dir <- saved$settings$orb_dir
+      if (!rlang::is_string(orb_dir) || !dir.exists(orb_dir)) orb_dir <- .selectORB(call)
+    }
+  } else {
+    # No ORB given: choose from the registered ORBs, as readORB() does.
+    orb <- readORB(orb_dir)
+    orb_dir <- orb$directory
+  }
+
   settings <- list(
     orb_dir = normalizePath(orb_dir, winslash = "/", mustWork = TRUE),
     modes = modes, seeds = as.integer(seeds), labels = labels,
@@ -91,11 +111,6 @@ runModelingWorkflow <- function(orb_dir,
     reuse_fits = reuse_fits, feature_types = feature_types, save_fits = save_fits
   )
   if (resume) {
-    snapshot <- file.path(out_dir, "workflow.rds")
-    if (!file.exists(snapshot)) {
-      .amrAbort("invalid_argument", "No saved workflow state was found; this run cannot be resumed.", call = call)
-    }
-    saved <- readRDS(snapshot)
     if (!identical(saved$settings, settings) ||
         !identical(normalizePath(saved$built$out_dir, winslash = "/", mustWork = TRUE),
                    normalizePath(out_dir, winslash = "/", mustWork = TRUE))) {
@@ -103,7 +118,6 @@ runModelingWorkflow <- function(orb_dir,
     }
     built <- saved$built
   } else {
-    orb <- readORB(orb_dir)
     out_dir <- out_dir %||% .defaultOutDir(orb$directory)
     eligibility <- eligibleScopes(
       profileORB(orb, mdr_min_classes = mdr_min_classes), modes = modes, min_genomes = min_genomes, n_fold = n_fold,
