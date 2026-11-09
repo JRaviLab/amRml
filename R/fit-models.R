@@ -94,9 +94,9 @@
       }),
       id = "zv_sparse_nonzero"
     )
-    recipes::step_scale(recipe, recipes::all_predictors())
+    .stepScale(recipe, recipes::all_predictors())
   } else {
-    recipes::step_normalize(recipe, recipes::all_predictors())
+    .stepScale(recipe, recipes::all_predictors(), center = TRUE)
   }
 }
 
