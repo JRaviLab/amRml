@@ -33,21 +33,19 @@ workers. Workers are fresh R processes, so amRml must be installed.}
 
 \item{resume}{Reuse saved task groups from an interrupted fit or reopen an
 unchanged completed fit. The task plan, matrix files and \code{reuse_fits}
-setting must match the original run.}
+setting must match the original run.
+\code{save_fits} must also match.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
-\code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), and \code{performance},
-\code{importance} and \code{predictions} (\verb{results/}), plus the \code{built} matrices. \code{performance}
-keeps old amRml's columns and rounding, adding \code{auprc};
-\code{n_feat} counts the matrix's features (the recipe may drop more).
-\code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
-points to Susceptible), plus \code{label}: for the MDR combination target,
-which multinomial regression fits with coefficients per label, the label
-a row's coefficient belongs to, and "POS" points to it (\code{NA} otherwise).
-For that target, \code{performance} has only \code{mcc} and \code{nmcc}, as in old amRml,
-and \code{res_prop} and \code{prob_resistant} are \code{NA}. \code{n_labels} counts each
-task's labels and \code{prob_predicted} is the predicted label's probability.
+\code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), \code{performance},
+\code{importance} and \code{predictions} (\verb{results/}), and the \code{built} matrices. In
+\code{importance}, \code{Sign} "POS" points to Susceptible and "NEG" to Resistant. The
+run's settings and task counts go to \code{run.json}.
+
+MDR combination models retain per-label coefficients in \code{importance$label}.
+Their binary-only performance metrics and \code{prob_resistant} are \code{NA};
+\code{n_labels} records label counts and \code{prob_predicted} the predicted-label probability.
 }
 \description{
 Fits tasks from \code{\link[=expandTasks]{expandTasks()}} in parallel with old amRml's method:

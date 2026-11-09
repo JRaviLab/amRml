@@ -155,7 +155,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   metadata <- tasks |>
     dplyr::filter(status == "fitted", labels %in% c("real", "shuffled")) |>
     dplyr::left_join(matrices, by = "matrix_id", relationship = "many-to-one") |>
-    dplyr::filter(mode_id == "vanilla") |>
+    dplyr::filter(mode_id == "vanilla", unit != "mdr") |>
     dplyr::select(task_id, matrix_id, unit, target, labels, seed, feature_type, encoding)
   if (!nrow(metadata) || anyNA(metadata) ||
       anyDuplicated(metadata[c("unit", "target", "labels", "seed", "feature_type", "encoding")])) {

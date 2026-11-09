@@ -39,3 +39,9 @@ utils::globalVariables(c(
   "shuffled_pair_reliability_supported", "shuffled_pair_robust75", "shuffled_upper", "status",
   "supported", "target", "task_id", "truth", "unit"
 ))
+
+# Columns used by the network evidence summaries.
+utils::globalVariables(c(
+  "dyad_type", "dyad_robust75", "dyad_reliability_supported",
+  "shuffled_dyad_robust75", "shuffled_dyad_reliability_supported"
+))

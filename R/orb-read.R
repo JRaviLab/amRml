@@ -445,10 +445,7 @@ listORBs <- function(root = NULL) {
   }
 
   pick <- utils::menu(
-    paste0(
-      orbs$dataset_label, " [", orbs$dataset_id, "], finished ", orbs$finished_at,
-      ", ", orbs$directory
-    ),
+    paste0(orbs$dataset_label, " [", orbs$dataset_id, "]"),
     title = "Select an ORB to read:"
   )
 

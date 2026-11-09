@@ -122,20 +122,19 @@
     performance = tibble::tibble(
       task_id = character(), species = character(), num_obs = integer(), res_prop = numeric(),
       n_test = integer(), res_prop_test = numeric(), n_feat = integer(),
-      model = character(), n_feats_returned = integer(), n_fold = integer(),
-      n_labels = integer(),
+      n_labels = integer(), model = character(), n_feats_returned = integer(), n_fold = integer(),
       fit_penalty = numeric(), fit_mixture = numeric(), mcc = numeric(), nmcc = numeric(),
       spec = numeric(), sens = numeric(), log2_apop = numeric(), f1 = numeric(),
       bal_acc = numeric(), auprc = numeric(), run_time_sec = numeric(),
       seed = integer(), date = character()
     ),
     importance = tibble::tibble(
-      task_id = character(), species = character(), Variable = character(),
+      task_id = character(), species = character(), label = character(), Variable = character(),
       Importance = numeric(), Sign = character()
     ),
     predictions = tibble::tibble(
       task_id = character(), species = character(), genome_id = character(), truth = character(),
-      predicted = character(), prob_resistant = numeric()
+      predicted = character(), prob_resistant = numeric(), prob_predicted = numeric()
     )
   )
 }
@@ -245,14 +244,12 @@
 #' @return An `amr_fit` list, also written to the output folder: `tasks` (with
 #'   `status`, `rule_id` and `message`; `tasks.parquet`), `performance`,
 #'   `importance` and `predictions` (`results/`), and the `built` matrices. In
-#'   `importance`, `Sign` "POS" points to Susceptible and "NEG" to Resistant, 
-#'   plus `label`: for the MDR combination target,
-#'   which multinomial regression fits with coefficients per label, the label
-#'   a row's coefficient belongs to, and "POS" points to it (`NA` otherwise).
-#'   For that target, `performance` has only `mcc` and `nmcc`, as in old amRml,
-#'   and `res_prop` and `prob_resistant` are `NA`. `n_labels` counts each
-#'   task's labels and `prob_predicted` is the predicted label's probability.. The
+#'   `importance`, `Sign` "POS" points to Susceptible and "NEG" to Resistant. The
 #'   run's settings and task counts go to `run.json`.
+#'
+#' MDR combination models retain per-label coefficients in `importance$label`.
+#' Their binary-only performance metrics and `prob_resistant` are `NA`;
+#' `n_labels` records label counts and `prob_predicted` the predicted-label probability.
 #'
 #' @section Errors:
 #' Invalid arguments or incompatible resume inputs raise `amrml_invalid_argument`.

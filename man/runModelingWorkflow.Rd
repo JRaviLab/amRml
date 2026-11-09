@@ -19,6 +19,7 @@ runModelingWorkflow(
   overwrite = FALSE,
   min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
+  overwrite = FALSE,
   reuse_fits = TRUE,
   feature_types = "standard",
   resume = FALSE
@@ -41,14 +42,10 @@ runModelingWorkflow(
 
 \item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
 
-\item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
-\code{\link[=expandTasks]{expandTasks()}}.}
-
 \item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_mdr_label_genomes}{Passed to
 \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
-\item{mdr_min_classes}{Passed to \code{\link[=profileORB]{profileORB()}}: fewest drug classes a genome
-must be Resistant in to be MDR; at least 2.}
+\item{mdr_min_classes}{Minimum resistant classes for MDR, passed to \code{\link[=profileORB]{profileORB()}}.}
 
 \item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run

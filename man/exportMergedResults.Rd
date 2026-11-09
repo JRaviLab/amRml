@@ -24,6 +24,9 @@ has \code{shuffled} and an integer \code{seed}. This export is temporary: it bri
 old amRml's format until amRml's own column names match it.
 }
 \details{
+MDR tasks remain in native results; they are excluded from this binary
+compatibility export, whose feature schema has no coefficient-label column.
+
 Left out: old amRml's \code{filename}, \code{train_prop}, \code{val_prop} and
 \code{prop_vi_top_feats} bounds, and this package's added columns (\code{task_id},
 \code{auprc}), which stay in \verb{results/}.

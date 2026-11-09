@@ -140,6 +140,9 @@
 #' old amRml's format until amRml's own column names match it.
 #'
 #' @details
+#' MDR tasks remain in native results; they are excluded from this binary
+#' compatibility export, whose feature schema has no coefficient-label column.
+#'
 #' Left out: old amRml's `filename`, `train_prop`, `val_prop` and
 #' `prop_vi_top_feats` bounds, and this package's added columns (`task_id`,
 #' `auprc`), which stay in `results/`.
@@ -176,6 +179,8 @@ exportMergedResults <- function(fit, overwrite = FALSE) {
   unlink(merged, recursive = TRUE)
   dir.create(merged)
   metadata <- .exportMetadata(fit)
+  # MDR coefficients remain in native results, retaining their class labels.
+  metadata <- metadata[metadata$unit != "mdr", ]
   # The seed comes from the tasks, so top features get it too.
   performance <- fit$performance[names(fit$performance) != "seed"]
   written <- character()
