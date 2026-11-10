@@ -224,8 +224,11 @@ rescoreFeatures <- function(fit, ..., min_seeds = 3L) {
     fp = integer(), fn = integer(), sensitivity = numeric(), precision = numeric(),
     label_mcc = numeric())
   if (!nrow(predictions)) return(empty)
-  inventory <- predictions |>
-    dplyr::distinct(matrix_id, label = truth)
+  inventory <- dplyr::bind_rows(
+    dplyr::select(predictions, matrix_id, label = truth),
+    dplyr::select(predictions, matrix_id, label = predicted)
+  ) |>
+    dplyr::distinct()
   pieces <- lapply(split(predictions, predictions$task_id), function(rows) {
     labels <- inventory$label[inventory$matrix_id == rows$matrix_id[[1L]]]
     dplyr::bind_rows(lapply(labels, function(label_value) {

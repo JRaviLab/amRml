@@ -135,3 +135,26 @@ test_that("candidate-aware scoring keeps MDR labels separate and accepts old bin
   expect_error(summarizeFeatureEvidence(scored, inventory[setdiff(keys, "label")]),
     "Expected per-seed")
 })
+
+test_that("MDR diagnostics include false positives for prediction-only labels", {
+  listed <- fxFitTasks()
+  listed$built$matrices$unit <- "mdr"
+  listed$built$matrices$target <- "resistant_classes"
+  fit <- structure(list(built = listed$built, tasks = listed$tasks,
+    predictions = tibble::tibble(task_id = listed$tasks$task_id[[1L]],
+      species = "Tst", truth = c("A", "A", "B", "B"),
+      predicted = c("A", "C", "C", "C"))), class = "amr_fit")
+  fit$tasks$status <- "fitted"
+  diag <- .mdrLabelDiagnostics(fit)
+  expect_setequal(diag$label, c("A", "B", "C"))
+  expect_equal(sum(diag$n_truth), 4L)
+  expect_equal(sum(diag$n_predicted), 4L)
+  missing <- diag[diag$label == "C", ]
+  expect_equal(missing$n_truth, 0L)
+  expect_equal(missing$n_predicted, 3L)
+  expect_equal(missing$fp, 3L)
+  expect_equal(missing$tn, 1L)
+  expect_equal(missing$precision, 0)
+  expect_true(is.na(missing$sensitivity))
+  expect_true(is.na(missing$label_mcc))
+})
