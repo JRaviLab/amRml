@@ -47,8 +47,34 @@ and rescored. The run used is reported.
 }
 \section{Output files}{
 
-Every call writes its results; there is no option to skip it. Each call writes a new folder, \verb{<run>/magic/<date-time>/}, so a result is never replaced by a
-later call with other thresholds. It holds Parquet files, compressed with Zstandard:
+Every call writes its results; there is no option to skip it. Everything is written to the
+run's \verb{results/} folder as Parquet files compressed with Zstandard.
+
+The per-seed calculations that need no threshold are saved as
+\code{results/magic_ready_performance.parquet} and \code{results/magic_ready_importance.parquet}. They are
+the run's merged results, for every scope, with columns added; every original column is
+unchanged. Thresholds are then filters over these columns.
+
+These two files exist only once rescoring has run at least once on the run, whether by
+\code{\link[=runModelingWorkflow]{runModelingWorkflow()}} with \code{rescore = TRUE} or by calling \code{rescoreFeatures()}. A run that
+never reaches rescoring (easy mode, \code{rescore = FALSE}, or too few paired seeds) does not have
+them. They are built once per run and reused by later calls, whatever thresholds or
+\code{min_seeds} those calls use. They are rebuilt only when the run's native
+\code{results/performance.parquet} or \code{results/importance.parquet} is newer, that is, when the
+models have been refitted.
+\itemize{
+\item \code{magic_ready_performance.parquet} adds \code{shuffled_mcc}, \code{mcc_diff}, \code{feat_return_ratio}, and
+the shuffled background from \code{\link[=assessModelReliability]{assessModelReliability()}}: \code{mean_shuffled_mcc},
+\code{sd_shuffled_mcc}, \code{shuffled_upper} and \code{above_background}. These are set on real-label
+rows, and are \code{NA} where a seed has no shuffled counterpart.
+\item \code{magic_ready_importance.parquet} adds \code{variable_clean} (the name used by the ORB's
+dyad relation), \code{contribution}, \code{rank}, \code{n_features}, \code{rank_score} and \code{cum_contrib}, set on
+real-label rows. A feature is in the core group when
+\code{cum_contrib - contribution < core_contribution_threshold}.
+}
+
+The files that depend on the thresholds are written to \verb{results/rescoring/}, replacing an
+earlier call's. They are:
 \itemize{
 \item \code{optimal_models.parquet}: every fit that passes at least one model criterion, with
 \code{is_good_performance}, \code{is_separated_from_shuffled} and \code{is_qualified} flags.

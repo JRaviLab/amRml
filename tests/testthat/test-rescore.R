@@ -147,7 +147,7 @@ test_that("a result is written as four tables, with its subsets kept as flags", 
   run <- withr::local_tempdir("run")
   out <- .writeRescored(fxRescored(), run)
 
-  expect_equal(dirname(out), normalizePath(file.path(run, "magic"), winslash = "/"))
+  expect_equal(out, normalizePath(file.path(run, "results", "rescoring"), winslash = "/"))
   expect_setequal(
     list.files(out),
     c("optimal_models.parquet", "model_summary.parquet", "qualified_features.parquet",
@@ -175,12 +175,12 @@ test_that("a result is written as four tables, with its subsets kept as flags", 
   expect_equal(info$rows$qualified_features, 3L)
 })
 
-test_that("every call writes a new folder and keeps the earlier result", {
+test_that("a later call replaces the earlier rescoring result", {
   run <- withr::local_tempdir("run")
   first <- .writeRescored(fxRescored(), run)
   second <- .writeRescored(fxRescored(), run)
 
-  expect_false(identical(first, second))
-  expect_true(file.exists(file.path(first, "qualified_features.parquet")))
-  expect_length(list.files(file.path(run, "magic")), 2L)
+  expect_identical(first, second)
+  expect_true(file.exists(file.path(second, "qualified_features.parquet")))
+  expect_length(list.files(file.path(run, "results")), 1L)
 })

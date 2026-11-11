@@ -64,7 +64,7 @@
 #' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
 #'   the discovery result when available; `$rescoring_status` records the outcome.
-#'   Rescoring tables and `discovery.rds` are saved in `results/rescoring/`, with
+#'   MAGIC-ready tables are saved in `results/` once rescoring has run, and the rescoring tables in `results/rescoring/`, with
 #'   provenance and skip/empty reasons in the manifest. This uses returned-feature
 #'   ranking, not the separate candidate-aware scoring helper or network export.
 #'
@@ -380,12 +380,21 @@ runModelingWorkflow <- function(orb_dir = NULL,
       source_orb_manifest = orb$manifest_path,
       metadata = list(eligibility = "metadata/eligibility.parquet",
                       matrices = "metadata/matrices.parquet"),
-      results = list(tasks = "results/tasks.parquet",
-                     performance = "results/performance.parquet",
-                     importance = "results/importance.parquet",
-                     predictions = "results/predictions.parquet",
-                     notes = "results/notes.parquet",
-                     merged = "results/merged"),
+      results = c(
+        list(tasks = "results/tasks.parquet",
+             performance = "results/performance.parquet",
+             importance = "results/importance.parquet",
+             predictions = "results/predictions.parquet",
+             notes = "results/notes.parquet",
+             merged = "results/merged"),
+        # Written by rescoring, so listed only when it ran far enough to write them.
+        if (file.exists(paths$magic_ready_performance)) {
+          list(magic_ready_performance = "results/magic_ready_performance.parquet")
+        },
+        if (file.exists(paths$magic_ready_importance)) {
+          list(magic_ready_importance = "results/magic_ready_importance.parquet")
+        }
+      ),
       models = if (save_fits) "results/models" else NULL,
       modes = I(eligibility$modes$mode_id), seeds = I(as.integer(seeds)), labels = I(labels),
       feature_types = I(unique(built$matrices$feature_type)),

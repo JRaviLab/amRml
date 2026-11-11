@@ -96,7 +96,7 @@ Default \code{TRUE}. Expected empty results are recorded without failing the run
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
 reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
 the discovery result when available; \verb{$rescoring_status} records the outcome.
-Rescoring tables and \code{discovery.rds} are saved in \verb{results/rescoring/}, with
+MAGIC-ready tables are saved in \verb{results/} once rescoring has run, and the rescoring tables in \verb{results/rescoring/}, with
 provenance and skip/empty reasons in the manifest. This uses returned-feature
 ranking, not the separate candidate-aware scoring helper or network export.
 }

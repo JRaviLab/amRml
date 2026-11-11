@@ -158,8 +158,16 @@
 
   # Contribution, rank, rank score and cumulative share within each model's seed. The core group
   # is not stored: it follows from `cum_contrib - contribution < core_contribution_threshold`.
+  # A model that returned no importance (for example a collapsed model) has no contributions to
+  # calculate; its rows keep `NA` rather than stopping the export.
+  fit_total <- stats::ave(
+    top$Importance, top[c(fit_keys, "shuffled")], FUN = function(x) sum(x, na.rm = TRUE)
+  )
+  scorable <- tempfile(fileext = ".parquet")
+  on.exit(unlink(scorable), add = TRUE)
+  arrow::write_parquet(top[is.finite(fit_total) & fit_total > 0, ], scorable)
   scored <- scoreFeaturesWithinSeed(
-    top_parquet, filter_model = FALSE, all_performance_parquet = perf_parquet
+    scorable, filter_model = FALSE, all_performance_parquet = perf_parquet
   )
   scored <- scored[c(
     fit_keys, "variable", "contribution", "rank", "n_features", "rank_score", "cum_contrib"
@@ -179,39 +187,42 @@
   list(all_perf = tibble::as_tibble(perf), all_top_features = tibble::as_tibble(top))
 }
 
-# Write the complete tables to `<run_dir>/magic/`, unless the copies there are newer than the
-# merged results they came from. Returns the folder.
-.writeCompleteRescoring <- function(merged, run_dir) {
-  out_dir <- file.path(run_dir, "magic")
-  files <- file.path(out_dir, basename(merged))
-  if (all(file.exists(files)) && min(file.mtime(files)) >= max(file.mtime(merged))) {
-    return(out_dir)
-  }
-
-  tables <- .completeRescoring(merged[[1L]], merged[[2L]])
-  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  # Write beside the target and rename, so an interrupted write never leaves a half file.
-  for (name in names(tables)) {
-    target <- file.path(out_dir, paste0(name, ".parquet"))
-    partial <- paste0(target, ".partial")
-    arrow::write_parquet(tables[[name]], partial, compression = .parquetCompression())
-    file.rename(partial, target)
-  }
-  rlang::inform(paste0("Per-seed calculations written to: ", out_dir))
-  out_dir
+# Whether the MAGIC-ready tables are already current: both exist and neither is older than the
+# run's native performance and importance results, which are rewritten whenever the models are
+# refitted. Thresholds and `min_seeds` do not matter, so changing them does not rebuild.
+.magicReadyCurrent <- function(run_dir) {
+  paths <- .runPaths(run_dir)
+  ready <- c(paths$magic_ready_performance, paths$magic_ready_importance)
+  source <- c(paths$performance, paths$importance)
+  all(file.exists(ready, source)) && min(file.mtime(ready)) >= max(file.mtime(source))
 }
 
-# Write a result to `<run_dir>/magic/<date-time>/`, a new folder for every call so an earlier
-# result is never replaced. Returns that folder.
+# Write the complete tables as `results/magic_ready_performance.parquet` and
+# `results/magic_ready_importance.parquet`, from every scope in the merged results, unless they
+# are already current. Returns both paths.
+.writeMagicReady <- function(merged, run_dir) {
+  paths <- .runPaths(run_dir)
+  targets <- c(paths$magic_ready_performance, paths$magic_ready_importance)
+  if (.magicReadyCurrent(run_dir)) return(targets)
+
+  tables <- .completeRescoring(merged[[1L]], merged[[2L]])
+  dir.create(paths$results, recursive = TRUE, showWarnings = FALSE)
+  # Write beside the target and rename, so an interrupted write never leaves a half file.
+  for (i in seq_along(targets)) {
+    partial <- paste0(targets[[i]], ".partial")
+    arrow::write_parquet(tables[[i]], partial, compression = .parquetCompression())
+    file.rename(partial, targets[[i]])
+  }
+  rlang::inform(paste0("MAGIC-ready tables written to: ", paths$results))
+  targets
+}
+
+# Write a result's four tables and `parameters.json` to `results/rescoring/`, replacing an
+# earlier result. Returns that folder.
 .writeRescored <- function(result, run_dir) {
   tables <- .rescoredTables(result)
-  stamp <- format(Sys.time(), "%Y-%m-%d_%H%M%S")
-  out_dir <- file.path(run_dir, "magic", stamp)
-  n <- 1L
-  while (dir.exists(out_dir)) {
-    n <- n + 1L
-    out_dir <- file.path(run_dir, "magic", paste0(stamp, "-", n))
-  }
+  out_dir <- .runPaths(run_dir)$rescoring
+  unlink(out_dir, recursive = TRUE)
   dir.create(out_dir, recursive = TRUE)
 
   compression <- .parquetCompression()
@@ -267,26 +278,34 @@
 #'   `"output_dir"` attribute is the folder the results were written to.
 #'
 #' @section Output files:
-#' Every call writes its results; there is no option to skip it. Everything goes in
-#' `<run>/magic/`, as Parquet files compressed with Zstandard.
+#' Every call writes its results; there is no option to skip it. Everything is written to the
+#' run's `results/` folder as Parquet files compressed with Zstandard.
 #'
-#' The per-seed calculations that need no threshold are saved once for the run, as
-#' `all_perf.parquet` and `all_top_features.parquet`. They are the merged results with columns
-#' added, and every original column is unchanged. They are rewritten only when the merged
-#' results are newer. Thresholds are then filters over these columns.
+#' The per-seed calculations that need no threshold are saved as
+#' `results/magic_ready_performance.parquet` and `results/magic_ready_importance.parquet`. They are
+#' the run's merged results, for every scope, with columns added; every original column is
+#' unchanged. Thresholds are then filters over these columns.
+#'
+#' These two files exist only once rescoring has run at least once on the run, whether by
+#' [runModelingWorkflow()] with `rescore = TRUE` or by calling `rescoreFeatures()`. A run that
+#' never reaches rescoring (easy mode, `rescore = FALSE`, or too few paired seeds) does not have
+#' them. They are built once per run and reused by later calls, whatever thresholds or
+#' `min_seeds` those calls use. They are rebuilt only when the run's native
+#' `results/performance.parquet` or `results/importance.parquet` is newer, that is, when the
+#' models have been refitted.
 #' \itemize{
-#'   \item `all_perf.parquet` adds `shuffled_mcc`, `mcc_diff`, `feat_return_ratio`, and the
-#'   shuffled background from [assessModelReliability()]: `mean_shuffled_mcc`,
+#'   \item `magic_ready_performance.parquet` adds `shuffled_mcc`, `mcc_diff`, `feat_return_ratio`, and
+#'   the shuffled background from [assessModelReliability()]: `mean_shuffled_mcc`,
 #'   `sd_shuffled_mcc`, `shuffled_upper` and `above_background`. These are set on real-label
 #'   rows, and are `NA` where a seed has no shuffled counterpart.
-#'   \item `all_top_features.parquet` adds `variable_clean` (the name used by the ORB's
+#'   \item `magic_ready_importance.parquet` adds `variable_clean` (the name used by the ORB's
 #'   dyad relation), `contribution`, `rank`, `n_features`, `rank_score` and `cum_contrib`, set on
 #'   real-label rows. A feature is in the core group when
 #'   `cum_contrib - contribution < core_contribution_threshold`.
 #' }
 #'
-#' Each call also writes its own result to a new folder, `<run>/magic/<date-time>/`, so a result
-#' is never replaced by a later call with other thresholds. It holds:
+#' The files that depend on the thresholds are written to `results/rescoring/`, replacing an
+#' earlier call's. They are:
 #' \itemize{
 #'   \item `optimal_models.parquet`: every fit that passes at least one model criterion, with
 #'   `is_good_performance`, `is_separated_from_shuffled` and `is_qualified` flags.
@@ -378,6 +397,8 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
     exportMergedResults(fit, overwrite = TRUE)
   }
 
+  all_merged <- merged
+
   # Use only representations with sufficient paired & fitted seeds
   scope_keys <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype")
   metadata <- .exportMetadata(fit)
@@ -434,6 +455,10 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
     )
   }
 
+  # Threshold-independent, so saved even when the thresholds leave nothing, and kept until the
+  # run's models change.
+  .writeMagicReady(all_merged, run_folder)
+
   result <- runFeatureDyadDiscovery(
     all_top_features_parquet = merged[[2]],
     all_performance_parquet = merged[[1]],
@@ -483,18 +508,9 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
     })
     status <- if (is.null(result)) "empty" else "success"
     if (!is.null(result)) {
-      directory <- file.path(.runPaths(fit$built$out_dir)$results, "rescoring")
-      dir.create(directory, recursive = TRUE, showWarnings = FALSE)
-      rds <- file.path(directory, "discovery.rds")
-      saveRDS(result, rds)
-      outputs <- rds
-      for (group in c("models", "features", "dyads")) {
-        for (name in names(result[[group]])) {
-          path <- file.path(directory, paste0(group, "_", name, ".parquet"))
-          .writeParquet(result[[group]][[name]], path)
-          outputs <- c(outputs, path)
-        }
-      }
+      paths <- .runPaths(fit$built$out_dir)
+      outputs <- c(paths$magic_ready_performance, paths$magic_ready_importance,
+                   list.files(paths$rescoring, full.names = TRUE))
       reason <- "MAGIC feature/dyad rescoring completed."
     }
   }
@@ -504,6 +520,9 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
   .manifestArtifact(manifest_path, "feature_rescoring",
                     status = if (status == "success") "ready" else status,
                     details = list(directory = if (status == "success") "results/rescoring" else NULL,
+                                   magic_ready = if (file.exists(.runPaths(fit$built$out_dir)$magic_ready_performance)) list(
+                                     performance = "results/magic_ready_performance.parquet",
+                                     importance = "results/magic_ready_importance.parquet"),
                                    path_mode = "relative_to_manifest", reason = reason,
                                    min_paired_seeds = 3L,
                                    scoring = "Returned-feature ranking; candidate-aware scoring is not applied."))

@@ -54,8 +54,11 @@ test_that("normal workflow rescoring exports results and resumes without fitting
   expect_s3_class(fit$rescoring, "feature_dyad_discovery")
   expect_true("geneA" %in% fit$rescoring$features$top$variable)
   paths <- file.path(args$out_dir, "results", "rescoring")
-  expect_equal(readRDS(file.path(paths, "discovery.rds")), fit$rescoring)
-  expect_true(file.exists(file.path(paths, "features_top.parquet")))
+  expect_setequal(list.files(paths), c("optimal_models.parquet", "model_summary.parquet",
+    "qualified_features.parquet", "qualified_dyads.parquet", "parameters.json"))
+  expect_true(all(file.exists(file.path(args$out_dir, "results",
+    c("magic_ready_performance.parquet", "magic_ready_importance.parquet")))))
+  expect_false(dir.exists(file.path(args$out_dir, "magic")))
   manifest <- jsonlite::read_json(file.path(args$out_dir, "manifest.json"))
   expect_identical(manifest$artifacts$feature_rescoring$status, "ready")
   local_mocked_bindings(.fitModel = function(...) stop("must not refit"))
@@ -128,4 +131,72 @@ test_that("dominant features cross the cumulative cutoff and seed counts precede
                "No model fits passed", class = "amrml_no_rescoring_evidence")
   expect_error(runFeatureDyadDiscovery(t, p, con),
                "No features passed", class = "amrml_no_rescoring_evidence")
+})
+
+test_that("magic-ready tables keep every original column and add the per-seed calculations", {
+  local_mocked_bindings(.tuningGrid = fxSmallGrid)
+  args <- fxWorkflowArgs(fxRescoringOrb(), file.path(withr::local_tempdir(), "run"))
+  fit <- do.call(runModelingWorkflow, args)
+  paths <- .runPaths(fit$built$out_dir)
+  merged <- file.path(paths$merged, c("all_perf.parquet", "all_top_features.parquet"))
+  ready <- c(paths$magic_ready_performance, paths$magic_ready_importance)
+
+  perf <- arrow::read_parquet(ready[[1]])
+  top <- arrow::read_parquet(ready[[2]])
+  original <- lapply(merged, arrow::read_parquet)
+  expect_true(all(names(original[[1]]) %in% names(perf)))
+  expect_true(all(names(original[[2]]) %in% names(top)))
+  expect_equal(nrow(perf), nrow(original[[1]]))
+  expect_equal(nrow(top), nrow(original[[2]]))
+  expect_true(all(c("shuffled_mcc", "mcc_diff", "above_background", "feat_return_ratio") %in% names(perf)))
+  expect_true(all(c("variable_clean", "contribution", "rank_score", "cum_contrib") %in% names(top)))
+  manifest <- jsonlite::read_json(file.path(args$out_dir, "manifest.json"))
+  expect_identical(manifest$artifacts$feature_rescoring$status, "ready")
+  expect_identical(manifest$artifacts$feature_rescoring$magic_ready$performance,
+                   "results/magic_ready_performance.parquet")
+  expect_identical(manifest$artifacts$feature_rescoring$magic_ready$importance,
+                   "results/magic_ready_importance.parquet")
+  expect_identical(manifest$artifacts$amRviz_input$results$magic_ready_performance,
+                   "results/magic_ready_performance.parquet")
+  expect_identical(manifest$artifacts$amRviz_input$results$magic_ready_importance,
+                   "results/magic_ready_importance.parquet")
+})
+
+test_that("a model with no importance does not stop the magic-ready export", {
+  local_mocked_bindings(.tuningGrid = fxSmallGrid)
+  args <- fxWorkflowArgs(fxRescoringOrb(), file.path(withr::local_tempdir(), "run"))
+  fit <- do.call(runModelingWorkflow, args)
+  paths <- .runPaths(fit$built$out_dir)
+  top <- arrow::read_parquet(file.path(paths$merged, "all_top_features.parquet"))
+  seed <- top$seed[!top$shuffled][[1]]
+  zero <- !top$shuffled & top$seed == seed
+  top$Importance[zero] <- 0
+  arrow::write_parquet(top, file.path(paths$merged, "all_top_features.parquet"))
+
+  ready <- .completeRescoring(file.path(paths$merged, "all_perf.parquet"),
+                              file.path(paths$merged, "all_top_features.parquet"))
+  expect_equal(nrow(ready$all_top_features), nrow(top))
+  expect_true(all(is.na(ready$all_top_features$contribution[zero])))
+})
+
+test_that("magic-ready tables are built once and rebuilt only when the models are refitted", {
+  local_mocked_bindings(.tuningGrid = fxSmallGrid)
+  args <- fxWorkflowArgs(fxRescoringOrb(), file.path(withr::local_tempdir(), "run"))
+  fit <- do.call(runModelingWorkflow, args)
+  paths <- .runPaths(fit$built$out_dir)
+  ready <- c(paths$magic_ready_performance, paths$magic_ready_importance)
+  first <- file.mtime(ready)
+  expect_true(.magicReadyCurrent(fit$built$out_dir))
+
+  # Rescoring again, with a different threshold, reuses them.
+  Sys.sleep(1.1)
+  rescoreFeatures(fit, MCC_threshold = 0.4)
+  expect_equal(file.mtime(ready), first)
+
+  # Refitted models write newer results, so the tables are rebuilt.
+  Sys.sleep(1.1)
+  Sys.setFileTime(paths$performance, Sys.time())
+  expect_false(.magicReadyCurrent(fit$built$out_dir))
+  rescoreFeatures(fit, MCC_threshold = 0.4)
+  expect_true(all(file.mtime(ready) > first))
 })

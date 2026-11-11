@@ -268,6 +268,16 @@ filterOptimalModel <- function(all_performance_parquet,
     )
 }
 
+# Feature names as the ORB's dyad_feature relation spells them: protein IDs get their "fig|"
+# separator back, and AMRFinder names lose the leading "X" and the ".NCBIFAM" suffix.
+.cleanFeatureNames <- function(feature_type, variable) {
+  dplyr::case_when(
+    feature_type == "protein" ~ sub("fig.", "fig|", variable, fixed = TRUE),
+    feature_type == "AMRFinder" ~ sub("^X", "", gsub("\\.NCBIFAM", "", variable)),
+    TRUE ~ variable
+  )
+}
+
 #' Score features within each seed
 #'
 #' @param all_top_features_parquet The path to the Parquet file containing all top features with their importance scores.
@@ -351,16 +361,7 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
       feature_type, feature_subtype, variable = Variable,
       importance = Importance, sign = Sign
     ) |>
-    dplyr::mutate(
-      variable = dplyr::case_when(
-        feature_type == "protein" ~ sub("fig.", "fig|", variable, fixed = TRUE),
-        feature_type == "AMRFinder" ~ sub(
-          "^X", "",
-          gsub("\\.NCBIFAM", "", variable)
-        ),
-        TRUE ~ variable
-      )
-    ) |>
+    dplyr::mutate(variable = .cleanFeatureNames(feature_type, variable)) |>
     dplyr::left_join(all_perf, by = dplyr::join_by(species, drug_label, drug_or_class, seed,
       feature_type, feature_subtype)) |>
     dplyr::group_by(
