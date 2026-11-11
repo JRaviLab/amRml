@@ -4,15 +4,23 @@
 \alias{rescoreFeatures}
 \title{Rescore features}
 \usage{
-rescoreFeatures(fit, ...)
+rescoreFeatures(fit = NULL, orb_dir = NULL, run_dir = NULL, ...)
 }
 \arguments{
-\item{fit}{An \code{amr_fit} from \code{\link[=fitModels]{fitModels()}} or \code{\link[=runModelingWorkflow]{runModelingWorkflow()}}.}
+\item{fit}{An \code{amr_fit} from \code{\link[=fitModels]{fitModels()}} or \code{\link[=runModelingWorkflow]{runModelingWorkflow()}}. Optional.}
+
+\item{orb_dir}{An amRdata ORB directory, whose newest rescorable run is used.
+Used when \code{fit} and \code{run_dir} are not supplied; if it is \code{NULL} too, an ORB is chosen
+from the registry.}
+
+\item{run_dir}{A completed run folder (e.g. \verb{<ORB>/amRml/<date-time>/}) to
+reopen. Supply at most one of \code{fit}, \code{run_dir} and \code{orb_dir}.}
 
 \item{...}{Feature rescoring's thresholds, passed to \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}.}
 }
 \value{
-The \code{feature_dyad_discovery} list from \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}.
+The \code{feature_dyad_discovery} list from \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}. Its
+\code{"output_dir"} attribute is the folder the results were written to.
 }
 \description{
 Runs feature rescoring (\code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}) on a fit: its vanilla
@@ -21,18 +29,51 @@ virtual \code{dyad_feature} relation. Feature rescoring needs real and shuffled
 labels and several seeds, e.g.
 from \code{runModelingWorkflow(orb_dir, modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
 }
+\details{
+No fit object is needed. With none of \code{fit}, \code{run_dir} and \code{orb_dir}, an ORB is
+chosen from those amRdata registered, as in \code{\link[=readORB]{readORB()}} (this needs an
+interactive session). The newest completed run in the ORB's \verb{amRml/} folder with
+fitted vanilla models on both real and shuffled labels is then reopened from disk
+and rescored. The run used is reported.
+}
+\section{Output files}{
+
+Every call writes its results; there is no option to skip it. Each call writes a new folder, \verb{<run>/magic/<date-time>/}, so a result is never replaced by a
+later call with other thresholds. It holds Parquet files, compressed with Zstandard:
+\itemize{
+\item \code{optimal_models.parquet}: every fit that passes at least one model criterion, with
+\code{is_good_performance}, \code{is_separated_from_shuffled} and \code{is_qualified} flags.
+\item \code{model_summary.parquet}: one row per species and drug or drug class.
+\item \code{qualified_features.parquet}: the selected features, with \code{is_consistent},
+\code{is_high_contribution}, \code{is_all_seeds}, \code{is_shared} and \code{is_unique} flags, and the number of
+drugs or classes each feature is selected for.
+\item \code{qualified_dyads.parquet}: the dyads reached by those features, with \code{is_high_score}, \code{is_shared}
+and \code{is_unique} flags.
+\item \code{parameters.json}: the thresholds used, the run, the package version and row counts.
+}
+The result's subset tables (for example \code{features$consistent}) are flags on these tables, not
+separate files, to keep the folder small. The dyads table is the largest and grows with the
+number of selected features.
+}
+
 \section{Errors}{
 
-Invalid input and missing ORB mappings raise \code{amrml_invalid_argument}.
+Invalid input, an unusable or incomplete run folder, no rescorable run, and
+missing ORB mappings raise \code{amrml_invalid_argument}.
 DuckDB read errors retain their DBI/driver error classes.
 }
 
 \examples{
 \dontrun{
+# From a fit in memory
 fit <- runModelingWorkflow("path/to/ORB",
   modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
 )
 rescored <- rescoreFeatures(fit)
 rescored$features$top
+
+# Without one: the newest rescorable run of an ORB, or of a registered ORB
+rescoreFeatures(orb_dir = "path/to/ORB")
+rescoreFeatures()
 }
 }

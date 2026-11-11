@@ -5,7 +5,7 @@
 \title{Run the modeling workflow}
 \usage{
 runModelingWorkflow(
-  orb_dir,
+  orb_dir = NULL,
   out_dir = NULL,
   modes = NULL,
   seeds = 123L,
@@ -16,7 +16,6 @@ runModelingWorkflow(
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
-  overwrite = FALSE,
   min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
   overwrite = FALSE,
@@ -26,7 +25,10 @@ runModelingWorkflow(
 )
 }
 \arguments{
-\item{orb_dir}{An amRdata ORB directory.}
+\item{orb_dir}{An amRdata ORB directory. If \code{NULL} (the default), the ORB is chosen
+from the registered ORBs as \code{\link[=readORB]{readORB()}} does, which needs an interactive session when
+several are registered. When resuming, \code{NULL} uses the ORB saved in \code{out_dir}, or asks
+you to choose one if that directory no longer exists.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
