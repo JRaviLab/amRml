@@ -3,14 +3,14 @@
 #' Rescore features
 #'
 #' Runs feature rescoring ([runFeatureDyadDiscovery()]) on a fit: its vanilla
-#' models' native performance and label-specific coefficients, and the ORB's
+#' and MDR models' native performance and label-specific coefficients, and the ORB's
 #' virtual `dyad_feature` relation. Feature rescoring needs real and shuffled
 #' labels and several seeds, e.g.
-#' from `runModelingWorkflow(orb_dir, model_types = "vanilla", seeds = c(31, 79, 51),
+#' from `runModelingWorkflow(orb_dir, model_types = c("vanilla", "mdr"), seeds = c(31, 79, 51),
 #' labels = c("real", "shuffled"))`.
 #'
 #' @param fit An `amr_fit` from [fitModels()] or [runModelingWorkflow()].
-#' @param min_seeds Minimum matched fitted real/shuffled seeds per vanilla
+#' @param min_seeds Minimum matched fitted real/shuffled seeds per vanilla or MDR
 #'   target, feature type, and encoding. Default `3L`.
 #' @param ... Feature rescoring's thresholds, passed to [runFeatureDyadDiscovery()].
 #'
@@ -37,7 +37,7 @@
 #' @examples
 #' \dontrun{
 #' fit <- runModelingWorkflow("path/to/ORB",
-#'   model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
+#'   model_types = c("vanilla", "mdr"), seeds = c(31, 79, 51), labels = c("real", "shuffled")
 #' )
 #' rescored <- rescoreFeatures(fit)
 #' rescored$features$top
@@ -52,7 +52,7 @@ rescoreFeatures <- function(fit, ..., min_seeds = 3L) {
   if (!nrow(scopes)) {
     .amrAbort("invalid_argument", paste0(
       "Feature rescoring needs at least ", min_seeds,
-      " fitted vanilla real/shuffled seed pairs per target, feature type, and encoding."
+      " fitted vanilla or MDR real/shuffled seed pairs per target, feature type, and encoding."
     ), call = call)
   }
 
@@ -112,11 +112,11 @@ rescoreFeatures <- function(fit, ..., min_seeds = 3L) {
   result
 }
 
-# Count successfully fitted seed pairs within each vanilla representation
+# Count successfully fitted seed pairs within each vanilla or MDR representation
 .rescoreScopes <- function(fit, min_seeds = 3L) {
   metadata <- .exportMetadata(fit)
   metadata$matrix_id <- fit$tasks$matrix_id
-  metadata <- metadata[metadata$mode_id == "vanilla" &
+  metadata <- metadata[metadata$mode_id %in% c("vanilla", "mdr") &
                          fit$tasks$status == "fitted", ]
   metadata |>
     dplyr::group_by(matrix_id, seed) |>
@@ -137,7 +137,7 @@ rescoreFeatures <- function(fit, ..., min_seeds = 3L) {
   result <- NULL
   outputs <- character()
   if (enabled && !nrow(scopes)) {
-    reason <- "MAGIC needs at least 3 fitted vanilla real/shuffled seed pairs per target, feature type, and encoding."
+    reason <- "MAGIC needs at least 3 fitted vanilla or MDR real/shuffled seed pairs per target, feature type, and encoding."
   }
   if (enabled && nrow(scopes)) {
     .manifestArtifact(manifest_path, "feature_rescoring", status = "building")

@@ -16,7 +16,8 @@
           species = species,
           rows = job$rows[[j]], columns = job$columns[[j]],
           encoding = job$encoding[[j]], cache = cache,
-          fitted = shared_fit, return_fitted = keep_fit, multi = job$multi[[j]]
+          fitted = shared_fit, return_fitted = keep_fit, multi = job$multi[[j]],
+          cv_workers = job$cv_workers %||% 1L
         ),
         .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
         .rng_sample_kind = "Rejection"
@@ -102,8 +103,10 @@
                   matrix_ids = job$tasks$matrix_id, matrix_files = unique(job$paths),
                   r_heap_used_mb = sum(gc(full = FALSE)[, 2]))
   .fitDiagnostic(job$diagnostics, "group_start", details)
-  message("Running ", details$group, ": ", paste(details$matrix_ids, collapse = ", "),
-          " (R heap ", details$r_heap_used_mb, " MiB).")
+  if (isTRUE(job$verbose)) {
+    message("Running ", details$group, ": ", paste(details$matrix_ids, collapse = ", "),
+            " (R heap ", details$r_heap_used_mb, " MiB).")
+  }
   tryCatch(.runTaskGroup(job, ...), error = function(e) {
     .fitDiagnostic(job$diagnostics, if (.isMemoryError(conditionMessage(e))) "oom_error" else "group_error",
                    list(group = details$group, error = conditionMessage(e)))
@@ -300,6 +303,9 @@
 #' task's test genomes.
 #'
 #' @details
+#' Penalties outside a fitted glmnet path are recorded in `notes` and cannot
+#' enter model selection. The selected penalty is also checked in the final fit.
+#'
 #' Cross-drug tasks with exactly matching training inputs reuse one fitted model;
 #' set `reuse_fits = FALSE` to disable reuse for comparison. Reused tasks'
 #' `run_time_sec` excludes shared training time for follower tasks; the first
@@ -339,6 +345,14 @@
 #'   require `resume = TRUE`. See [runTaskChunk()] and [collectTaskArray()].
 #' @param group_subset Group indices; required only for `execution = "worker"`.
 #'   Use the saved chunk map rather than recomputing group numbers.
+#' @param parallel_cv Split cross-validation folds across the workers in
+#'   `BPPARAM`, for every model family. Default FALSE parallelizes independent
+#'   model tasks instead. TRUE runs one model task at a time and uses portable
+#'   socket workers for its folds, up to the smaller of the fold and worker counts.
+#'   Each fold needs its own memory. There is no nested task/fold parallelism.
+#' @param verbose Print per-group task IDs, heap use, worker setup, and diagnostic
+#'   summaries. Default FALSE keeps completion progress and the final summary.
+#'   Detailed worker diagnostics are always saved to `diagnostics/`.
 #' @param n_chunks Maximum number of array chunks when preparing.
 #'   Fewer chunks assign more fit groups to each worker; see [runTaskChunk()].
 #' @param BPPARAM A `BiocParallelParam`, e.g. `BiocParallel::MulticoreParam(4)`,
@@ -377,9 +391,11 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
                       reuse_fits = TRUE, resume = FALSE,
                       group_subset = NULL,
                       execution = c("fit", "prepare", "worker", "collect"),
-                      n_chunks = 100L) {
+                      n_chunks = 100L, parallel_cv = FALSE, verbose = FALSE) {
   call <- rlang::current_env()
   started <- Sys.time()
+  .checkArgFlag(parallel_cv, "parallel_cv", call = call)
+  .checkArgFlag(verbose, "verbose", call = call)
   .checkArgClass(tasks, "tasks", "amr_tasks", "expandTasks()", call = call)
   .checkArgClass(BPPARAM, "BPPARAM", "BiocParallelParam", "BiocParallel", call = call)
   .checkArgFlag(overwrite, "overwrite", call = call)
@@ -417,7 +433,7 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   listed$status <- rep("fitted", nrow(listed))
   listed$rule_id <- rep(NA_character_, nrow(listed))
   listed$message <- rep(NA_character_, nrow(listed))
-  if (execution == "worker") message("Array worker: loading matrix index and checking task groups.")
+  if (verbose && execution == "worker") message("Array worker: loading matrix index and checking task groups.")
   index <- readRDS(paths$matrix_index)
   groups <- if (reuse_fits) {
     .fitTaskGroups(listed, tasks$built$matrices, index)
@@ -449,7 +465,7 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   if (execution == "fit" && file.exists(array_path)) {
     .amrAbort("invalid_argument", "This is an array run; please use `collectTaskArray()` to finish!", call = call)
   }
-  if (execution == "worker") message("Array worker: verifying shared input checksums.")
+  if (verbose && execution == "worker") message("Array worker: verifying shared input checksums.")
   manifest <- .fitCheckpointManifest(tasks, groups, reuse_fits, save_fits, save_state)
   if (resume) {
     if (!file.exists(manifest_path)) return(.readCompletedFit(tasks, manifest, call))
@@ -472,7 +488,8 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
   group_paths <- file.path(checkpoint_dir, sprintf("group-%06d.rds", seq_along(groups)))
   if (execution == "prepare") {
     plan <- list(tasks = tasks, chunks = .splitGroupIds(length(groups), n_chunks),
-                 save_fits = save_fits, save_state = save_state, reuse_fits = reuse_fits)
+                 save_fits = save_fits, save_state = save_state, reuse_fits = reuse_fits,
+                 parallel_cv = parallel_cv, verbose = verbose)
     .saveFitCheckpoint(plan, array_path)
     return(invisible(plan))
   }
@@ -496,6 +513,8 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
                       length(pending), " task groups remaining.")
   jobs <- lapply(pending, function(g) {
     job <- .fitGroupJob(groups[[g]], listed, tasks$built$matrices, index, out_dir, group_paths[[g]])
+    job$verbose <- verbose
+    job$cv_workers <- if (parallel_cv) BiocParallel::bpnworkers(BPPARAM) else 1L
     if (execution == "worker") job$lock <- paste0(group_paths[[g]], ".lock")
     job
   })
@@ -507,6 +526,7 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
     sum(lengths(groups[selected]))
   )
   report(n_recovered)
+  completed <- n_recovered
   if (length(jobs)) {
     next_job <- local({
       i <- 0L
@@ -517,14 +537,15 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
     })
     completed <- BiocParallel::bpiterate(
       next_job, .runFitGroup, cache = cache, species = species, model_dir = model_dir,
-      save_fits = save_fits, BPPARAM = BPPARAM,
+      save_fits = save_fits,
+      BPPARAM = if (parallel_cv) BiocParallel::SerialParam() else BPPARAM,
       REDUCE = function(completed, n) {
         report(completed + n)
         completed + n
-      }, init = n_recovered, reduce.in.order = FALSE
+      }, init = completed, reduce.in.order = FALSE
     )
-    report(completed, finish = TRUE)
-  } else report(n_recovered, finish = TRUE)
+  }
+  report(completed, finish = TRUE)
 
   if (execution == "worker") return(invisible(list(groups = selected)))
 
@@ -599,12 +620,14 @@ fitModels <- function(tasks, save_fits = FALSE, save_state = FALSE,
       nrow(listed),
       sum(listed$status == "failed"),
       .elapsedTime(started)
-    ),
-    "\nDiagnostics:",
-    "\n  Collapsed models: ", n_collapsed,
-    "\n    All susceptible: ", n_all_susceptible,
-    "\n    All resistant: ", n_all_resistant
+    )
   )
-  message("  Diagnostic notes: ", nrow(fit$notes), " records in results/notes.parquet")
+  if (verbose) {
+    message("Diagnostics:",
+            "\n  Collapsed models: ", n_collapsed,
+            "\n    All susceptible: ", n_all_susceptible,
+            "\n    All resistant: ", n_all_resistant)
+    message("  Diagnostic notes: ", nrow(fit$notes), " records in results/notes.parquet")
+  }
   fit
 }

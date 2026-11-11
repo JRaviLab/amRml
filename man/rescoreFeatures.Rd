@@ -11,7 +11,7 @@ rescoreFeatures(fit, ..., min_seeds = 3L)
 
 \item{...}{Feature rescoring's thresholds, passed to \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}.}
 
-\item{min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla
+\item{min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla or MDR
 target, feature type, and encoding. Default \code{3L}.}
 }
 \value{
@@ -19,10 +19,10 @@ The \code{feature_dyad_discovery} list from \code{\link[=runFeatureDyadDiscovery
 }
 \description{
 Runs feature rescoring (\code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}) on a fit: its vanilla
-models' native performance and label-specific coefficients, and the ORB's
+and MDR models' native performance and label-specific coefficients, and the ORB's
 virtual \code{dyad_feature} relation. Feature rescoring needs real and shuffled
 labels and several seeds, e.g.
-from \code{runModelingWorkflow(orb_dir, model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
+from \code{runModelingWorkflow(orb_dir, model_types = c("vanilla", "mdr"), seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
 }
 \details{
 Binary MDR is scored like a single-drug target. Combination coefficients are
@@ -47,7 +47,7 @@ DuckDB read errors retain their DBI/driver error classes.
 \examples{
 \dontrun{
 fit <- runModelingWorkflow("path/to/ORB",
-  model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
+  model_types = c("vanilla", "mdr"), seeds = c(31, 79, 51), labels = c("real", "shuffled")
 )
 rescored <- rescoreFeatures(fit)
 rescored$features$top

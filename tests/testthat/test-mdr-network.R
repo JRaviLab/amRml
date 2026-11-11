@@ -14,7 +14,7 @@ test_that("MAGIC never combines endpoints from different MDR combination labels"
     DBI::dbWriteTable(con, view, data.frame(cluster = character(), feature = character()))
   }
   DBI::dbDisconnect(con, shutdown = TRUE)
-  matrices <- tibble::tibble(matrix_id = c("g", "p"), mode_id = "vanilla",
+  matrices <- tibble::tibble(matrix_id = c("g", "p"), mode_id = "mdr",
     unit = "mdr", target = "resistant_classes", feature_type = c("gene", "protein"),
     encoding = "binary")
   tasks <- tidyr::expand_grid(matrix_id = c("g", "p"), seed = 1:3,
@@ -59,4 +59,10 @@ test_that("MAGIC never combines endpoints from different MDR combination labels"
   # Model reliability stays at 2 representations, not 4 label views.
   reliability <- arrow::read_parquet(file.path(out, "model_reliability.parquet"))
   expect_equal(nrow(reliability), 2L)
+  matrices$mode_id <- "vanilla"
+  .writeParquet(matrices, paths$matrices)
+  legacy_out <- file.path(root, "legacy-vanilla-mdr")
+  expect_no_warning(exportNetwork(run, orb, legacy_out))
+  legacy_graph <- arrow::read_parquet(file.path(legacy_out, "cluster_pair_network_evidence.parquet"))
+  expect_equal(legacy_graph$high_priority, graph$high_priority)
 })

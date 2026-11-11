@@ -29,7 +29,9 @@ runModelingWorkflow(
   easy_mode = FALSE,
   rescore = TRUE,
   execution = c("fit", "prepare", "collect"),
-  n_chunks = 100L
+  n_chunks = 100L,
+  parallel_cv = FALSE,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -37,14 +39,51 @@ runModelingWorkflow(
 interactively: use the only usable ORB, or prompt to select among several.
 Required in non-interactive sessions.}
 
-\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
-\code{"full"}, or an explicit character vector of ORB feature types.
-Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+\item{feature_types}{Which ORB feature types to model. Choose a preset or
+supply exact feature IDs, such as \code{c("gene", "DefenseCas")}:
+\itemize{
+\item \code{"quick"}: \code{gene}, \code{protein}, and \code{Pfam}.
+\item \code{"standard"} (default): quick plus \code{COG}, \code{AMRFinder}, and
+\code{DefenseCas} (defense and CRISPR/Cas annotations).
+\item \code{"full"}: standard plus \code{struct}, the only additional feature type.
+}
 
-\item{model_types}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
+Presets select only tables available in the ORB; explicit IDs must match
+available tables exactly. Selection happens before matrices are planned
+or built; see \code{\link[=planMatrices]{planMatrices()}}.}
 
-\item{threads}{Number of parallel workers. Default \code{1} runs serially. Larger
-values use multicore workers on Unix and socket workers on Windows.}
+\item{model_types}{Which modeling modes to run. Supply one mode ID or a
+character vector, such as \code{"vanilla"} or
+\code{c("vanilla", "cross_country", "logo")}. \code{NULL} (the default) considers
+all modes; only eligible, supported models are fitted. Available IDs are:
+\itemize{
+\item \code{"vanilla"}: the standard models for individual drugs and drug classes.
+\item \code{"mdr"}: multidrug-resistance models only: binary \code{mdr} (resistant
+to at least \code{mdr_min_classes} classes) and \code{resistant_classes} (the
+combination of resistant classes). Use \code{c("vanilla", "mdr")} for both
+whole-dataset suites.
+\item \code{"complete"}: all supported modes, including vanilla, MDR, stratified,
+cross-test, and leave-one-out models.
+\item \code{"stratified_year"}, \code{"stratified_country"}: separate drug and
+drug-class models within each year bin or country.
+\item \code{"cross_year"}, \code{"cross_country"}, \code{"cross_drug"}: cross-test models,
+trained on one year bin, country, or drug and tested on another.
+\item \code{"loto"}, \code{"logo"}: leave-one-year-bin-out and leave-one-country-out
+models, trained on all other groups and tested on the held-out group.
+\item \code{"lodo"}: leave-one-drug-out is registered but not yet supported;
+it is recorded as excluded.
+}
+
+Matched shuffled-label baseline tasks are selected separately through
+\code{labels = c("real", "shuffled")} (the default), for every requested mode
+and seed. Use \code{labels = "real"} to fit only real-label models. See
+\code{\link[=modelingModes]{modelingModes()}} for the mode registry and \code{\link[=eligibleScopes]{eligibleScopes()}} for the
+data requirements.}
+
+\item{threads}{Number of outer workers for ordinary tasks. Default \code{1} fits
+them serially. Larger values use multicore workers on Unix and socket
+workers on Windows. With \code{parallel_cv = TRUE}, these workers fit the folds
+of one model at a time instead of fitting independent model tasks.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
@@ -91,7 +130,7 @@ Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
 and cross-validation are unchanged; automatic rescoring is skipped.}
 
 \item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
-at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+at least three fitted real/shuffled seed pairs exist in a vanilla or MDR scope.
 Default \code{TRUE}. Expected empty results are recorded without failing the run.}
 
 \item{execution}{Advanced options for HPC job arrays. \code{"fit"} runs the full
@@ -102,6 +141,12 @@ gathers only completed checkpoints.}
 
 \item{n_chunks}{Maximum number of nonempty array chunks when preparing.
 Fewer chunks assign more fit groups to each worker; see \code{\link[=runTaskChunk]{runTaskChunk()}}.}
+
+\item{parallel_cv}{Split CV folds across the existing worker allocation for
+all models; default FALSE. Passed to \code{\link[=fitModels]{fitModels()}}. Uses more memory per model.}
+
+\item{verbose}{Print per-group and worker setup diagnostics. Default FALSE
+retains completion progress and final summaries. Passed to \code{\link[=fitModels]{fitModels()}}.}
 }
 \value{
 Preparation returns a plan with tasks, chunks and fit settings.

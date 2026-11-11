@@ -121,7 +121,7 @@ test_that("non-OOM failures are recorded without automatic submission", {
   path <- file.path(root, "retry.rds")
   saveRDS(slurmState(root), path)
   slurmReplies(e, list(c("123_1|COMPLETED|", "123_2|FAILED|1:0|"), character()))
-  expect_message(e$.slurmWatch(path, 0L), "Chunks failed without a confirmed OOM: 2")
+  expect_message(e$.slurmWatch(path, 0L), "Chunks failed without confirmed OOM error: 2")
   wave <- readRDS(path)$waves[[1L]]
   expect_identical(wave$failed_chunks, 2L)
   expect_length(wave$oom_chunks, 0L)

@@ -7,7 +7,8 @@
 runTaskChunk(
   out_dir,
   chunk_id = Sys.getenv("SLURM_ARRAY_TASK_ID"),
-  threads = 1L
+  threads = 1L,
+  verbose = NULL
 )
 }
 \arguments{
@@ -18,8 +19,11 @@ runTaskChunk(
 \item{threads}{Number of R workers in this array element. Default \code{1} keeps
 the full job memory allocation available to one fit. Must not exceed
 \code{SLURM_CPUS_PER_TASK} when set. Limit BLAS/OpenMP threads in the batch script.
-Currently, modeling logic is single-threaded and will not benefit from extra
-CPU resources.}
+Prepared \code{parallel_cv = TRUE} plans spend this allocation on CV folds
+within one model rather than on independent model tasks.}
+
+\item{verbose}{Print worker setup and per-group diagnostics. NULL uses the
+prepared plan's setting (FALSE by default). Completion progress stays visible.}
 }
 \value{
 Invisibly, a list of the completed group IDs.

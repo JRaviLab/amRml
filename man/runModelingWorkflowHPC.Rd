@@ -29,7 +29,8 @@ Do not supply \code{execution} or \code{resume}. Other stages accept no extra ar
 \item{scheduler}{Submission backend, currently \code{"slurm"}.}
 
 \item{cpus_per_task}{CPUs and parallel R workers per array element. Default \code{1}.
-Modeling logic does not currently benefit from multiple CPUs per model!}
+With \code{parallel_cv = TRUE} during prep, workers split CV folds within
+each model. Otherwise they fit independent model tasks.}
 
 \item{max_concurrent}{Maximum simultaneously running array elements.}
 

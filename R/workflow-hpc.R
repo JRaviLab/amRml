@@ -11,7 +11,8 @@
 #'   Do not supply `execution` or `resume`. Other stages accept no extra arguments.
 #' @param scheduler Submission backend, currently `"slurm"`.
 #' @param cpus_per_task CPUs and parallel R workers per array element. Default `1`.
-#'   Modeling logic does not currently benefit from multiple CPUs per model!
+#'   With `parallel_cv = TRUE` during prep, workers split CV folds within
+#'   each model. Otherwise they fit independent model tasks.
 #' @param max_concurrent Maximum simultaneously running array elements.
 #' @param memory_mb For `"run"`, a required, strictly increasing vector of total
 #'   per-node memory allocations in SLURM M units. The first is the initial
