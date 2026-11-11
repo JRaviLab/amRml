@@ -7,8 +7,8 @@
 exportNetwork(run_dir, orb_dir, out_dir, core_threshold = 0.75)
 }
 \arguments{
-\item{run_dir}{Completed modeling run with tasks.parquet, matrices.parquet,
-results/performance.parquet, results/importance.parquet, and predictions.}
+\item{run_dir}{Completed modeling run with metadata/matrices.parquet and the
+tasks, performance, importance, and predictions tables in results/.}
 
 \item{orb_dir}{Parquet-backed ORB with cluster dyads, protein_members, and annotation
 views. Opened read-only.}
@@ -36,5 +36,6 @@ test set. The raw modeling performance Parquet remains unchanged. Model
 reliability is assessed by \code{assessModelReliability()}. Candidate-aware direct
 feature scores are not approximated from the matrix-wide feature count;
 node tables here report observed returned-coefficient evidence instead.
-Writes Parquet evidence tables only. Does not create review or Cytoscape CSVs.
+Writes Parquet evidence tables and a network manifest describing default
+filters, scoring rules, and the evidence needed to recompute filters in amRviz.
 }

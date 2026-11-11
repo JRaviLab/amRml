@@ -12,7 +12,7 @@ utils::globalVariables(c(
   "contribution", "contribution_cutoff", "cum_contrib", "drug_label", "drug_or_class", "dyad",
   "dyad_median_contribution", "dyad_median_rank_score", "dyad_score_cutoff", "feature",
   "feature_subtype", "feature_type", "feature_type_subtype", "fit_mixture", "fit_penalty",
-  "frequency",
+  "frequency", "median_prior_cum_contrib", "paired", "n_paired_seeds",
   "importance", "Importance", "in_core", "in_core_consistent", "mcc", "MCC_diff",
   "mean_rank_score", "median_contribution", "median_cum_contrib", "median_MCC_diff",
   "median_nonshuffled_MCC", "median_rank_score", "model", "n_drug_or_class", "n_feat",
@@ -27,7 +27,8 @@ utils::globalVariables(c(
 # Additional columns used by model reliability and network evidence summaries.
 utils::globalVariables(c(
   "above_background", "annotation_key", "assessable_pair", "direct_score", "encoding",
-  "evidence_status", "gene_cluster", "gene_representation_supported", "gene_robust75",
+  "dyad_reliability_supported", "dyad_robust75", "dyad_type", "evidence_status",
+  "gene_cluster", "gene_representation_supported", "gene_robust75",
   "has_real", "has_shuffled", "high_priority", "legacy_key", "matrix_id", "mcc_adjusted",
   "mcc_for_reliability", "mcc_real", "mcc_shuffled", "mean_returned_contribution",
   "mean_shuffled_mcc", "mode_id", "n_core_seeds", "n_eligible_seeds", "n_fitted_seeds",
@@ -36,8 +37,10 @@ utils::globalVariables(c(
   "pair_reliability_supported", "pair_robust75", "predicted", "priority_under_reliability",
   "protein_cluster", "protein_representation_supported", "protein_robust75",
   "reproducibly_important", "returned", "returned_nonzero", "sd_shuffled_mcc",
+  "shuffled_dyad_reliability_supported", "shuffled_dyad_robust75",
   "shuffled_pair_reliability_supported", "shuffled_pair_robust75", "shuffled_upper", "status",
-  "supported", "target", "task_id", "truth", "unit"
+  "supported", "target", "task_id", "truth", "unit",
+  "stage", "resample", "location", "type", "note"
 ))
 
 # Columns used by the network evidence summaries.

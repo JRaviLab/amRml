@@ -16,35 +16,33 @@
     .amrAbort("invalid_argument", "`run_dir` must be an existing amRml run folder.", call = call)
   }
   run_dir <- normalizePath(run_dir, winslash = "/", mustWork = TRUE)
-  needed <- c(
-    "workflow.rds", "tasks.parquet",
-    file.path("results", c(
-      "fit-completion.rds", "performance.parquet", "importance.parquet", "predictions.parquet"
-    ))
-  )
-  missing <- needed[!file.exists(file.path(run_dir, needed))]
+  paths <- .runPaths(run_dir)
+  needed <- c(paths$workflow, paths$completion, paths$tasks, paths$performance,
+              paths$importance, paths$predictions)
+  missing <- needed[!file.exists(needed)]
   if (length(missing)) {
     .amrAbort(
       "invalid_argument",
       c(
         "Not a completed amRml run folder.",
         x = run_dir,
-        x = paste0("Missing: ", paste(missing, collapse = ", "))
+        x = paste0("Missing: ", paste(substring(missing, nchar(run_dir) + 2L), collapse = ", ")),
+        i = "Resume state is removed after a successful run unless `save_state = TRUE`."
       ),
       call = call
     )
   }
 
-  built <- readRDS(file.path(run_dir, "workflow.rds"))$built
+  built <- readRDS(paths$workflow)$built
   # The folder may have moved since the run.
   built$out_dir <- run_dir
-  read <- function(...) arrow::read_parquet(file.path(run_dir, ...))
+  read <- function(path) arrow::read_parquet(path)
   structure(
     list(
-      tasks = read("tasks.parquet"),
-      performance = read("results", "performance.parquet"),
-      importance = read("results", "importance.parquet"),
-      predictions = read("results", "predictions.parquet"),
+      tasks = read(paths$tasks),
+      performance = read(paths$performance),
+      importance = read(paths$importance),
+      predictions = read(paths$predictions),
       built = built
     ),
     class = "amr_fit"
@@ -65,7 +63,7 @@
       "No completed run in this ORB can be rescored.",
       x = file.path(orb_directory, "amRml"),
       i = paste0(
-        "Run e.g. `runModelingWorkflow(orb_dir, modes = \"vanilla\", ",
+        "Run e.g. `runModelingWorkflow(orb_dir, model_types = \"vanilla\", ",
         "seeds = c(31, 79, 51), labels = c(\"real\", \"shuffled\"))`."
       )
     ),
@@ -172,7 +170,7 @@
 #' models' merged results, from [exportMergedResults()], and the ORB's
 #' virtual `dyad_feature` relation. Feature rescoring needs real and shuffled
 #' labels and several seeds, e.g.
-#' from `runModelingWorkflow(orb_dir, modes = "vanilla", seeds = c(31, 79, 51),
+#' from `runModelingWorkflow(orb_dir, model_types = "vanilla", seeds = c(31, 79, 51),
 #' labels = c("real", "shuffled"))`.
 #'
 #' @details
@@ -188,6 +186,8 @@
 #'   from the registry.
 #' @param run_dir A completed run folder (e.g. `<ORB>/amRml/<date-time>/`) to
 #'   reopen. Supply at most one of `fit`, `run_dir` and `orb_dir`.
+#' @param min_seeds Minimum matched fitted real/shuffled seeds per vanilla
+#'   drug, feature type, and encoding. Default `3L`.
 #' @param ... Feature rescoring's thresholds, passed to [runFeatureDyadDiscovery()].
 #'
 #' @return The `feature_dyad_discovery` list from [runFeatureDyadDiscovery()]. Its
@@ -220,7 +220,7 @@
 #' \dontrun{
 #' # From a fit in memory
 #' fit <- runModelingWorkflow("path/to/ORB",
-#'   modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
+#'   model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
 #' )
 #' rescored <- rescoreFeatures(fit)
 #' rescored$features$top
@@ -230,7 +230,7 @@
 #' rescoreFeatures()
 #' }
 #' @export
-rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ...) {
+rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min_seeds = 3L) {
   call <- rlang::current_env()
   if (sum(!is.null(fit), !is.null(orb_dir), !is.null(run_dir)) > 1L) {
     .amrAbort(
@@ -247,7 +247,7 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ...) {
     fit <- .readFitRun(run_dir, call)
   } else {
     # No fit given: find the ORB (from the registry if need be), then its newest usable run.
-    if (is.null(orb_dir)) orb_dir <- .selectORB(call)
+    if (is.null(orb_dir)) orb_dir <- .selectORB(call, argument = "orb_dir")
     orb_directory <- readORB(orb_dir)$directory
     fit <- .findFitRun(orb_directory, call)
     rlang::inform(paste0("Rescoring run: ", fit$built$out_dir))
@@ -259,12 +259,20 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ...) {
       c(
         "Feature rescoring needs fitted vanilla models with both real and shuffled labels.",
         i = paste0(
-          "Run e.g. `runModelingWorkflow(orb_dir, modes = \"vanilla\", ",
+          "Run e.g. `runModelingWorkflow(orb_dir, model_types = \"vanilla\", ",
           "seeds = c(31, 79, 51), labels = c(\"real\", \"shuffled\"))`."
         )
       ),
       call = call
     )
+  }
+  .checkArgCount(min_seeds, "min_seeds", call = call)
+  scopes <- .rescoreScopes(fit, min_seeds)
+  if (!nrow(scopes)) {
+    .amrAbort("invalid_argument", paste0(
+      "Feature rescoring needs at least ", min_seeds,
+      " fitted vanilla real/shuffled seed pairs per drug, feature type, and encoding."
+    ), call = call)
   }
 
   # Resolve the run folder before changing into the ORB directory below
@@ -272,11 +280,32 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ...) {
 
   # Complete any merged-result export before changing into the ORB directory
   merged <- file.path(
-    fit$built$out_dir, "merged", c("all_perf.parquet", "all_top_features.parquet")
+    .runPaths(fit$built$out_dir)$merged,
+    c("all_perf.parquet", "all_top_features.parquet")
   )
   if (!all(file.exists(merged))) {
     exportMergedResults(fit, overwrite = TRUE)
   }
+
+  # Use only representations with sufficient paired & fitted seeds
+  scope_keys <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype")
+  metadata <- .exportMetadata(fit)
+  metadata$matrix_id <- fit$tasks$matrix_id
+  eligible <- metadata[metadata$matrix_id %in% scopes$matrix_id, ]
+  eligible <- eligible[!duplicated(eligible[c("unit", "target", "feature_type", "encoding")]), ]
+  allowed <- tibble::tibble(
+    drug_label = eligible$unit, drug_or_class = eligible$target,
+    feature_type = eligible$feature_type, feature_subtype = eligible$encoding
+  )
+  selected <- lapply(merged, function(path) {
+    dplyr::semi_join(arrow::read_parquet(normalizePath(path)), allowed,
+                     by = scope_keys[-1L])
+  })
+  selected_dir <- tempfile("amrml-rescoring-")
+  dir.create(selected_dir)
+  on.exit(unlink(selected_dir, recursive = TRUE), add = TRUE)
+  merged <- file.path(selected_dir, basename(merged))
+  for (i in seq_along(merged)) .writeParquet(selected[[i]], merged[[i]])
 
   # Locate the ORB
   orb_dirs <- orb_directory %||%
@@ -325,4 +354,71 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ...) {
   attr(result, "output_dir") <- out_dir
   rlang::inform(paste0("Rescoring results written to: ", out_dir))
   result
+}
+
+# Count successfully fitted seed pairs within each vanilla representation
+.rescoreScopes <- function(fit, min_seeds = 3L) {
+  metadata <- .exportMetadata(fit)
+  metadata$matrix_id <- fit$tasks$matrix_id
+  metadata <- metadata[metadata$mode_id == "vanilla" & metadata$unit != "mdr" &
+                         fit$tasks$status == "fitted", ]
+  metadata |>
+    dplyr::group_by(matrix_id, seed) |>
+    dplyr::summarise(paired = all(c(FALSE, TRUE) %in% shuffled), .groups = "drop") |>
+    dplyr::filter(paired) |>
+    dplyr::count(matrix_id, name = "n_paired_seeds") |>
+    dplyr::filter(n_paired_seeds >= min_seeds)
+}
+
+# Empty outcomes are distinct from failures!
+.noRescoringEvidence <- function(message) {
+  rlang::abort(message, class = "amrml_no_rescoring_evidence")
+}
+
+.rescoreWorkflow <- function(fit, manifest_path, enabled = TRUE, reason = NULL) {
+  scopes <- .rescoreScopes(fit)
+  status <- "skipped"
+  result <- NULL
+  outputs <- character()
+  if (enabled && !nrow(scopes)) {
+    reason <- "MAGIC needs at least 3 fitted vanilla real/shuffled seed pairs per drug, feature type, and encoding."
+  }
+  if (enabled && nrow(scopes)) {
+    .manifestArtifact(manifest_path, "feature_rescoring", status = "building")
+    .manifestStage(manifest_path, "rescore_features", status = "running")
+    result <- tryCatch(rescoreFeatures(fit), amrml_no_rescoring_evidence = function(e) {
+      reason <<- conditionMessage(e)
+      NULL
+    })
+    status <- if (is.null(result)) "empty" else "success"
+    if (!is.null(result)) {
+      directory <- file.path(.runPaths(fit$built$out_dir)$results, "rescoring")
+      dir.create(directory, recursive = TRUE, showWarnings = FALSE)
+      rds <- file.path(directory, "discovery.rds")
+      saveRDS(result, rds)
+      outputs <- rds
+      for (group in c("models", "features", "dyads")) {
+        for (name in names(result[[group]])) {
+          path <- file.path(directory, paste0(group, "_", name, ".parquet"))
+          .writeParquet(result[[group]][[name]], path)
+          outputs <- c(outputs, path)
+        }
+      }
+      reason <- "MAGIC feature/dyad rescoring completed."
+    }
+  }
+  .manifestStage(manifest_path, "rescore_features", status = status,
+                 parameters = list(min_paired_seeds = 3L), outputs = outputs,
+                 metrics = list(n_eligible_scopes = nrow(scopes)), message = reason)
+  .manifestArtifact(manifest_path, "feature_rescoring",
+                    status = if (status == "success") "ready" else status,
+                    details = list(directory = if (status == "success") "results/rescoring" else NULL,
+                                   path_mode = "relative_to_manifest", reason = reason,
+                                   min_paired_seeds = 3L,
+                                   scoring = "Returned-feature ranking; candidate-aware scoring is not applied."))
+  .manifestEvent(manifest_path, reason)
+  message(reason)
+  fit$rescoring <- result
+  fit$rescoring_status <- list(status = status, reason = reason)
+  fit
 }

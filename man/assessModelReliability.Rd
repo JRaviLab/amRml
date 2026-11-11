@@ -4,12 +4,21 @@
 \alias{assessModelReliability}
 \title{Assess model reliability using real-label and shuffled-label MCC}
 \usage{
-assessModelReliability(all_performance_parquet, min_supported_seeds = 2L)
+assessModelReliability(
+  all_performance_parquet,
+  min_supported_seeds = 2L,
+  direction = c("positive", "negative")
+)
 }
 \arguments{
 \item{all_performance_parquet}{Path to the merged model-performance Parquet file.}
 
 \item{min_supported_seeds}{Number of supporting seeds required (default 2).}
+
+\item{direction}{\code{"positive"} (default) requires real MCC above zero, its
+matched shuffled MCC, and shuffled mean + SD. \code{"negative"} requires real
+MCC below zero, its matched shuffled MCC, and shuffled mean - SD. Cross-test
+train/test scope columns are retained when forming comparisons.}
 }
 \value{
 List with reliability results by representation and MCC comparisons
@@ -19,6 +28,7 @@ by seed. Missing MCC values are not replaced with zero.
 Compare each model's real-label MCC with the shuffled-label MCC from the
 same seed and with the average shuffled MCC plus one standard deviation (SD)
 for the same drug, feature type, and encoding. A seed supports the model only
-when its real-label MCC is positive and exceeds both comparisons.
+when its real-label MCC has the requested sign and exceeds both comparisons
+in that direction.
 At least two defined shuffled MCC values are needed to calculate the SD.
 }

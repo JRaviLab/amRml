@@ -5,7 +5,7 @@
 fxCompletedRun <- function(env = parent.frame()) {
   fit <- fxRunFit(fxFitTasks(env = env))
   fit$built$matrices$mode_id <- "vanilla"
-  saveRDS(list(settings = list(), built = fit$built), file.path(fit$built$out_dir, "workflow.rds"))
+  saveRDS(list(settings = list(), built = fit$built), .runPaths(fit$built$out_dir)$workflow)
   fit
 }
 
@@ -32,7 +32,7 @@ test_that("a run folder that was moved is read from where it is now", {
 
 test_that("an unfinished run folder is refused with what is missing", {
   fit <- fxCompletedRun()
-  unlink(file.path(fit$built$out_dir, "results", "fit-completion.rds"))
+  unlink(.runPaths(fit$built$out_dir)$completion)
 
   expect_error(
     .readFitRun(fit$built$out_dir, rlang::current_env()),
@@ -62,7 +62,8 @@ test_that("the newest rescorable run in an ORB is found, skipping incomplete one
   }
   # The newest folder is unfinished.
   dir.create(runs[[3]])
-  file.create(file.path(runs[[3]], "workflow.rds"))
+  dir.create(file.path(runs[[3]], "state"))
+  file.create(.runPaths(runs[[3]])$workflow)
 
   found <- .findFitRun(orb, rlang::current_env())
   expect_equal(found$built$out_dir, normalizePath(runs[[2]], winslash = "/"))
@@ -74,7 +75,7 @@ test_that("an ORB without a rescorable run is an error", {
 
   # A completed run with no vanilla models is not rescorable.
   fit <- fxRunFit(fxFitTasks())
-  saveRDS(list(settings = list(), built = fit$built), file.path(fit$built$out_dir, "workflow.rds"))
+  saveRDS(list(settings = list(), built = fit$built), .runPaths(fit$built$out_dir)$workflow)
   dir.create(file.path(orb, "amRml"))
   file.copy(fit$built$out_dir, file.path(orb, "amRml"), recursive = TRUE)
   expect_error(.findFitRun(orb, rlang::current_env()), class = "amrml_invalid_argument")

@@ -7,15 +7,21 @@
 filterOptimalModel(
   all_performance_parquet,
   MCC_threshold = NULL,
-  compare_to_shuffled = TRUE
+  compare_to_shuffled = TRUE,
+  direction = c("positive", "negative")
 )
 }
 \arguments{
 \item{all_performance_parquet}{The path to the 'all performance parquet' file}
 
-\item{MCC_threshold}{The minimum non-shuffled MCC required to keep a model fit (default is \code{NULL}, no filtering)}
+\item{MCC_threshold}{Minimum real MCC magnitude in the selected direction,
+or \code{NULL} for no magnitude threshold.}
 
-\item{compare_to_shuffled}{Logical indicating whether to require the non-shuffled MCC to exceed (outperform) the shuffled-label MCC for the same fit (default is \code{TRUE}). A fit with no shuffled counterpart (\code{shuffled_MCC} is \code{NA} after pivoting) always passes this check regardless.}
+\item{compare_to_shuffled}{Require a defined shuffled counterpart and a real
+MCC farther in the selected direction (default \code{TRUE}).}
+
+\item{direction}{Select positive or negative signal; \code{MCC_threshold}, when
+supplied, is a nonnegative magnitude in the selected direction.}
 }
 \value{
 a tibble of model fits (one row per species, drug_label, drug_or_class, seed, feature_type, feature_subtype, model, fit_penalty, fit_mixture) that pass the requested quality thresholds, with \code{nonshuffled_MCC}, \code{shuffled_MCC}, and \code{MCC_diff} columns added. This does not pick a single "best" fit per group; it filters out fits that fail the MCC/shuffled-comparison criteria, so multiple passing fits per group can remain.

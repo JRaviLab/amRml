@@ -2,30 +2,44 @@
 
 # Feature evidence and model reliability scoring
 
+# Identity columns shared by the merged vanilla and cross-test exports.
+.modelPerformanceKeys <- function(perf) {
+  c("species", intersect(c("drug_label", "drug_or_class", "drug", "test_drug",
+    "strat_label", "strat_value", "strat_value_test", "leaveout_strat_value"),
+    names(perf)), "feature_type", "feature_subtype", "seed")
+}
+
 #' Assess model reliability using real-label and shuffled-label MCC
 #'
 #' Compare each model's real-label MCC with the shuffled-label MCC from the
 #' same seed and with the average shuffled MCC plus one standard deviation (SD)
 #' for the same drug, feature type, and encoding. A seed supports the model only
-#' when its real-label MCC is positive and exceeds both comparisons.
+#' when its real-label MCC has the requested sign and exceeds both comparisons
+#' in that direction.
 #' At least two defined shuffled MCC values are needed to calculate the SD.
 #'
 #' @param all_performance_parquet Path to the merged model-performance Parquet file.
 #' @param min_supported_seeds Number of supporting seeds required (default 2).
+#' @param direction `"positive"` (default) requires real MCC above zero, its
+#'   matched shuffled MCC, and shuffled mean + SD. `"negative"` requires real
+#'   MCC below zero, its matched shuffled MCC, and shuffled mean - SD. Cross-test
+#'   train/test scope columns are retained when forming comparisons.
 #' @return List with reliability results by representation and MCC comparisons
 #'   by seed. Missing MCC values are not replaced with zero.
 #' @export
 assessModelReliability <- function(all_performance_parquet,
-                                  min_supported_seeds = 2L) {
+                                  min_supported_seeds = 2L,
+                                  direction = c("positive", "negative")) {
+  direction <- match.arg(direction)
+  sign <- if (direction == "positive") 1 else -1
   stopifnot(file.exists(all_performance_parquet))
   if (length(min_supported_seeds) != 1L || is.na(min_supported_seeds) ||
       min_supported_seeds < 1L || min_supported_seeds != as.integer(min_supported_seeds))
     stop("min_supported_seeds must be a positive integer.", call. = FALSE)
   
-  keys <- c("species", "drug_label", "drug_or_class", "feature_type",
-            "feature_subtype", "seed")
-  rep_keys <- head(keys, -1L)
   perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
+  keys <- .modelPerformanceKeys(perf)
+  rep_keys <- head(keys, -1L)
   if (!all(c(keys, "shuffled", "mcc") %in% names(perf)))
     stop("Performance must contain scope, seed, shuffled and mcc columns.", call. = FALSE)
   if (anyNA(perf[c(keys, "shuffled")]) ||
@@ -47,7 +61,8 @@ assessModelReliability <- function(all_performance_parquet,
       sd_shuffled_mcc = if (n_shuffled_defined >= 2L) stats::sd(mcc, na.rm = TRUE) else NA_real_,
       .groups = "drop"
     ) |>
-    dplyr::mutate(shuffled_upper = mean_shuffled_mcc + sd_shuffled_mcc)
+    dplyr::mutate(shuffled_upper = mean_shuffled_mcc + sd_shuffled_mcc,
+                  shuffled_lower = mean_shuffled_mcc - sd_shuffled_mcc)
   
   real <- perf |>
     dplyr::filter(!shuffled) |>
@@ -63,12 +78,12 @@ assessModelReliability <- function(all_performance_parquet,
     dplyr::mutate(
       assessable_pair = !is.na(mcc_real) & !is.na(mcc_shuffled) &
         !is.na(shuffled_upper),
-      # Count this seed as supporting the model only if real-label MCC is
-      # positive and exceeds both its matched shuffled MCC and the shuffled
-      # average plus one SD. Missing MCC values cannot provide support
+      # Require the requested sign and separation from both the paired null
+      # and the directional mean +/- SD baseline. Missing values cannot support.
       above_background = dplyr::coalesce(
-        assessable_pair & mcc_real > 0 & mcc_real > mcc_shuffled &
-          mcc_real > shuffled_upper, FALSE
+        assessable_pair & sign * mcc_real > 0 &
+          sign * (mcc_real - mcc_shuffled) > 0 &
+          sign * (mcc_real - mean_shuffled_mcc) > sd_shuffled_mcc, FALSE
       )
     )
   
@@ -86,6 +101,7 @@ assessModelReliability <- function(all_performance_parquet,
       .groups = "drop"
     ) |>
     dplyr::mutate(
+      direction = direction,
       evidence_status = dplyr::case_when(
         n_supported_seeds >= min_supported_seeds ~ "supported",
         n_paired_assessable < min_supported_seeds ~ "insufficient",
@@ -199,8 +215,12 @@ summarizeFeatureEvidence <- function(scored_top_features,
 #' Filter model fits to those passing quality thresholds
 #'
 #' @param all_performance_parquet The path to the 'all performance parquet' file
-#' @param MCC_threshold The minimum non-shuffled MCC required to keep a model fit (default is \code{NULL}, no filtering)
-#' @param compare_to_shuffled Logical indicating whether to require the non-shuffled MCC to exceed (outperform) the shuffled-label MCC for the same fit (default is \code{TRUE}). A fit with no shuffled counterpart (\code{shuffled_MCC} is \code{NA} after pivoting) always passes this check regardless.
+#' @param MCC_threshold Minimum real MCC magnitude in the selected direction,
+#'   or `NULL` for no magnitude threshold.
+#' @param compare_to_shuffled Require a defined shuffled counterpart and a real
+#'   MCC farther in the selected direction (default `TRUE`).
+#' @param direction Select positive or negative signal; `MCC_threshold`, when
+#'   supplied, is a nonnegative magnitude in the selected direction.
 #'
 #' @returns a tibble of model fits (one row per species, drug_label, drug_or_class, seed, feature_type, feature_subtype, model, fit_penalty, fit_mixture) that pass the requested quality thresholds, with \code{nonshuffled_MCC}, \code{shuffled_MCC}, and \code{MCC_diff} columns added. This does not pick a single "best" fit per group; it filters out fits that fail the MCC/shuffled-comparison criteria, so multiple passing fits per group can remain.
 #'
@@ -211,7 +231,8 @@ summarizeFeatureEvidence <- function(scored_top_features,
 #' }
 filterOptimalModel <- function(all_performance_parquet,
   MCC_threshold = NULL,
-  compare_to_shuffled = TRUE)
+  compare_to_shuffled = TRUE,
+  direction = c("positive", "negative"))
   {
   stopifnot(file.exists(all_performance_parquet))
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
@@ -220,29 +241,30 @@ filterOptimalModel <- function(all_performance_parquet,
     stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
   }
 
-  all_perf |>
-    dplyr::select(
-      species, drug_label, drug_or_class,
-      seed, feature_type, feature_subtype,
-      model, fit_penalty, fit_mixture,
-      shuffled, mcc
-    ) |>
-    tidyr::pivot_wider(
-      names_from = shuffled,
-      values_from = mcc,
-      names_prefix = "shuffled_"
-    ) |>
-    dplyr::rename(
-      nonshuffled_MCC = shuffled_FALSE,
-      shuffled_MCC = shuffled_TRUE
-    ) |>
-    dplyr::filter(!is.na(nonshuffled_MCC)) |>
-    dplyr::mutate(
-      MCC_diff = nonshuffled_MCC - shuffled_MCC
-    ) |>
+  direction <- match.arg(direction)
+  if (!is.null(MCC_threshold) &&
+      (length(MCC_threshold) != 1L || !is.numeric(MCC_threshold) ||
+       !is.finite(MCC_threshold) || MCC_threshold < 0 || MCC_threshold > 1)) {
+    stop("MCC_threshold must be NULL or a magnitude in [0, 1].", call. = FALSE)
+  }
+  keys <- c(.modelPerformanceKeys(all_perf), "model")
+  if (anyNA(all_perf[c(keys, "shuffled")]) ||
+      anyDuplicated(all_perf[c(keys, "shuffled")])) {
+    stop("Performance has missing or duplicate fit identities.", call. = FALSE)
+  }
+  real <- all_perf |>
+    dplyr::filter(!shuffled) |>
+    dplyr::select(dplyr::all_of(keys), fit_penalty, fit_mixture, nonshuffled_MCC = mcc)
+  shuffled <- all_perf |>
+    dplyr::filter(shuffled) |>
+    dplyr::select(dplyr::all_of(keys), shuffled_MCC = mcc)
+  sign <- if (direction == "positive") 1 else -1
+  dplyr::left_join(real, shuffled, by = keys, relationship = "one-to-one") |>
+    dplyr::mutate(MCC_diff = nonshuffled_MCC - shuffled_MCC) |>
     dplyr::filter(
-      if (!is.null(MCC_threshold)) (nonshuffled_MCC >= MCC_threshold) else TRUE,
-      if (compare_to_shuffled) (MCC_diff > 0 | is.na(shuffled_MCC)) else TRUE
+      !is.na(nonshuffled_MCC), sign * nonshuffled_MCC > 0,
+      if (!is.null(MCC_threshold)) sign * nonshuffled_MCC >= MCC_threshold else TRUE,
+      if (compare_to_shuffled) !is.na(shuffled_MCC) & sign * MCC_diff > 0 else TRUE
     )
 }
 
@@ -390,11 +412,13 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
 #' collapsing the per-seed rows from `scoreFeaturesWithinSeed()` down to one
 #' row per feature.
 #'
+#' @param seed_inventory Optional fitted real-label scope/seed table before quality
+#'   filtering. Used as the per-representation seed denominator.
 #' @param scored_top_features The tibble of scored top features with their contribution, rank, and rank score within each seed generated from `scoreFeaturesWithinSeed()`
 #'
 #' @returns a tibble with one row per species/drug_label/drug_or_class/feature_type/feature_subtype/variable, with:
 #' \itemize{
-#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the total number of distinct \code{seed} values present anywhere in \code{scored_top_features} (a single count computed once for the whole call, not per feature or per group — so this assumes every group was fit with the same set of seeds).
+#'   \item \code{seed_ratio}: the number of seeds the feature appears in, divided by the number of fitted seeds in its species/drug/feature-type/encoding representation. When supplied, \code{seed_inventory} includes seeds before model-quality filtering.
 #'   \item \code{mean_rank_score}, \code{median_rank_score}: mean/median of \code{rank_score} across seeds; ranges 0-1 with higher values indicating higher importance.
 #'   \item \code{median_rank}: median of \code{rank} across seeds. (\code{mean_rank} is not currently computed.)
 #'   \item \code{median_contribution}: median of \code{contribution} across seeds. (\code{mean_contribution} is not currently computed.)
@@ -411,12 +435,13 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
 #' \dontrun{
 #' summariseFeaturesAcrossSeeds(scoreFeaturesWithinSeed(all_top_features.parquet))
 #' }
-summariseFeaturesAcrossSeeds <- function(scored_top_features) {
-
-  # find max number of seeds
-  max_seeds <- scored_top_features |>
-    dplyr::summarise(n_seeds = dplyr::n_distinct(seed)) |>
-    dplyr::pull(n_seeds)
+summariseFeaturesAcrossSeeds <- function(scored_top_features, seed_inventory = NULL) {
+  scope <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype")
+  if (is.null(seed_inventory)) seed_inventory <- scored_top_features
+  counts <- seed_inventory |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(scope))) |>
+    dplyr::summarise(n_seeds = dplyr::n_distinct(seed), .groups = "drop")
+  scored_top_features <- dplyr::left_join(scored_top_features, counts, by = scope)
 
   feature_summary <- scored_top_features |>
     dplyr::group_by(
@@ -428,7 +453,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
       variable
     ) |>
     dplyr::summarise(
-      seed_ratio = dplyr::n_distinct(seed) / max_seeds,
+      seed_ratio = dplyr::n_distinct(seed) / dplyr::first(n_seeds),
 
       mean_rank_score = mean(rank_score, na.rm = TRUE),
       median_rank_score = median(rank_score, na.rm = TRUE),
@@ -446,6 +471,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 
       median_contribution = median(contribution, na.rm = TRUE),
       median_cum_contrib = median(cum_contrib, na.rm = TRUE),
+      median_prior_cum_contrib = median(cum_contrib - contribution, na.rm = TRUE),
 
       in_core_consistent = dplyr::n_distinct(in_core) == 1,
       in_core = if (in_core_consistent) dplyr::first(in_core) else FALSE,
@@ -467,7 +493,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 #' @inheritParams scoreFeaturesWithinSeed
 #' @param rank_score_quantile A value in \[0, 1\] (default is \code{0.95}). Keep only features whose \code{median_rank_score} is at or above this quantile of \code{median_rank_score}, where the quantile is computed separately within each (species, drug_label, drug_or_class) group (with \code{na.rm = TRUE}) — so a feature is compared only against other features from the same drug/class, not against the whole panel. This means a drug/class with weaker or more diffuse signal overall can still contribute its own top features, rather than being crowded out by drugs/classes with stronger or more concentrated signal. As with the other conditions listed below, this is not restricted to rows that already pass them: \code{dplyr::filter()} evaluates every condition passed to a single call against the same original data, so this threshold does not narrow as other conditions are applied
 #' @param cv_threshold The maximum allowed coefficient of variation (default is \code{1}). Keep only features with \code{rank_score_cv <= cv_threshold}, i.e. drop features whose rank_score is inconsistent across seeds relative to its mean. A feature present in every seed (\code{seed_ratio == 1}) always passes this check regardless of its \code{rank_score_cv} — including when \code{rank_score_cv} is \code{NA}, which happens whenever a group has only a single seed
-#' @param cumulative_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%). Keep only features with \code{median_cum_contrib <= cumulative_contribution_threshold}
+#' @param cumulative_contribution_threshold The cumulative-contribution cutoff, in \[0, 1\] (default is \code{0.75}, i.e. 75%). Keep the smallest ranked prefix reaching this share, including the feature that crosses the threshold, using \code{median_prior_cum_contrib < cumulative_contribution_threshold}
 #' @param seed_ratio_threshold If not \code{NULL} (the default), keep only features whose \code{seed_ratio} exactly equals this value
 #' @param found_in_both_subtypes Logical indicating whether to additionally restrict to features that survive the filters above in both the binary and counts \code{feature_subtype} (default is \code{FALSE})
 #' @param compare_median_to_sd_rank_score Logical indicating whether to additionally require \code{median_rank_score > rank_score_sd} (default is \code{FALSE})
@@ -479,7 +505,7 @@ summariseFeaturesAcrossSeeds <- function(scored_top_features) {
 #'   \item \code{seed_ratio == 1} OR \code{rank_score_cv <= cv_threshold} (see \code{cv_threshold}),
 #'   \item \code{in_core} is TRUE,
 #'   \item \code{sign_consistent} is TRUE (sign is the same in every seed; this does not require the sign to be negative),
-#'   \item \code{median_cum_contrib <= cumulative_contribution_threshold}, and
+#'   \item \code{median_prior_cum_contrib < cumulative_contribution_threshold}, and
 #'   \item \code{median_rank_score} is at or above the \code{rank_score_quantile} quantile of \code{median_rank_score}, computed separately per (species, drug_label, drug_or_class) group.
 #' }
 #' Two columns are then added, grouped by (species, drug_label, drug_or_class, feature_type, variable): \code{n_subtype} and \code{subtype_csv}, recording how many/which \code{feature_subtype} values each combination has among the rows that survived the first pass.
@@ -515,7 +541,9 @@ topFeaturesPerDrugOrClass <- function(
     compare_to_shuffled = compare_to_shuffled
   )
 
-  feature_summary <- summariseFeaturesAcrossSeeds(scored_features)
+  seed_inventory <- arrow::read_parquet(normalizePath(all_performance_parquet)) |>
+    dplyr::filter(!shuffled)
+  feature_summary <- summariseFeaturesAcrossSeeds(scored_features, seed_inventory)
 
   top_filtered_features <- feature_summary |>
     dplyr::group_by(species, drug_label, drug_or_class) |>
@@ -528,7 +556,7 @@ topFeaturesPerDrugOrClass <- function(
       seed_ratio == 1 | rank_score_cv <= cv_threshold, # rank_score_cv can be NA if there is only one seed.
       in_core,
       sign_consistent,
-      median_cum_contrib <= cumulative_contribution_threshold,
+      median_prior_cum_contrib < cumulative_contribution_threshold,
       median_rank_score >= rank_score_cutoff
     ) |>
     dplyr::select(-rank_score_cutoff) |>
@@ -880,7 +908,7 @@ runFeatureDyadDiscovery <- function(
   )
 
   if (nrow(qualified_models) == 0) {
-    stop(
+    .noRescoringEvidence(
       "No model fits passed the requested model-quality criteria."
     )
   }
@@ -966,7 +994,7 @@ runFeatureDyadDiscovery <- function(
   )
 
   if (nrow(top_features) == 0) {
-    stop(
+    .noRescoringEvidence(
       "No features passed the requested feature-selection criteria."
     )
   }

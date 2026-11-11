@@ -101,8 +101,8 @@
 #' by CD-HIT representatives. Functional annotations do not increase either
 #' endpoint's feature score.
 #'
-#' @param run_dir Completed modeling run with tasks.parquet, matrices.parquet,
-#'   results/performance.parquet, results/importance.parquet, and predictions.
+#' @param run_dir Completed modeling run with metadata/matrices.parquet and the
+#'   tasks, performance, importance, and predictions tables in results/.
 #' @param orb_dir Parquet-backed ORB with cluster dyads, protein_members, and annotation
 #'   views. Opened read-only.
 #' @param out_dir Output directory outside the modeling run and ORB.
@@ -114,10 +114,12 @@
 #'   reliability is assessed by `assessModelReliability()`. Candidate-aware direct
 #'   feature scores are not approximated from the matrix-wide feature count;
 #'   node tables here report observed returned-coefficient evidence instead.
-#'   Writes Parquet evidence tables only. Does not create review or Cytoscape CSVs.
+#'   Writes Parquet evidence tables and a network manifest describing default
+#'   filters, scoring rules, and the evidence needed to recompute filters in amRviz.
 #' @export
 exportNetwork <- function(run_dir, orb_dir, out_dir,
                          core_threshold = 0.75) {
+  export_run <- .manifestNewRun(list(core_threshold = core_threshold))
   if (length(core_threshold) != 1L || !is.finite(core_threshold) ||
       core_threshold <= 0 || core_threshold > 1) {
     stop("core_threshold must be in (0, 1].", call. = FALSE)
@@ -130,17 +132,18 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
       startsWith(out_dir, paste0(orb_dir, "/"))) {
     stop("Output must be outside the modeling run and ORB.", call. = FALSE)
   }
-  inputs <- c("tasks.parquet", "matrices.parquet", "results/performance.parquet",
-              "results/importance.parquet", "results/predictions.parquet")
-  if (!all(file.exists(file.path(run_dir, inputs)))) {
-    stop("Missing run output: ", paste(inputs[!file.exists(file.path(run_dir, inputs))],
-                                      collapse = ", "), call. = FALSE)
+  paths <- .runPaths(run_dir)
+  inputs <- c(paths$tasks, paths$matrices, paths$performance,
+              paths$importance, paths$predictions)
+  if (!all(file.exists(inputs))) {
+    stop("Missing run output: ", paste(inputs[!file.exists(inputs)], collapse = ", "),
+         call. = FALSE)
   }
-  tasks <- arrow::read_parquet(file.path(run_dir, inputs[[1L]]))
-  matrices <- arrow::read_parquet(file.path(run_dir, inputs[[2L]]))
-  performance <- arrow::read_parquet(file.path(run_dir, inputs[[3L]]))
-  importance <- arrow::read_parquet(file.path(run_dir, inputs[[4L]]))
-  predictions <- arrow::read_parquet(file.path(run_dir, inputs[[5L]]))
+  tasks <- arrow::read_parquet(inputs[[1L]])
+  matrices <- arrow::read_parquet(inputs[[2L]])
+  performance <- arrow::read_parquet(inputs[[3L]])
+  importance <- arrow::read_parquet(inputs[[4L]])
+  predictions <- arrow::read_parquet(inputs[[5L]])
   required_tasks <- c("task_id", "matrix_id", "labels", "seed", "status")
   required_matrices <- c("matrix_id", "mode_id", "unit", "target", "feature_type", "encoding")
   if (!all(required_tasks %in% names(tasks)) ||
@@ -368,16 +371,10 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
       shuffled_pair_robust75 = dplyr::coalesce(shuffled_pair_robust75, FALSE),
       shuffled_pair_reliability_supported = dplyr::coalesce(shuffled_pair_reliability_supported, FALSE)
     )
-  # Find the protein clusters adjacent to reproducibly important gene/protein
-  # pairs. Include robust real-label pairs even if their models did not pass the
-  # reliability check, so annotation context remains available for review.
-  robust_pairs <- real |>
-    dplyr::filter(dyad_robust75)
-
-  # Retrieve ORB annotations for protein clusters connected to robust pairs.
+  # Keep context for every dyad so consumers can relax the default cutoffs.
   # Keep Pfam, COG, AMRFinder, and DefenseCas links separate from the endpoint
   # scores: a cluster with many annotations does not gain extra importance.
-  neighbor_clusters <- unique(stats::na.omit(robust_pairs$protein_cluster))
+  neighbor_clusters <- unique(stats::na.omit(pairs$protein_cluster))
   neighbor_links <- local({
     old_wd <- getwd()
     on.exit(setwd(old_wd), add = TRUE)
@@ -429,7 +426,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     dplyr::left_join(mapping, by = c("feature_type", "annotation_key"),
                      relationship = "many-to-one") |>
     dplyr::mutate(node_id = dplyr::coalesce(node_id, annotation_key))
-  neighbors <- robust_pairs |>
+  neighbors <- real |>
     dplyr::distinct(unit, target, encoding, protein_cluster) |>
     dplyr::left_join(matched, by = "protein_cluster", relationship = "many-to-many") |>
     dplyr::filter(!is.na(feature_type)) |>
@@ -481,14 +478,14 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     shuffled_reference = "mean_plus_one_sd",
     constant_prediction_mcc = "zero_when_both_truth_classes_present"
   )
-  arrow::write_parquet(provenance, file.path(out_dir, "network_provenance.parquet"))
-  arrow::write_parquet(scored, file.path(out_dir, "feature_returned_seed_evidence.parquet"))
-  arrow::write_parquet(nodes, file.path(out_dir, "gene_protein_cluster_node_evidence.parquet"))
-  arrow::write_parquet(annotation_evidence, file.path(out_dir, "annotation_node_evidence.parquet"))
-  arrow::write_parquet(graph, file.path(out_dir, "cluster_pair_network_evidence.parquet"))
-  arrow::write_parquet(neighbors, file.path(out_dir, "cluster_annotation_neighbor_evidence.parquet"))
-  arrow::write_parquet(reliability$by_representation, file.path(out_dir, "model_reliability.parquet"))
-  arrow::write_parquet(performance |>
+  .writeParquet(provenance, file.path(out_dir, "network_provenance.parquet"))
+  .writeParquet(scored, file.path(out_dir, "feature_returned_seed_evidence.parquet"))
+  .writeParquet(nodes, file.path(out_dir, "gene_protein_cluster_node_evidence.parquet"))
+  .writeParquet(annotation_evidence, file.path(out_dir, "annotation_node_evidence.parquet"))
+  .writeParquet(graph, file.path(out_dir, "cluster_pair_network_evidence.parquet"))
+  .writeParquet(neighbors, file.path(out_dir, "cluster_annotation_neighbor_evidence.parquet"))
+  .writeParquet(reliability$by_representation, file.path(out_dir, "model_reliability.parquet"))
+  .writeParquet(performance |>
     dplyr::select(task_id, unit, target, labels, seed, feature_type, encoding,
                   mcc, mcc_adjusted, mcc_for_reliability),
     file.path(out_dir, "reliability_mcc_audit.parquet"))
@@ -498,15 +495,19 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     dplyr::transmute(model_feature = Variable,
                      protein_cluster = sub("^fig\\.", "fig|", Variable),
                      in_orb_graph = protein_cluster %in% pairs$protein_cluster)
-  arrow::write_parquet(protein_ids,
+  .writeParquet(protein_ids,
     file.path(out_dir, "protein_cluster_id_crosswalk.parquet"))
   if (!any(cluster_rows$feature_type == "gene" & cluster_rows$in_orb_graph) ||
       !any(cluster_rows$feature_type == "protein" & cluster_rows$in_orb_graph)) {
     warning("No matching gene or protein clusters in ORB dyads; check feature ID normalization and ORB version.",
             call. = FALSE)
   }
-  arrow::write_parquet(cluster_rows,
+  .writeParquet(cluster_rows,
     file.path(out_dir, "gene_protein_seed_evidence.parquet"))
+  .writeParquet(metadata, file.path(out_dir, "fitted_tasks.parquet"))
+  .writeParquet(reliability$by_seed, file.path(out_dir, "model_reliability_by_seed.parquet"))
+  .writeNetworkManifest(out_dir, run_dir, orb_dir, export_run, core_threshold,
+                        metadata, pairs)
 
   message("MAGIC network export: ", nrow(pairs), " fixed dyads; ",
           sum(real$high_priority), " high-priority dyad/encoding records (",

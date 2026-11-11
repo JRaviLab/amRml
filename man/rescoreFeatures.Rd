@@ -4,7 +4,13 @@
 \alias{rescoreFeatures}
 \title{Rescore features}
 \usage{
-rescoreFeatures(fit = NULL, orb_dir = NULL, run_dir = NULL, ...)
+rescoreFeatures(
+  fit = NULL,
+  orb_dir = NULL,
+  run_dir = NULL,
+  ...,
+  min_seeds = 3L
+)
 }
 \arguments{
 \item{fit}{An \code{amr_fit} from \code{\link[=fitModels]{fitModels()}} or \code{\link[=runModelingWorkflow]{runModelingWorkflow()}}. Optional.}
@@ -17,6 +23,9 @@ from the registry.}
 reopen. Supply at most one of \code{fit}, \code{run_dir} and \code{orb_dir}.}
 
 \item{...}{Feature rescoring's thresholds, passed to \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}.}
+
+\item{min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla
+drug, feature type, and encoding. Default \code{3L}.}
 }
 \value{
 The \code{feature_dyad_discovery} list from \code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDiscovery()}}. Its
@@ -27,7 +36,7 @@ Runs feature rescoring (\code{\link[=runFeatureDyadDiscovery]{runFeatureDyadDisc
 models' merged results, from \code{\link[=exportMergedResults]{exportMergedResults()}}, and the ORB's
 virtual \code{dyad_feature} relation. Feature rescoring needs real and shuffled
 labels and several seeds, e.g.
-from \code{runModelingWorkflow(orb_dir, modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
+from \code{runModelingWorkflow(orb_dir, model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled"))}.
 }
 \details{
 No fit object is needed. With none of \code{fit}, \code{run_dir} and \code{orb_dir}, an ORB is
@@ -67,7 +76,7 @@ DuckDB read errors retain their DBI/driver error classes.
 \dontrun{
 # From a fit in memory
 fit <- runModelingWorkflow("path/to/ORB",
-  modes = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
+  model_types = "vanilla", seeds = c(31, 79, 51), labels = c("real", "shuffled")
 )
 rescored <- rescoreFeatures(fit)
 rescored$features$top
