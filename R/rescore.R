@@ -127,6 +127,80 @@
   )
 }
 
+# Zstandard compresses these tables well; Snappy is the fallback where an Arrow build lacks it.
+.parquetCompression <- function() {
+  if (arrow::codec_is_available("zstd")) "zstd" else "snappy"
+}
+
+# The merged performance and top-feature tables with every per-seed calculation that does not
+# depend on a threshold added as columns. Thresholds (the core share, the MCC cut-off, the rank
+# quantile and the rest) are then filters over these columns. Original columns are unchanged.
+.completeRescoring <- function(perf_parquet, top_parquet) {
+  perf <- arrow::read_parquet(perf_parquet)
+  top <- arrow::read_parquet(top_parquet)
+
+  fit_keys <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype", "seed")
+
+  # Real-label MCC against its shuffled counterpart, and the shuffled background it is judged by.
+  # Defined only on real-label rows; the shuffled rows keep NA.
+  shuffled_mcc <- perf[perf$shuffled, c(fit_keys, "mcc")]
+  names(shuffled_mcc)[names(shuffled_mcc) == "mcc"] <- "shuffled_mcc"
+  background <- assessModelReliability(perf_parquet)$by_seed[c(
+    fit_keys, "mean_shuffled_mcc", "sd_shuffled_mcc", "shuffled_upper", "above_background"
+  )]
+  perf$.row <- seq_len(nrow(perf))
+  perf <- dplyr::left_join(perf, dplyr::mutate(shuffled_mcc, shuffled = FALSE), by = c(fit_keys, "shuffled"))
+  perf <- dplyr::left_join(perf, dplyr::mutate(background, shuffled = FALSE), by = c(fit_keys, "shuffled"))
+  perf$mcc_diff <- perf$mcc - perf$shuffled_mcc
+  perf$feat_return_ratio <- perf$n_feats_returned / perf$n_feat
+  perf <- perf[order(perf$.row), ]
+  perf$.row <- NULL
+
+  # Contribution, rank, rank score and cumulative share within each model's seed. The core group
+  # is not stored: it follows from `cum_contrib - contribution < core_contribution_threshold`.
+  scored <- scoreFeaturesWithinSeed(
+    top_parquet, filter_model = FALSE, all_performance_parquet = perf_parquet
+  )
+  scored <- scored[c(
+    fit_keys, "variable", "contribution", "rank", "n_features", "rank_score", "cum_contrib"
+  )]
+  # Not `variable`, which a case-insensitive reader such as DuckDB would confuse with `Variable`
+  names(scored)[names(scored) == "variable"] <- "variable_clean"
+  scored$shuffled <- FALSE
+  top$variable_clean <- .cleanFeatureNames(top$feature_type, top$Variable)
+  join_keys <- c(fit_keys, "shuffled", "variable_clean")
+  if (anyDuplicated(scored[join_keys])) {
+    rlang::abort("Scored features are not unique within each seed, so they cannot be matched back.")
+  }
+  rows <- nrow(top)
+  top <- dplyr::left_join(top, scored, by = join_keys)
+  if (nrow(top) != rows) rlang::abort("Matching scores back to the features changed the row count.")
+
+  list(all_perf = tibble::as_tibble(perf), all_top_features = tibble::as_tibble(top))
+}
+
+# Write the complete tables to `<run_dir>/magic/`, unless the copies there are newer than the
+# merged results they came from. Returns the folder.
+.writeCompleteRescoring <- function(merged, run_dir) {
+  out_dir <- file.path(run_dir, "magic")
+  files <- file.path(out_dir, basename(merged))
+  if (all(file.exists(files)) && min(file.mtime(files)) >= max(file.mtime(merged))) {
+    return(out_dir)
+  }
+
+  tables <- .completeRescoring(merged[[1L]], merged[[2L]])
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  # Write beside the target and rename, so an interrupted write never leaves a half file.
+  for (name in names(tables)) {
+    target <- file.path(out_dir, paste0(name, ".parquet"))
+    partial <- paste0(target, ".partial")
+    arrow::write_parquet(tables[[name]], partial, compression = .parquetCompression())
+    file.rename(partial, target)
+  }
+  rlang::inform(paste0("Per-seed calculations written to: ", out_dir))
+  out_dir
+}
+
 # Write a result to `<run_dir>/magic/<date-time>/`, a new folder for every call so an earlier
 # result is never replaced. Returns that folder.
 .writeRescored <- function(result, run_dir) {
@@ -140,8 +214,7 @@
   }
   dir.create(out_dir, recursive = TRUE)
 
-  # Zstandard compresses these tables well; Snappy is the fallback where an Arrow build lacks it.
-  compression <- if (arrow::codec_is_available("zstd")) "zstd" else "snappy"
+  compression <- .parquetCompression()
   for (name in names(tables)) {
     arrow::write_parquet(
       tables[[name]], file.path(out_dir, paste0(name, ".parquet")), compression = compression
@@ -194,8 +267,26 @@
 #'   `"output_dir"` attribute is the folder the results were written to.
 #'
 #' @section Output files:
-#' Every call writes its results; there is no option to skip it. Each call writes a new folder, `<run>/magic/<date-time>/`, so a result is never replaced by a
-#' later call with other thresholds. It holds Parquet files, compressed with Zstandard:
+#' Every call writes its results; there is no option to skip it. Everything goes in
+#' `<run>/magic/`, as Parquet files compressed with Zstandard.
+#'
+#' The per-seed calculations that need no threshold are saved once for the run, as
+#' `all_perf.parquet` and `all_top_features.parquet`. They are the merged results with columns
+#' added, and every original column is unchanged. They are rewritten only when the merged
+#' results are newer. Thresholds are then filters over these columns.
+#' \itemize{
+#'   \item `all_perf.parquet` adds `shuffled_mcc`, `mcc_diff`, `feat_return_ratio`, and the
+#'   shuffled background from [assessModelReliability()]: `mean_shuffled_mcc`,
+#'   `sd_shuffled_mcc`, `shuffled_upper` and `above_background`. These are set on real-label
+#'   rows, and are `NA` where a seed has no shuffled counterpart.
+#'   \item `all_top_features.parquet` adds `variable_clean` (the name used by the ORB's
+#'   dyad relation), `contribution`, `rank`, `n_features`, `rank_score` and `cum_contrib`, set on
+#'   real-label rows. A feature is in the core group when
+#'   `cum_contrib - contribution < core_contribution_threshold`.
+#' }
+#'
+#' Each call also writes its own result to a new folder, `<run>/magic/<date-time>/`, so a result
+#' is never replaced by a later call with other thresholds. It holds:
 #' \itemize{
 #'   \item `optimal_models.parquet`: every fit that passes at least one model criterion, with
 #'   `is_good_performance`, `is_separated_from_shuffled` and `is_qualified` flags.
