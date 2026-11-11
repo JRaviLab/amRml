@@ -28,7 +28,7 @@ fxLabelled <- function(n) {
 fxCombinationFit <- function(n = 20, env = parent.frame()) {
   data <- fxLabelled(n)
   eligibility <- fxEligibility(
-    data$metadata, modes = "vanilla", parquets = data$parquets,
+    data$metadata, modes = "mdr", parquets = data$parquets,
     min_genomes = n, n_fold = 2, min_mdr_label_genomes = n, env = env
   )
   eligibility$scopes <- eligibility$scopes[eligibility$scopes$target == "resistant_classes", ]
@@ -82,6 +82,9 @@ test_that("importance is per label, and predictions carry the predicted label's 
 
   expect_true(all(fit$importance$label %in% c("CLX", "CLX_CLY", "Susceptible")))
   expect_true("geneX" %in% fit$importance$Variable)
+  expect_equal(fit$performance$n_feats_returned,
+    dplyr::n_distinct(fit$importance$Variable))
+  expect_gt(nrow(fit$importance), fit$performance$n_feats_returned)
   expect_true(all(is.na(fit$predictions$prob_resistant)))
   expect_true(all(fit$predictions$prob_predicted >= 1 / 3 & fit$predictions$prob_predicted <= 1))
   expect_true(all(fit$predictions$truth %in% c("CLX", "CLX_CLY", "Susceptible")))
@@ -104,11 +107,14 @@ test_that("MDR coefficients retain labels in native results and stay out of bina
   expect_identical(fit$importance, native)
   expect_equal(arrow::read_parquet(file.path(fit$built$out_dir, "results", "importance.parquet")), native)
 
-  # Even three otherwise complete real/shuffled pairs are not binary drug evidence.
+  # Native MDR rescoring accepts complete pairs while binary exports stay unchanged.
   paired <- expandTasks(fit$built, seeds = 1:3, labels = c("real", "shuffled"))
   fit$tasks <- paired$tasks
   fit$tasks$status <- "fitted"
-  expect_error(rescoreFeatures(fit), class = "amrml_invalid_argument")
+  expect_equal(nrow(.rescoreScopes(fit)), nrow(fit$built$matrices))
+  legacy <- fit
+  legacy$built$matrices$mode_id <- "vanilla"
+  expect_equal(.rescoreScopes(legacy), .rescoreScopes(fit))
 })
 
 
@@ -126,4 +132,22 @@ test_that("multiclass diagnostics do not report binary confusion counts or expec
   expect_true(all(is.na(diagnostics[c("tp", "tn", "fp", "fn", "n_pred_resistant",
                                        "n_pred_susceptible", "pred_resistant_fraction",
                                        "actual_resistant_fraction")])))
+})
+
+test_that("a mixed workflow array preserves general CV parallelism through collection", {
+  local_mocked_bindings(.registerManifest = function(path) path)
+  data <- fxLabelled(20)
+  orb <- fxOrb(metadata = data$metadata, parquets = data$parquets)
+  out <- file.path(withr::local_tempdir(), "parallel-cv-array")
+  runModelingWorkflowHPC("prep", out_dir = out, orb_dir = orb,
+    model_types = c("vanilla", "mdr"), feature_types = "gene", seeds = 123L, labels = "real",
+    min_genomes = 20, min_mdr_label_genomes = 20, n_fold = 2, n_chunks = 1,
+    rescore = FALSE, save_state = TRUE, parallel_cv = TRUE)
+  expect_true(.readTaskArray(out)$parallel_cv)
+  expect_true(readRDS(.runPaths(out)$workflow)$parallel_cv)
+  withr::local_envvar(SLURM_CPUS_PER_TASK = "2")
+  suppressWarnings(runTaskChunk(out, 1, threads = 2))
+  fit <- collectTaskArray(out)
+  expect_true(all(fit$tasks$status == "fitted"))
+  expect_true(any(fit$performance$n_labels == 3))
 })

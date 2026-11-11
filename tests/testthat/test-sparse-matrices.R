@@ -24,3 +24,15 @@ test_that("feature presets select available tables and explicit names stay stric
   expect_equal(unique(explicit$matrices$feature_type), "widget")
   expect_error(planMatrices(eligibility, feature_types = "typo"), class = "amrml_invalid_argument")
 })
+
+test_that("standard includes DefenseCas and full adds only struct", {
+  available <- c("gene", "protein", "Pfam", "COG", "AMRFinder", "DefenseCas", "struct")
+  resolve <- function(preset, types = available) {
+    .resolveFeatureTypes(preset, types, call = rlang::current_env())
+  }
+  expect_equal(resolve("quick"), c("gene", "protein", "Pfam"))
+  expect_equal(resolve("standard"), setdiff(available, "struct"))
+  expect_equal(resolve("full"), available)
+  expect_equal(setdiff(resolve("full"), resolve("standard")), "struct")
+  expect_equal(resolve("standard", c("gene", "DefenseCas")), c("gene", "DefenseCas"))
+})

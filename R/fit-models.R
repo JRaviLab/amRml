@@ -134,7 +134,7 @@
 
 # Ported from old amRml's tuneGrid(), selectBestModel() and fitBestModel(): tune over
 # stratified folds, choose by MCC, and fit on all training rows.
-.fitModel <- function(data, n_fold, sparse = FALSE, multi = FALSE) {
+.fitModel <- function(data, n_fold, sparse = FALSE, multi = FALSE, cv_workers = 1L) {
   workflow <- workflows::workflow() |>
     workflows::add_recipe(.buildRecipe(data, sparse = sparse)) |>
     workflows::add_model(.modelSpec(multi))
@@ -155,24 +155,14 @@
   # tune emits CLI alerts and its own progress bar even with verbose = FALSE.
   # Scope these options to this model call; parent progress remains enabled.
   withr::local_options(list(cli.progress_handlers_only = character()))
-  tuned <- suppressMessages(suppressWarnings(
-    tune::tune_grid(
-      workflow,
-      resamples = resamples,
-      grid = .tuningGrid(),
-      # Only MCC selects the winner; all final test metrics are computed below.
-      metrics = yardstick::metric_set(yardstick::mcc),
-      control = tune::control_grid(
-        allow_par = FALSE,
-        verbose = FALSE
-      )
-    )
-  ))
+  tuned <- .tuneModelFolds(workflow, resamples, .tuningGrid(), cv_workers)
+  checked <- .checkTuningPaths(tuned)
+  tuned <- checked$tuned
   collected <- tune::collect_notes(tuned)
-  notes <- .emptyModelNotes()
+  notes <- checked$notes
   if (nrow(collected)) {
     ids <- grep("^id", names(collected), value = TRUE)
-    notes <- tibble::tibble(
+    collected_notes <- tibble::tibble(
       stage = "tune", resample = if (length(ids)) {
         do.call(paste, c(as.list(collected[ids]), sep = "/"))
       } else rep(NA_character_, nrow(collected)),
@@ -180,8 +170,13 @@
       type = as.character(collected$type), note = as.character(collected$note)
     ) |>
       dplyr::count(stage, resample, location, type, note, name = "n")
+    notes <- dplyr::bind_rows(notes, collected_notes)
   }
   tryCatch({
+    metrics <- suppressWarnings(tune::collect_metrics(tuned))
+    if (!any(is.finite(metrics$mean[metrics$.metric == "mcc"]))) {
+      stop("No tuning candidate has a defined MCC at a fitted penalty.")
+    }
     best <- tune::select_best(tuned, metric = "mcc")
     fit <- withCallingHandlers(
       parsnip::fit(tune::finalize_workflow(workflow, best), data = data),
@@ -194,6 +189,28 @@
         invokeRestart("muffleMessage")
       }
     )
+    engine <- parsnip::extract_fit_engine(fit)
+    if (!.penaltyCovered(engine$lambda, best$penalty)) {
+      path <- .extendPenaltyPath(engine$lambda, best$penalty)
+      spec <- tune::finalize_model(.modelSpec(multi), best) |>
+        parsnip::set_engine("glmnet", path_values = path)
+      final_workflow <- tune::finalize_workflow(workflow, best) |>
+        workflows::update_model(spec)
+      notes <- dplyr::bind_rows(notes, .conditionModelNote(simpleMessage(
+        "Extended final glmnet path to fit the selected penalty exactly."), "final_fit"))
+      fit <- withCallingHandlers(parsnip::fit(final_workflow, data = data),
+        warning = function(w) {
+          notes <<- dplyr::bind_rows(notes, .conditionModelNote(w, "final_fit"))
+          invokeRestart("muffleWarning")
+        },
+        message = function(m) {
+          notes <<- dplyr::bind_rows(notes, .conditionModelNote(m, "final_fit"))
+          invokeRestart("muffleMessage")
+        })
+      if (!.penaltyCovered(parsnip::extract_fit_engine(fit)$lambda, best$penalty)) {
+        stop("The selected penalty was not reached by the final glmnet fit.")
+      }
+    }
     list(fit = fit, penalty = best$penalty, mixture = best$mixture, notes = notes)
   }, error = function(e) {
     e$amr_notes <- notes
@@ -379,7 +396,7 @@
 
 # One task: shuffle if asked, split, tune, fit, and score on the test genomes.
 .fitTask <- function(task, path, species, rows, columns, encoding, cache,
-                     fitted = NULL, return_fitted = FALSE, multi = FALSE) {
+                     fitted = NULL, return_fitted = FALSE, multi = FALSE, cv_workers = 1L) {
   started <- Sys.time()
   if (!multi && !all(rows$phenotype %in% .PHENOTYPES)) {
     stop("A Resistant/Susceptible target has other phenotypes.")
@@ -406,7 +423,8 @@
   }
   test <- .modelData(test_values, rows$phenotype[split$test], sparse = use_sparse, labels = labels)
   if (is.null(fitted)) {
-    fitted <- .fitModel(train, task$n_fold, sparse = use_sparse, multi = multi)
+    fitted <- .fitModel(train, task$n_fold, sparse = use_sparse, multi = multi,
+                        cv_workers = cv_workers)
     fitted$sparse <- use_sparse
     fitted$importance <- .taskImportance(fitted$fit, fitted$penalty, matrix$features, multi = multi)
   }
@@ -427,7 +445,7 @@
     n_feat = length(matrix$features),
     n_labels = length(labels),
     model = "LR",
-    n_feats_returned = nrow(importance),
+    n_feats_returned = dplyr::n_distinct(importance$Variable),
     n_fold = task$n_fold,
     fit_penalty = fitted$penalty,
     fit_mixture = fitted$mixture,

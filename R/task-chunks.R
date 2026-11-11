@@ -49,97 +49,54 @@ taskChunk <- function(chunks, chunk_id) {
 
 #' Run one prepared array chunk
 #'
-#' Each workers writes their own checkpoints and models. They are forbidden from 
-#' meddling in other workers' result tables or updating anything that doesn't belong
-#' strictly to them. Completed groups are skipped on a retry. 
-#' A directory lock rejects simultaneous attempts on the same chunk. After a 
-#' killed job, remove stale locks after confirming that job has exited! Never 
-#' change the plan or inputs while workers run. Prepare and collect with 
-#' The Coordinator outside of the array. Startup messages identify plan loading, 
-#' task grouping, and each worker validates the full run's shared inputs before 
-#' fitting its chunk. Model progress advances when a complete fit group is checkpointed.
-#' @section Batching:
-#' Choose `n_chunks` during preparation.
-#' For 400 independent models, `n_chunks = 4` gives 4 chunks of 100 models.
-#' A group may contain several models that share a fitted model.
-#' With `threads = 1`, the R process handles its groups sequentially and reuses
-#' its feature-store cache. Checkpoints are written after each group, so retries
-#' skip completed groups within a partially finished chunk. Chunk assignments are 
-#' fixed when preparing. You must use a new run directory to change the chunk 
-#' count, and please please leave the saved plan unchanged while jobs are running.
+#' Runs a saved chunk from `fitModels(execution = "prepare")` or
+#' [runModelingWorkflowHPC()]. Completed fit groups are skipped on retries.
+#' Workers write only their own checkpoints and models; shared results are
+#' written during collection. Do not change the plan or inputs while jobs run.
 #'
-#' @section SLURM submission:
-#' Every cluster is a special snowflake, so you must supply your own batch script.
-#' Prepare once. For example:
-#' ```r
-#' plan <- runModelingWorkflow(
-#'   orb_dir = "/bug/orb",
-#'   out_dir = "/bug/orb/run", 
-#'   execution = "prepare", # Used only when batching to prep for an array!
-#'   n_chunks = 4L # How many batches total to split your models into
-#' )
-#' 
-#' length(plan$chunks) # What do you actually get?
-#' ```
-#' Save a script such as `bug-fit.sbatch`, add your partition, account, walltime,
-#' and environment activation parameters appropriate for your cluster. e.g.,
-#' ```bash
-#' #!/bin/bash
-#' #SBATCH --nodes=1
-#' #SBATCH --ntasks=1
-#' #SBATCH --cpus-per-task=2
-#' #SBATCH --mem-per-cpu=3000M
-#' #SBATCH --output=amRml-%A_%a.out
-#' #SBATCH --error=amRml-%A_%a.err
-#' # Activate your R environment containing installed amRml here!
-#' export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-#' export VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1
-#' run_dir="${1:?Pass a prepared run directory for processing}"
-#' Rscript -e 'amRml::runTaskChunk(commandArgs(TRUE)[[1]])' "$run_dir"
-#' ```
-#' Submit using the actual number of chunks (4 in this example):
-#' ```bash
-#' sbatch --array=1-4%2 bug-fit.sbatch /bug/orb/run
-#' ```
-#' Once all workers end successfully, you have to collect in a compute allocation
-#' using the same R environment:
-#' ```bash
-#' Rscript -e 'amRml::collectTaskArray(commandArgs(TRUE)[[1]])' /bug/orb/run
-#' ```
-#' Collection requires all group checkpoints. A successful exit can still hold 
-#' failed model fits, so you can inspect your collected task table for failures.
+#' Directory locks stop workers from simultaneously fiddling with a chunk. A lock's
+#' `owner.json` records hostname, PID, time and SLURM IDs. Confirm a job has exited 
+#' before removing a stale lock. Group diagnostics are retained in
+#' `diagnostics/worker-*.jsonl`, including task/matrix IDs and R heap use.
+#' R memory errors are recorded as `fit_oom`.
 #'
+#' @seealso [runModelingWorkflowHPC()] for preparation, generated SLURM runners,
+#'   bounded OOM error retries and collection.
 #' @param out_dir Prepared run directory on a filesystem shared by all jobs.
 #' @param chunk_id One-based chunk ID; defaults to `SLURM_ARRAY_TASK_ID`.
 #' @param threads Number of R workers in this array element. Default `1` keeps
 #'   the full job memory allocation available to one fit. Must not exceed
 #'   `SLURM_CPUS_PER_TASK` when set. Limit BLAS/OpenMP threads in the batch script.
+#'   Prepared `parallel_cv = TRUE` plans spend this allocation on CV folds
+#'   within one model rather than on independent model tasks.
+#' @param verbose Print worker setup and per-group diagnostics. NULL uses the
+#'   prepared plan's setting (FALSE by default). Completion progress stays visible.
 #' @return Invisibly, a list of the completed group IDs.
 #' @export
-runTaskChunk <- function(out_dir, chunk_id = Sys.getenv("SLURM_ARRAY_TASK_ID"), threads = 1L) {
+runTaskChunk <- function(out_dir, chunk_id = Sys.getenv("SLURM_ARRAY_TASK_ID"), threads = 1L, verbose = NULL) {
   .checkArgCount(threads, "threads")
+  if (!is.null(verbose)) .checkArgFlag(verbose, "verbose")
   allocated <- Sys.getenv("SLURM_CPUS_PER_TASK")
   if (nzchar(allocated)) {
     cpus <- suppressWarnings(as.numeric(allocated))
     .checkArgCount(cpus, "SLURM_CPUS_PER_TASK")
     if (threads > cpus) .amrAbort("invalid_argument", "`threads` exceeds SLURM_CPUS_PER_TASK.")
   }
-  message("Array worker: loading saved task plan.")
+  if (isTRUE(verbose)) message("Array worker: loading saved task plan.")
   plan <- .readTaskArray(out_dir)
+  verbose <- verbose %||% plan$verbose %||% FALSE
   groups <- taskChunk(plan$chunks, chunk_id)
   id <- match(TRUE, vapply(plan$chunks, identical, logical(1), groups))
   lock <- file.path(.runPaths(out_dir)$checkpoints, sprintf("chunk-%06d.lock", id))
-  if (!dir.create(lock, showWarnings = FALSE)) {
-    stop("Chunk is already running or has a stale lock: ", lock, call. = FALSE)
-  }
+  .acquireFitLock(lock, "Chunk")
   on.exit(unlink(lock, recursive = TRUE), add = TRUE)
-  message("Array chunk ", id, ": ", length(groups), " fit groups assigned.")
+  if (verbose) message("Array chunk ", id, ": ", length(groups), " fit groups assigned.")
   backend <- if (threads == 1L) BiocParallel::SerialParam() else if (.Platform$OS.type == "windows") {
     BiocParallel::SnowParam(workers = threads)
   } else BiocParallel::MulticoreParam(workers = threads)
   fitModels(plan$tasks, save_fits = plan$save_fits, save_state = plan$save_state,
             reuse_fits = plan$reuse_fits, resume = TRUE, BPPARAM = backend,
-            execution = "worker", group_subset = groups)
+            execution = "worker", group_subset = groups, parallel_cv = plan$parallel_cv %||% FALSE, verbose = verbose)
 }
 
 #' Collect a completed task array
@@ -163,6 +120,7 @@ collectTaskArray <- function(out_dir) {
   invisible(fitModels(
     plan$tasks, save_fits = plan$save_fits, save_state = plan$save_state,
     reuse_fits = plan$reuse_fits, resume = TRUE,
-    BPPARAM = BiocParallel::SerialParam(), execution = "collect"
+    BPPARAM = BiocParallel::SerialParam(), execution = "collect",
+    parallel_cv = plan$parallel_cv %||% FALSE, verbose = plan$verbose %||% FALSE
   ))
 }

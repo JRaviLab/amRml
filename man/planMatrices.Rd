@@ -9,13 +9,14 @@ planMatrices(eligibility, modes = NULL, feature_types = "standard")
 \arguments{
 \item{eligibility}{An \code{amr_eligibility} from \code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
-\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}} to plan matrices for, or \code{NULL} for
+\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}} to plan matrices for,
+\code{"complete"} for all supported modes, or \code{NULL} for
 every mode in \code{eligibility}.}
 
 \item{feature_types}{A preset (\code{"quick"}, \code{"standard"}, or \code{"full"}) or an
 explicit character vector of feature types. Default \code{"standard"}.
 Quick uses gene, protein, and Pfam; Standard also includes COG and
-AMRFinder; Full additionally includes struct and DefenseCas. Presets use
+AMRFinder and DefenseCas; Full additionally includes only struct. Presets use
 only tables present in the ORB. Explicit selections require exact names.}
 }
 \value{

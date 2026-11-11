@@ -27,12 +27,46 @@
 #'   Required in non-interactive sessions.
 #' @param out_dir Folder to write to. By default a new run folder,
 #'   `<ORB>/amRml/<date-time>/`.
-#' @param model_types Mode IDs from [modelingModes()], or `NULL` for all of them.
-#' @param threads Number of parallel workers. Default `1` runs serially. Larger
-#'   values use multicore workers on Unix and socket workers on Windows.
-#' @param feature_types Feature types to model: `"quick"`, `"standard"` (default),
-#'   `"full"`, or an explicit character vector of ORB feature types.
-#'   Selected before matrices are planned or built; see [planMatrices()].
+#' @param model_types Which modeling modes to run. Supply one mode ID or a
+#'   character vector, such as `"vanilla"` or
+#'   `c("vanilla", "cross_country", "logo")`. `NULL` (the default) considers
+#'   all modes; only eligible, supported models are fitted. Available IDs are:
+#'
+#'   * `"vanilla"`: the standard models for individual drugs and drug classes.
+#'   * `"mdr"`: multidrug-resistance models only: binary `mdr` (resistant
+#'     to at least `mdr_min_classes` classes) and `resistant_classes` (the
+#'     combination of resistant classes). Use `c("vanilla", "mdr")` for both
+#'     whole-dataset suites.
+#'   * `"complete"`: all supported modes, including vanilla, MDR, stratified,
+#'     cross-test, and leave-one-out models.
+#'   * `"stratified_year"`, `"stratified_country"`: separate drug and
+#'     drug-class models within each year bin or country.
+#'   * `"cross_year"`, `"cross_country"`, `"cross_drug"`: cross-test models,
+#'     trained on one year bin, country, or drug and tested on another.
+#'   * `"loto"`, `"logo"`: leave-one-year-bin-out and leave-one-country-out
+#'     models, trained on all other groups and tested on the held-out group.
+#'   * `"lodo"`: leave-one-drug-out is registered but not yet supported;
+#'     it is recorded as excluded.
+#'
+#'   Matched shuffled-label baseline tasks are selected separately through
+#'   `labels = c("real", "shuffled")` (the default), for every requested mode
+#'   and seed. Use `labels = "real"` to fit only real-label models. See
+#'   [modelingModes()] for the mode registry and [eligibleScopes()] for the
+#'   data requirements.
+#' @param threads Number of outer workers for ordinary tasks. Default `1` fits
+#'   them serially. Larger values use multicore workers on Unix and socket
+#'   workers on Windows. With `parallel_cv = TRUE`, these workers fit the folds
+#'   of one model at a time instead of fitting independent model tasks.
+#' @param feature_types Which ORB feature types to model. Choose a preset or
+#'   supply exact feature IDs, such as `c("gene", "DefenseCas")`:
+#'   * `"quick"`: `gene`, `protein`, and `Pfam`.
+#'   * `"standard"` (default): quick plus `COG`, `AMRFinder`, and
+#'     `DefenseCas` (defense and CRISPR/Cas annotations).
+#'   * `"full"`: standard plus `struct`, the only additional feature type.
+#'
+#'   Presets select only tables available in the ORB; explicit IDs must match
+#'   available tables exactly. Selection happens before matrices are planned
+#'   or built; see [planMatrices()].
 #' @param seeds Seeds passed to [expandTasks()]. Normal mode defaults to
 #'   `c(123L, 456L, 789L)`; easy mode defaults to `123L`.
 #' @param labels `"real"`, `"shuffled"` or both (the default), passed to
@@ -61,6 +95,10 @@
 #'   gathers only completed checkpoints.
 #' @param n_chunks Maximum number of nonempty array chunks when preparing.
 #'   Fewer chunks assign more fit groups to each worker; see [runTaskChunk()].
+#' @param verbose Print per-group and worker setup diagnostics. Default FALSE
+#'   retains completion progress and final summaries. Passed to [fitModels()].
+#' @param parallel_cv Split CV folds across the existing worker allocation for
+#'   all models; default FALSE. Passed to [fitModels()]. Uses more memory per model.
 #' @param mdr_min_classes Minimum resistant classes for MDR, passed to [profileORB()].
 #' @param min_mdr_label_genomes Minimum training genomes per MDR combination label, passed to [eligibleScopes()].
 #' @param reuse_fits Passed to [fitModels()]; reuse compatible cross-drug,
@@ -71,7 +109,7 @@
 #'   Default `FALSE`. Conflicting explicit arguments are rejected. Model fitting
 #'   and cross-validation are unchanged; automatic rescoring is skipped.
 #' @param rescore Automatically run [rescoreFeatures()] after merged export when
-#'   at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+#'   at least three fitted real/shuffled seed pairs exist in a vanilla or MDR scope.
 #'   Default `TRUE`. Expected empty results are recorded without failing the run.
 #'
 #' @return Preparation returns a plan with tasks, chunks and fit settings.
@@ -79,7 +117,9 @@
 #'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
 #'   the discovery result when available; `$rescoring_status` records the outcome.
 #'   Rescoring tables and `discovery.rds` are saved in `results/rescoring/`, with
-#'   provenance and skip/empty reasons in the manifest. This uses returned-feature
+#'   provenance and skip/empty reasons in the manifest. Binary MDR and individual
+#'   resistance-combination labels are included. Cross-target tables compare
+#'   shared MDR, drug and class feature/dyad memberships. This uses returned-feature
 #'   ranking, not the separate candidate-aware scoring helper or network export.
 #'
 #' @section Errors:
@@ -117,9 +157,11 @@ runModelingWorkflow <- function(orb_dir = NULL,
                                 easy_mode = FALSE,
                                 rescore = TRUE,
                                 execution = c("fit", "prepare", "collect"),
-                                n_chunks = 100L) {
+                                n_chunks = 100L, parallel_cv = FALSE, verbose = FALSE) {
   call <- rlang::current_env()
   started <- Sys.time()
+  .checkArgFlag(parallel_cv, "parallel_cv", call = call)
+  .checkArgFlag(verbose, "verbose", call = call)
   .checkArgFlag(easy_mode, "easy_mode", call = call)
   .checkArgFlag(rescore, "rescore", call = call)
   if (easy_mode) {
@@ -207,6 +249,8 @@ runModelingWorkflow <- function(orb_dir = NULL,
   }
   if (resume && is.null(saved$settings$min_mdr_label_genomes) && missing(min_mdr_label_genomes)) settings$min_mdr_label_genomes <- NULL
   if (resume && is.null(saved$settings$mdr_min_classes) && missing(mdr_min_classes)) settings$mdr_min_classes <- NULL
+  if (resume && missing(parallel_cv)) parallel_cv <- saved$parallel_cv %||% FALSE
+  if (resume && missing(verbose)) verbose <- saved$verbose %||% FALSE
   if (resume && is.null(saved$settings$easy_mode) && missing(easy_mode)) settings$easy_mode <- NULL
   if (resume && is.null(saved$settings$rescore) && missing(rescore)) settings$rescore <- NULL
   manifest_path <- NULL
@@ -316,7 +360,7 @@ runModelingWorkflow <- function(orb_dir = NULL,
     # Save the original task inputs so an interrupted run can be resumed without
     # rebuilding matrices or reassigning its genome splits.
     .saveFitCheckpoint(
-      list(settings = settings, built = built), paths$workflow
+      list(settings = settings, built = built, parallel_cv = parallel_cv, verbose = verbose), paths$workflow
     )
   }
 
@@ -334,7 +378,7 @@ runModelingWorkflow <- function(orb_dir = NULL,
   fit_parameters <- list(
     save_fits = save_fits, save_state = save_state, reuse_fits = reuse_fits,
     backend = class(BPPARAM)[[1]], workers = BiocParallel::bpnworkers(BPPARAM),
-    resume = resume
+    resume = resume, parallel_cv = parallel_cv, verbose = verbose
   )
   .manifestStage(
     manifest_path, "fit_models", status = "running",
@@ -345,7 +389,7 @@ runModelingWorkflow <- function(orb_dir = NULL,
     tasks,
     save_fits = save_fits, save_state = TRUE,
     overwrite = overwrite, BPPARAM = BPPARAM, reuse_fits = reuse_fits, resume = resume,
-    execution = execution, n_chunks = n_chunks
+    execution = execution, n_chunks = n_chunks, parallel_cv = parallel_cv, verbose = verbose
   )
   if (execution == "prepare") {
     .manifestEvent(manifest_path, "Array prepared; waiting for workers and collection.",

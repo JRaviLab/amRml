@@ -8,15 +8,19 @@
 # Keep all returned features so later steps can compare core and non-core evidence.
 .scoreNetworkTasks <- function(importance, metadata, core_threshold) {
   stopifnot(core_threshold > 0, core_threshold <= 1)
+  if (!"label" %in% names(importance)) importance$label <- NA_character_
   r <- importance |>
     dplyr::inner_join(metadata, by = "task_id", relationship = "many-to-one")
+  if (any(.isMulticlass(r$unit, r$target) & is.na(r$label))) {
+    stop("Multiclass coefficients must retain their outcome labels.", call. = FALSE)
+  }
   if (anyNA(r[c("Variable", "Importance", "Sign")]) ||
       any(!is.finite(r$Importance) | r$Importance <= 0) ||
-      anyDuplicated(r[c("task_id", "Variable")])) {
+      anyDuplicated(r[c("task_id", "label", "Variable")])) {
     stop("Invalid returned feature importance.", call. = FALSE)
   }
   r |>
-    dplyr::group_by(task_id) |>
+    dplyr::group_by(task_id, label) |>
     dplyr::mutate(contribution = Importance / sum(Importance)) |>
     dplyr::arrange(dplyr::desc(contribution), Variable, .by_group = TRUE) |>
     dplyr::mutate(in_core = dplyr::row_number() <=
@@ -30,16 +34,17 @@
 # representative IDs when glmnet has written it as "fig.", and record whether
 # each cluster appears in the fixed ORB dyad graph. Do not combine coefficients.
 .prepareNetworkNodes <- function(scored, pairs) {
+  if (!"label" %in% names(scored)) scored$label <- NA_character_
   rows <- scored |>
     dplyr::filter(feature_type %in% c("gene", "protein")) |>
-    dplyr::transmute(task_id, unit, target, labels, seed, encoding, feature_type,
+    dplyr::transmute(task_id, unit, target, label, labels, seed, encoding, feature_type,
                      node_id = dplyr::if_else(feature_type == "protein",
                        sub("^fig\\.", "fig|", Variable), Variable),
                      contribution, in_core, sign = Sign,
                      n_returned_features = 1L) |>
     dplyr::mutate(in_orb_graph = dplyr::if_else(feature_type == "protein",
       node_id %in% pairs$protein_cluster, node_id %in% pairs$gene_cluster))
-  if (anyDuplicated(rows[c("task_id", "feature_type", "node_id")])) {
+  if (anyDuplicated(rows[c("task_id", "label", "feature_type", "node_id")])) {
     stop("Multiple model features map to the same cluster ID within a task.", call. = FALSE)
   }
   rows
@@ -52,7 +57,7 @@
 # zero coefficient from a feature that was unavailable to the model; the final
 # candidate-aware MAGIC score requires a separate candidate inventory.
 .summarizeNetworkNodes <- function(rows, fitted) {
-  groups <- c("unit", "target", "labels", "encoding", "feature_type")
+  groups <- c("unit", "target", intersect("label", names(rows)), "labels", "encoding", "feature_type")
   fits <- fitted |>
     dplyr::count(dplyr::across(dplyr::all_of(groups)), name = "n_fitted_seeds")
   rows |>
@@ -116,6 +121,9 @@
 #'   node tables here report observed returned-coefficient evidence instead.
 #'   Writes Parquet evidence tables and a network manifest describing default
 #'   filters, scoring rules, and the evidence needed to recompute filters in amRviz.
+#'   MDR combination evidence retains its coefficient label throughout normalization,
+#'   recurrence and endpoint joins: both endpoints must support the same label.
+#'   Model reliability remains an assessment of the whole fitted model.
 #' @export
 exportNetwork <- function(run_dir, orb_dir, out_dir,
                          core_threshold = 0.75) {
@@ -158,11 +166,11 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   metadata <- tasks |>
     dplyr::filter(status == "fitted", labels %in% c("real", "shuffled")) |>
     dplyr::left_join(matrices, by = "matrix_id", relationship = "many-to-one") |>
-    dplyr::filter(mode_id == "vanilla", unit != "mdr") |>
+    dplyr::filter(mode_id %in% c("vanilla", "mdr")) |>
     dplyr::select(task_id, matrix_id, unit, target, labels, seed, feature_type, encoding)
   if (!nrow(metadata) || anyNA(metadata) ||
       anyDuplicated(metadata[c("unit", "target", "labels", "seed", "feature_type", "encoding")])) {
-    stop("Expected distinct fitted vanilla tasks with complete scope metadata.", call. = FALSE)
+    stop("Expected distinct fitted vanilla or MDR tasks with complete scope metadata.", call. = FALSE)
   }
   if ("seed" %in% names(performance) &&
       any(metadata$seed != performance$seed[match(metadata$task_id, performance$task_id)],
@@ -177,19 +185,26 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   }
 
   scored <- .scoreNetworkTasks(importance, metadata, core_threshold)
-  if (dplyr::n_distinct(scored$task_id) != nrow(metadata)) {
+  missing_ids <- setdiff(metadata$task_id, scored$task_id)
+  if (length(missing_ids) && (!"n_feats_returned" %in% names(performance) ||
+      any(is.na(performance$n_feats_returned[match(missing_ids, performance$task_id)]) |
+          performance$n_feats_returned[match(missing_ids, performance$task_id)] != 0L))) {
     stop("A fitted task has no usable returned coefficient importance.", call. = FALSE)
   }
   if (any(abs((scored |>
-    dplyr::group_by(task_id) |>
+    dplyr::group_by(task_id, label) |>
     dplyr::summarise(total = sum(contribution), .groups = "drop"))$total - 1) > 1e-7)) {
     stop("Normalized contribution is not conserved within fitted tasks.", call. = FALSE)
   }
   # Keep one record for every successful task when counting fitted seeds.
   # A model can fit successfully while returning only a few nonzero features,
   # so returned coefficient rows alone cannot tell us how many seeds were fitted.
+  # Prediction labels inventory the outcomes even when a label has no
+  # returned coefficient in any seed of this representation.
+  outcome_labels <- .networkOutcomeLabels(metadata, predictions)
   fitted <- metadata |>
-    dplyr::select(unit, target, labels, seed, encoding, feature_type)
+    dplyr::left_join(outcome_labels, by = "matrix_id", relationship = "many-to-many") |>
+    dplyr::select(unit, target, label, labels, seed, encoding, feature_type)
 
   audit <- predictions |>
     dplyr::group_by(task_id) |>
@@ -287,7 +302,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
       feature_type == "protein", "direct_protein_cluster_model", "direct_gene_model"))
   annotations <- scored |>
     dplyr::filter(feature_type %in% c("Pfam", "COG", "AMRFinder", "DefenseCas")) |>
-    dplyr::transmute(unit, target, labels, seed, encoding, feature_type,
+    dplyr::transmute(unit, target, label, labels, seed, encoding, feature_type,
                      node_id = Variable, contribution, in_core,
                      n_returned_features = 1L) |>
     .summarizeNetworkNodes(fitted)
@@ -295,8 +310,8 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     dplyr::left_join(representation, by = c("unit", "target", "feature_type", "encoding"),
                      relationship = "many-to-one")
 
-  scopes <- metadata |>
-    dplyr::distinct(unit, target, labels, encoding)
+  scopes <- fitted |>
+    dplyr::distinct(unit, target, label, labels, encoding)
   graph <- dplyr::cross_join(scopes, pairs)
   graph$gene_degree <- dplyr::if_else(
     is.na(graph$gene_cluster), 0L,
@@ -307,7 +322,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   for (typ in c("gene", "protein")) {
     n <- nodes |>
       dplyr::filter(feature_type == typ) |>
-      dplyr::select(unit, target, labels, encoding, node_id,
+      dplyr::select(unit, target, label, labels, encoding, node_id,
                     reproducibly_important, n_core_seeds, n_fitted_seeds,
                     mean_returned_contribution)
     prefix <- if (typ == "gene") "gene" else "protein"
@@ -317,7 +332,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     names(n)[names(n) == "n_fitted_seeds"] <- paste0(prefix, "_fitted_seeds")
     names(n)[names(n) == "mean_returned_contribution"] <- paste0(prefix, "_mean_returned_contribution")
     graph <- dplyr::left_join(graph, n,
-      by = c("unit", "target", "labels", "encoding", paste0(prefix, "_cluster")),
+      by = c("unit", "target", "label", "labels", "encoding", paste0(prefix, "_cluster")),
       relationship = "many-to-one")
     col <- paste0(prefix, "_robust75")
     graph[[col]] <- dplyr::coalesce(graph[[col]], FALSE)
@@ -354,7 +369,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
     )
   background <- graph |>
     dplyr::filter(labels == "shuffled") |>
-    dplyr::select(unit, target, encoding, gene_cluster, protein_cluster, dyad_type,
+    dplyr::select(unit, target, label, encoding, gene_cluster, protein_cluster, dyad_type,
                   shuffled_dyad_robust75 = dyad_robust75,
                   shuffled_dyad_reliability_supported = priority_under_reliability,
                   shuffled_pair_robust75 = pair_robust75,
@@ -362,7 +377,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   real <- graph |>
     dplyr::filter(labels == "real") |>
     dplyr::left_join(background,
-      by = c("unit", "target", "encoding", "gene_cluster", "protein_cluster", "dyad_type"),
+      by = c("unit", "target", "label", "encoding", "gene_cluster", "protein_cluster", "dyad_type"),
       relationship = "one-to-one") |>
     dplyr::mutate(
       shuffled_dyad_robust75 = dplyr::coalesce(shuffled_dyad_robust75, FALSE),
@@ -427,12 +442,12 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
                      relationship = "many-to-one") |>
     dplyr::mutate(node_id = dplyr::coalesce(node_id, annotation_key))
   neighbors <- real |>
-    dplyr::distinct(unit, target, encoding, protein_cluster) |>
+    dplyr::distinct(unit, target, label, encoding, protein_cluster) |>
     dplyr::left_join(matched, by = "protein_cluster", relationship = "many-to-many") |>
     dplyr::filter(!is.na(feature_type)) |>
     dplyr::cross_join(tibble::tibble(labels = c("real", "shuffled"))) |>
     dplyr::left_join(annotation_evidence,
-      by = c("unit", "target", "encoding", "labels", "feature_type", "node_id"),
+      by = c("unit", "target", "label", "encoding", "labels", "feature_type", "node_id"),
       relationship = "many-to-one") |>
     dplyr::mutate(returned_nonzero = !is.na(n_returned_seeds),
                   robust75 = dplyr::coalesce(reproducibly_important, FALSE),
@@ -440,7 +455,7 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
                     "returned", "not_returned_candidate_unknown"))
 
   by_target <- real |>
-    dplyr::group_by(unit, target) |>
+    dplyr::group_by(unit, target, label) |>
     dplyr::summarise(
       n_fixed_dyad_encoding_records = dplyr::n(),
       n_real_robust_dyad_encoding_records = sum(dyad_robust75),
@@ -507,11 +522,25 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   .writeParquet(metadata, file.path(out_dir, "fitted_tasks.parquet"))
   .writeParquet(reliability$by_seed, file.path(out_dir, "model_reliability_by_seed.parquet"))
   .writeNetworkManifest(out_dir, run_dir, orb_dir, export_run, core_threshold,
-                        metadata, pairs)
+                        metadata, pairs, coefficient_labels = unique(stats::na.omit(scored$label)))
 
   message("MAGIC network export: ", nrow(pairs), " fixed dyads; ",
           sum(real$high_priority), " high-priority dyad/encoding records (",
           sum(by_target$n_distinct_high_priority_dyads), " distinct dyads).\n",
           "Outputs: ", out_dir)
   invisible(list(summary = by_target, out_dir = out_dir))
+}
+
+# Binary and multiclass labels are different and require special snowflake handling
+.networkOutcomeLabels <- function(metadata, predictions) {
+  multi <- .isMulticlass(metadata$unit, metadata$target)
+  binary <- metadata[!multi, ] |>
+    dplyr::distinct(matrix_id) |>
+    dplyr::mutate(label = NA_character_)
+  combination <- metadata[multi, ] |>
+    dplyr::select(task_id, matrix_id) |>
+    dplyr::inner_join(dplyr::distinct(predictions, task_id, truth),
+      by = "task_id", relationship = "many-to-many") |>
+    dplyr::distinct(matrix_id, label = truth)
+  dplyr::bind_rows(binary, combination)
 }

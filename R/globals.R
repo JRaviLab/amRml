@@ -48,3 +48,12 @@ utils::globalVariables(c(
   "dyad_type", "dyad_robust75", "dyad_reliability_supported",
   "shuffled_dyad_robust75", "shuffled_dyad_reliability_supported"
 ))
+
+# Outcome-aware MDR comparisons/diagnostics.
+utils::globalVariables(c(
+  "label", "labels_csv", "n_outcomes", "n_model_targets", "n_drug_targets",
+  "n_class_targets", "n_mdr_outcomes", "n_mdr_combination_labels", "outcome_id",
+  "outcome_id_a", "outcome_id_b", "outcome_a", "outcome_b", "n_a", "n_b",
+  "n_shared", "n_union", "shared_within_mdr", "shared_mdr_single_drug",
+  "n_distinct_features"
+))

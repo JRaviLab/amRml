@@ -1,6 +1,6 @@
-# Network evidence remains separate from the completed modeling bundle.
+# Network evidence remains separate from the completed modeling ORB
 .writeNetworkManifest <- function(out_dir, run_dir, orb_dir, run, core_threshold,
-                                   metadata, pairs) {
+                                   metadata, pairs, coefficient_labels = character()) {
   tables <- c(
     dyads = "cluster_pair_network_evidence.parquet",
     nodes = "gene_protein_cluster_node_evidence.parquet",
@@ -46,15 +46,18 @@
                         min_supported_seeds = 2L, min_shuffled_seeds = 2L,
                         shuffled_sd_multiplier = 1, min_real_mcc = 0),
         available = list(targets = I(unique(metadata$target)),
-                         units = I(unique(metadata$unit)), seeds = I(unique(metadata$seed)),
+                         units = I(unique(metadata$unit)),
+                         coefficient_labels = I(coefficient_labels), seeds = I(unique(metadata$seed)),
                          labels = I(unique(metadata$labels)),
                          encodings = I(unique(metadata$encoding)),
                          feature_types = I(unique(metadata$feature_type)),
                          dyad_types = I(unique(pairs$dyad_type))),
         rules = list(
           core = "Smallest prefix reaching core_threshold after sorting contribution descending, then feature ID; crossing feature included.",
-          contribution = "Importance divided by total returned importance within task; means use returned seeds only.",
+          contribution = "Importance divided by total returned importance within task and coefficient label; means use returned seeds only.",
           robust = "Core in at least min_core_seeds successfully fitted seeds.",
+          reliability_scope = "Whole fitted model; label-specific performance is not inferred from global MCC.",
+          coefficient_direction = "Binary POS points to susceptibility; multinomial POS points to its label in the fitted parameterization.",
           reliability = "Real MCC strictly above zero, matched shuffled MCC, and shuffled mean plus one sample SD; at least two defined shuffled seeds.",
           dyads = "Every available endpoint must be robust and its representation supported; absent orphan endpoints impose no requirement.",
           priority = "Real-label dyad satisfying robustness and reliability.",
@@ -62,7 +65,7 @@
           undefined_mcc = "Zero only for constant predictions with both truth classes and no missing predictions; raw MCC retained in audit."
         ),
         filtering = list(
-          direct = I(c("unit", "target", "encoding", "labels", "dyad_type")),
+          direct = I(c("unit", "target", "label", "encoding", "labels", "dyad_type")),
           recompute = list(
             core_threshold = "Recompute per-task in_core from feature_seeds, then cluster/node/dyad summaries.",
             min_core_seeds = "Recompute robustness from cluster_seeds and fitted_tasks.",
