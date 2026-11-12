@@ -92,3 +92,38 @@ test_that("the print counts tasks by drug, drug class and MDR", {
 
   expect_output(print(fit), "by target: 0 drug, 0 drug class, 1 MDR")
 })
+
+
+test_that("MDR coefficients retain labels in native results and stay out of binary exports", {
+  fit <- fxCombinationFit()
+  native <- fit$importance
+  expect_true("label" %in% names(.emptyFitResults()$importance))
+  expect_true(all(native$label %in% c("CLX", "CLX_CLY", "Susceptible")))
+  written <- exportMergedResults(fit)
+  expect_length(written, 0L)
+  expect_identical(fit$importance, native)
+  expect_equal(arrow::read_parquet(file.path(fit$built$out_dir, "results", "importance.parquet")), native)
+
+  # Even three otherwise complete real/shuffled pairs are not binary drug evidence.
+  paired <- expandTasks(fit$built, seeds = 1:3, labels = c("real", "shuffled"))
+  fit$tasks <- paired$tasks
+  fit$tasks$status <- "fitted"
+  expect_error(rescoreFeatures(fit), class = "amrml_invalid_argument")
+})
+
+
+test_that("multiclass diagnostics do not report binary confusion counts or expected metric gaps", {
+  scored <- tibble::tibble(
+    phenotype = factor(c("CLX", "CLX_CLY", "Susceptible")),
+    .pred_class = factor(rep("CLX", 3))
+  )
+  metrics <- tibble::tibble(mcc = 0, nmcc = 0.5, auprc = NA_real_)
+  diagnostics <- .taskDiagnostics(scored, metrics, multi = TRUE)
+  expect_false(diagnostics$metric_undefined)
+  expect_true(diagnostics$collapsed_model)
+  expect_equal(diagnostics$collapse_class, "CLX")
+  expect_equal(diagnostics$prediction_behavior, "constant_class")
+  expect_true(all(is.na(diagnostics[c("tp", "tn", "fp", "fn", "n_pred_resistant",
+                                       "n_pred_susceptible", "pred_resistant_fraction",
+                                       "actual_resistant_fraction")])))
+})

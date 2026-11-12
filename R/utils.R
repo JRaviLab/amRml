@@ -16,3 +16,14 @@
 .taskModes <- function(tasks, matrices) {
   matrices$mode_id[match(tasks$matrix_id, matrices$matrix_id)]
 }
+
+# BiocParallel's default backend, except where forking the R session is unsafe
+# (Positron and RStudio refuse it): there, fresh R processes with as many workers.
+.defaultBPPARAM <- function() {
+  param <- BiocParallel::bpparam()
+  no_fork <- nzchar(Sys.getenv("POSITRON")) || nzchar(Sys.getenv("RSTUDIO"))
+  if (inherits(param, "MulticoreParam") && no_fork) {
+    return(BiocParallel::SnowParam(workers = BiocParallel::bpnworkers(param)))
+  }
+  param
+}

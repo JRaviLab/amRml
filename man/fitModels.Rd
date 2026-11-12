@@ -6,8 +6,10 @@
 \usage{
 fitModels(
   tasks,
+  save_fits = FALSE,
+  save_state = FALSE,
+  BPPARAM = .defaultBPPARAM(),
   overwrite = FALSE,
-  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
   reuse_fits = TRUE,
   resume = FALSE
 )
@@ -15,31 +17,45 @@ fitModels(
 \arguments{
 \item{tasks}{An \code{amr_tasks} from \code{\link[=expandTasks]{expandTasks()}}.}
 
+\item{save_fits}{Save each fitted model to \verb{results/models/<task_id>.rds}:
+the fitted workflow (\code{fit}) and the \code{features} its predictors \code{x1}, \code{x2},
+... stand for. Default \code{FALSE}.
+Must match the interrupted run when resuming.}
+
+\item{save_state}{Retain the internal RDS matrix stores and resume state after
+successful fitting. Default \code{FALSE}; interrupted runs retain this state so
+they can still be resumed. Must match when resuming.}
+
+\item{BPPARAM}{A \code{BiocParallelParam}, e.g. \code{BiocParallel::MulticoreParam(4)},
+or \code{BiocParallel::SerialParam()} to fit one task at a time. The default is
+\code{BiocParallel::bpparam()}, except that inside Positron or RStudio, which
+cannot fork the R session, it is a \code{SnowParam} with the same number of
+workers. Workers are fresh R processes, so amRml must be installed.}
+
 \item{overwrite}{Replace results already in the output folder.}
 
-\item{BPPARAM}{A \link[BiocParallel:BiocParallelParam]{BiocParallel::BiocParallelParam} backend; by default,
-an eight-worker socket cluster with 128 scheduling chunks. Use
-\code{\link[BiocParallel:SerialParam]{BiocParallel::SerialParam()}} to run sequentially.}
-
-\item{reuse_fits}{Reuse fitted models among compatible cross-drug tasks.}
+\item{reuse_fits}{Reuse fitted models among cross-drug, cross-year, and
+cross-country tasks with identical training inputs, seeds, and fold settings.}
 
 \item{resume}{Reuse saved task groups from an interrupted fit or reopen an
 unchanged completed fit. The task plan, matrix files and \code{reuse_fits}
-setting must match the original run.}
+setting must match the original run.
+\code{save_fits} and \code{save_state} must also match.}
 }
 \value{
 An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
-\code{status}, \code{rule_id} and \code{message}; \code{tasks.parquet}), and \code{performance},
-\code{importance} and \code{predictions} (\verb{results/}), plus the \code{built} matrices. \code{performance}
-keeps old amRml's columns and rounding, adding \code{auprc};
-\code{n_feat} counts the matrix's features (the recipe may drop more).
-\code{importance} has old amRml's \code{Variable}, \code{Importance} and \code{Sign} ("POS"
-points to Susceptible), plus \code{label}: for the MDR combination target,
-which multinomial regression fits with coefficients per label, the label
-a row's coefficient belongs to, and "POS" points to it (\code{NA} otherwise).
-For that target, \code{performance} has only \code{mcc} and \code{nmcc}, as in old amRml,
-and \code{res_prop} and \code{prob_resistant} are \code{NA}. \code{n_labels} counts each
-task's labels and \code{prob_predicted} is the predicted label's probability.
+\code{status}, \code{rule_id} and \code{message}; \code{results/tasks.parquet}), \code{performance},
+\code{importance}, \code{predictions}, and \code{notes} (\verb{results/}), and the \code{built} matrices.
+Notes retain tuning diagnostics and task warnings/messages, with task IDs,
+stage, resample, location, type, text, and occurrence counts. In
+\code{importance}, \code{Sign} "POS" points to Susceptible and "NEG" to Resistant. The
+Internal state is retained after interruption, or after success when
+\code{save_state = TRUE}. When called through \code{\link[=runModelingWorkflow]{runModelingWorkflow()}}, settings,
+provenance and task counts are also recorded in \code{manifest.json}.
+
+MDR combination models retain per-label coefficients in \code{importance$label}.
+Their binary-only performance metrics and \code{prob_resistant} are \code{NA};
+\code{n_labels} records label counts and \code{prob_predicted} the predicted-label probability.
 }
 \description{
 Fits tasks from \code{\link[=expandTasks]{expandTasks()}} in parallel with old amRml's method:
@@ -52,17 +68,19 @@ Cross-drug tasks with exactly matching training inputs reuse one fitted model;
 set \code{reuse_fits = FALSE} to disable reuse for comparison. Reused tasks'
 \code{run_time_sec} excludes shared training time for follower tasks; the first
 task in a group includes the training cost.
-Each completed task group is saved in \verb{fit-checkpoints/} so it can be reused
+Each completed task group is saved in \verb{state/fit-checkpoints/} so it can be reused
 after an interruption. Checkpoints are removed after results are written.
 Use \code{resume = TRUE} with the same tasks and output directory to reuse them.
 Each task runs under its own seed. A task that errors is recorded as
 \code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
 carry on. A shuffled task permutes the training matrix's labels before the
 split.
+Progress is reported by the parent process as checkpointed task groups return.
+Counts include failed tasks and recovered checkpoints; the final summary lists
+fitted and failed tasks separately. Elapsed time covers the current invocation.
 
 Completed results can also be reopened with \code{resume = TRUE} without fitting
-again. Version 1 checkpoints require the original implementation or a fresh
-run in another output directory.
+again when \code{save_state = TRUE}.
 }
 \section{Errors}{
 

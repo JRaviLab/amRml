@@ -582,6 +582,21 @@ test_that("a bad root is an error and unreadable folders under it are warned abo
   Sys.chmod(root, "755")
 })
 
+test_that("workflow discovers registered ORBs only in interactive sessions", {
+  orb <- fxOrb()
+  fxRegistry(orb)
+  withr::local_options(rlang_interactive = FALSE)
+  expect_error(runModelingWorkflow(), "`orb_dir` must be supplied",
+               class = "amrml_invalid_argument")
+  withr::local_options(rlang_interactive = TRUE)
+  local_mocked_bindings(readORB = function(path) {
+    expect_equal(path, normalizePath(orb))
+    stop("selected registered ORB")
+  })
+  expect_message(expect_error(runModelingWorkflow(), "selected registered ORB"),
+                 "Using ORB")
+})
+
 test_that("readORB() without a path picks from the registry, interactively only", {
   one <- fxOrb()
   two <- fxOrb()

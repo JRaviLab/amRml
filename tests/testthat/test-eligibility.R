@@ -529,3 +529,30 @@ test_that("the print shows the MDR settings", {
 
   expect_output(print(eligibility), "MDR +: 2\\+ classes; combination labels need 25 training genomes")
 })
+
+test_that("default CV minima cover exact holdout rounding and worst training fold", {
+  internal <- function(n, n_fold = 5, min_fold_minority = 2) {
+    fxScopes(fxEligibility(fxRows(n, 40), modes = "vanilla", min_genomes = 2,
+      n_fold = n_fold, min_fold_minority = min_fold_minority,
+      min_analysis_minority = 8), "vanilla")[1, ]
+  }
+  expect_false(internal(12)$eligible) # floor(.8 * 12) = 9: a fold has one minority.
+  expect_true(internal(13)$eligible) # 10 retained: 2 assessment, 8 analysis.
+  expect_false(internal(18, min_fold_minority = 3)$eligible)
+  expect_true(internal(19, min_fold_minority = 3)$eligible)
+  expect_false(internal(19, n_fold = 2)$eligible) # 15 retained, worst analysis = 7.
+  expect_true(internal(20, n_fold = 2)$eligible)
+
+  cross <- function(n) {
+    metadata <- rbind(fxRows(n, 40, year_bin = "Y1"),
+                       fxRows(3, 3, from = 100, year_bin = "Y2"))
+    x <- fxScopes(fxEligibility(metadata, modes = "cross_year", min_genomes = 2,
+      min_fold_minority = 2, min_analysis_minority = 8), "cross_year")
+    x$eligible[x$unit == "drug" & x$train_group == "Y1"]
+  }
+  expect_false(cross(9))
+  expect_true(cross(10))
+  profile <- profileORB(readORB(fxOrb()))
+  expect_error(eligibleScopes(profile, min_fold_minority = 0), class = "amrml_invalid_argument")
+  expect_error(eligibleScopes(profile, min_analysis_minority = 1.5), class = "amrml_invalid_argument")
+})

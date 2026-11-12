@@ -11,7 +11,9 @@ eligibleScopes(
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
-  min_mdr_label_genomes = 25
+  min_mdr_label_genomes = 25,
+  min_fold_minority = 2,
+  min_analysis_minority = 8
 )
 }
 \arguments{
@@ -29,6 +31,10 @@ eligibleScopes(
 
 \item{min_mdr_label_genomes}{Fewest training genomes an MDR combination needs to
 stay a label in a scope (old amRml's \code{min_n}).}
+
+\item{min_fold_minority}{Minimum observations of each label in every CV assessment fold (default 2).}
+
+\item{min_analysis_minority}{Minimum observations of each label in every CV training split (default 8).}
 }
 \value{
 An \code{amr_eligibility} list:
