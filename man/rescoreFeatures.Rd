@@ -66,7 +66,9 @@ models have been refitted.
 \item \code{magic_ready_performance.parquet} adds \code{shuffled_mcc}, \code{mcc_diff}, \code{feat_return_ratio}, and
 the shuffled background from \code{\link[=assessModelReliability]{assessModelReliability()}}: \code{mean_shuffled_mcc},
 \code{sd_shuffled_mcc}, \code{shuffled_upper} and \code{above_background}. These are set on real-label
-rows, and are \code{NA} where a seed has no shuffled counterpart.
+rows, and are \code{NA} where a seed has no shuffled counterpart. \code{above_background} is also \code{NA}
+where the seed cannot be assessed (an undefined MCC, or fewer than 2 shuffled MCCs to form
+the background), so \code{FALSE} always means assessed and not above the background.
 \item \code{magic_ready_importance.parquet} adds \code{variable_clean} (the name used by the ORB's
 dyad relation), \code{contribution}, \code{rank}, \code{n_features}, \code{rank_score} and \code{cum_contrib}, set on
 real-label rows. A feature is in the core group when

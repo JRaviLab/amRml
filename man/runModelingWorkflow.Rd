@@ -27,7 +27,8 @@ runModelingWorkflow(
   min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
   easy_mode = FALSE,
-  rescore = TRUE
+  rescore = TRUE,
+  rescore_min_seeds = 3L
 )
 }
 \arguments{
@@ -89,8 +90,12 @@ Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
 and cross-validation are unchanged; automatic rescoring is skipped.}
 
 \item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
-at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+at least \code{rescore_min_seeds} fitted real/shuffled seed pairs exist in a vanilla scope.
 Default \code{TRUE}. Expected empty results are recorded without failing the run.}
+
+\item{rescore_min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla drug, feature
+type, and encoding for rescoring; passed to \code{\link[=rescoreFeatures]{rescoreFeatures()}} as \code{min_seeds}. Default \code{3L}.
+Rescoring runs after fitting, so it may differ when resuming.}
 }
 \value{
 The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be

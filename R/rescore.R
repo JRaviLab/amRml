@@ -134,11 +134,6 @@
   )
 }
 
-# Zstandard compresses these tables well; Snappy is the fallback where an Arrow build lacks it.
-.parquetCompression <- function() {
-  if (arrow::codec_is_available("zstd")) "zstd" else "snappy"
-}
-
 # The merged performance and top-feature tables with every per-seed calculation that does not
 # depend on a threshold added as columns. Thresholds (the core share, the MCC cut-off, the rank
 # quantile and the rest) are then filters over these columns. Original columns are unchanged.
@@ -159,6 +154,11 @@
   perf <- dplyr::left_join(perf, dplyr::mutate(shuffled_mcc, shuffled = FALSE), by = c(fit_keys, "shuffled"))
   perf <- dplyr::left_join(perf, dplyr::mutate(background, shuffled = FALSE), by = c(fit_keys, "shuffled"))
   perf$mcc_diff <- perf$mcc - perf$shuffled_mcc
+  # assessModelReliability() reports FALSE for a seed it cannot assess. Keep that distinct from
+  # "assessed and not above the background": NA, like the other background columns.
+  perf$above_background[
+    is.na(perf$mcc) | is.na(perf$shuffled_mcc) | is.na(perf$shuffled_upper)
+  ] <- NA
   perf$feat_return_ratio <- perf$n_feats_returned / perf$n_feat
   perf <- perf[order(perf$.row), ]
   perf$.row <- NULL
@@ -172,7 +172,7 @@
   )
   scorable <- tempfile(fileext = ".parquet")
   on.exit(unlink(scorable), add = TRUE)
-  arrow::write_parquet(top[is.finite(fit_total) & fit_total > 0, ], scorable)
+  .writeParquet(top[is.finite(fit_total) & fit_total > 0, ], scorable)
   scored <- scoreFeaturesWithinSeed(
     scorable, filter_model = FALSE, all_performance_parquet = perf_parquet
   )
@@ -217,7 +217,7 @@
   # Write beside the target and rename, so an interrupted write never leaves a half file.
   for (i in seq_along(targets)) {
     partial <- paste0(targets[[i]], ".partial")
-    arrow::write_parquet(tables[[i]], partial, compression = .parquetCompression())
+    .writeParquet(tables[[i]], partial)
     file.rename(partial, targets[[i]])
   }
   rlang::inform(paste0("MAGIC-ready tables written to: ", paths$results))
@@ -232,11 +232,8 @@
   unlink(out_dir, recursive = TRUE)
   dir.create(out_dir, recursive = TRUE)
 
-  compression <- .parquetCompression()
   for (name in names(tables)) {
-    arrow::write_parquet(
-      tables[[name]], file.path(out_dir, paste0(name, ".parquet")), compression = compression
-    )
+    .writeParquet(tables[[name]], file.path(out_dir, paste0(name, ".parquet")))
   }
   jsonlite::write_json(
     list(
@@ -245,7 +242,7 @@
       amRml_version = tryCatch(
         as.character(utils::packageVersion("amRml")), error = function(e) NA_character_
       ),
-      compression = compression,
+      compression = "zstd",
       rows = lapply(tables, nrow),
       parameters = result$parameters
     ),
@@ -304,7 +301,9 @@
 #'   \item `magic_ready_performance.parquet` adds `shuffled_mcc`, `mcc_diff`, `feat_return_ratio`, and
 #'   the shuffled background from [assessModelReliability()]: `mean_shuffled_mcc`,
 #'   `sd_shuffled_mcc`, `shuffled_upper` and `above_background`. These are set on real-label
-#'   rows, and are `NA` where a seed has no shuffled counterpart.
+#'   rows, and are `NA` where a seed has no shuffled counterpart. `above_background` is also `NA`
+#'   where the seed cannot be assessed (an undefined MCC, or fewer than 2 shuffled MCCs to form
+#'   the background), so `FALSE` always means assessed and not above the background.
 #'   \item `magic_ready_importance.parquet` adds `variable_clean` (the name used by the ORB's
 #'   dyad relation), `contribution`, `rank`, `n_features`, `rank_score` and `cum_contrib`, set on
 #'   real-label rows. A feature is in the core group when
@@ -485,7 +484,7 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
 }
 
 # Count successfully fitted seed pairs within each vanilla representation
-.rescoreScopes <- function(fit, min_seeds = 3L) {
+.rescoreScopes <- function(fit, min_seeds) {
   metadata <- .exportMetadata(fit)
   metadata$matrix_id <- fit$tasks$matrix_id
   metadata <- metadata[metadata$mode_id == "vanilla" & metadata$unit != "mdr" &
@@ -503,18 +502,21 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
   rlang::abort(message, class = "amrml_no_rescoring_evidence")
 }
 
-.rescoreWorkflow <- function(fit, manifest_path, enabled = TRUE, reason = NULL) {
-  scopes <- .rescoreScopes(fit)
+.rescoreWorkflow <- function(fit, manifest_path, enabled = TRUE, reason = NULL, min_seeds = 3L) {
+  scopes <- .rescoreScopes(fit, min_seeds)
   status <- "skipped"
   result <- NULL
   outputs <- character()
   if (enabled && !nrow(scopes)) {
-    reason <- "MAGIC needs at least 3 fitted vanilla real/shuffled seed pairs per drug, feature type, and encoding."
+    reason <- paste0(
+      "MAGIC needs at least ", min_seeds,
+      " fitted vanilla real/shuffled seed pairs per drug, feature type, and encoding."
+    )
   }
   if (enabled && nrow(scopes)) {
     .manifestArtifact(manifest_path, "feature_rescoring", status = "building")
     .manifestStage(manifest_path, "rescore_features", status = "running")
-    result <- tryCatch(rescoreFeatures(fit), amrml_no_rescoring_evidence = function(e) {
+    result <- tryCatch(rescoreFeatures(fit, min_seeds = min_seeds), amrml_no_rescoring_evidence = function(e) {
       reason <<- conditionMessage(e)
       NULL
     })
@@ -527,16 +529,17 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
     }
   }
   .manifestStage(manifest_path, "rescore_features", status = status,
-                 parameters = list(min_paired_seeds = 3L), outputs = outputs,
+                 parameters = list(min_paired_seeds = min_seeds), outputs = outputs,
                  metrics = list(n_eligible_scopes = nrow(scopes)), message = reason)
   .manifestArtifact(manifest_path, "feature_rescoring",
                     status = if (status == "success") "ready" else status,
                     details = list(directory = if (status == "success") "results/rescoring" else NULL,
-                                   magic_ready = if (file.exists(.runPaths(fit$built$out_dir)$magic_ready_performance)) list(
+                                   # Written by this run's call, so not listed when it was skipped
+                                   magic_ready = if (status %in% c("success", "empty")) list(
                                      performance = "results/magic_ready_performance.parquet",
                                      importance = "results/magic_ready_importance.parquet"),
                                    path_mode = "relative_to_manifest", reason = reason,
-                                   min_paired_seeds = 3L,
+                                   min_paired_seeds = min_seeds,
                                    scoring = "Returned-feature ranking; candidate-aware scoring is not applied."))
   .manifestEvent(manifest_path, reason)
   message(reason)

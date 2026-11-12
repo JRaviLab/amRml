@@ -95,10 +95,10 @@ test_that("rescoring eligibility counts matched successful seeds per representat
     class = "amr_fit")
   fit$tasks$status[fit$tasks$matrix_id == "m2" & fit$tasks$seed == 3 &
                      fit$tasks$labels == "shuffled"] <- "failed"
-  expect_equal(.rescoreScopes(fit)$matrix_id, "m1")
+  expect_equal(.rescoreScopes(fit, 3L)$matrix_id, "m1")
   fit$tasks$status[fit$tasks$matrix_id == "m1" & fit$tasks$seed == 2 &
                      fit$tasks$labels == "real"] <- "failed"
-  expect_equal(nrow(.rescoreScopes(fit)), 0L)
+  expect_equal(nrow(.rescoreScopes(fit, 3L)), 0L)
   expect_error(rescoreFeatures(fit), "at least 3", class = "amrml_invalid_argument")
 })
 
@@ -199,4 +199,22 @@ test_that("magic-ready tables are built once and rebuilt only when the models ar
   expect_false(.magicReadyCurrent(fit$built$out_dir))
   rescoreFeatures(fit, MCC_threshold = 0.4)
   expect_true(all(file.mtime(ready) > first))
+})
+
+test_that("the workflow's rescoring minimum is the one the user passes", {
+  listed <- fxFitTasks()
+  listed$built$matrices$mode_id <- "vanilla"
+  fit <- structure(list(built = listed$built, tasks = tidyr::expand_grid(
+    matrix_id = "m1", seed = 1:3, labels = c("real", "shuffled")) |>
+    dplyr::mutate(task_id = paste0("t", dplyr::row_number()), status = "fitted")),
+    class = "amr_fit")
+  manifest <- withr::local_tempfile(fileext = ".json")
+  local_mocked_bindings(.manifestStage = function(...) NULL, .manifestArtifact = function(...) NULL,
+                        .manifestEvent = function(...) NULL)
+  out <- suppressMessages(.rescoreWorkflow(fit, manifest, min_seeds = 4L))
+  expect_identical(out$rescoring_status$status, "skipped")
+  expect_match(out$rescoring_status$reason, "at least 4")
+  expect_error(
+    runModelingWorkflow(rescore_min_seeds = 0), class = "amrml_invalid_argument"
+  )
 })

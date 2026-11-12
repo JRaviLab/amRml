@@ -192,3 +192,44 @@ test_that("a later call replaces the earlier rescoring result", {
   expect_true(file.exists(file.path(second, "qualified_features.parquet")))
   expect_length(list.files(file.path(run, "results")), 1L)
 })
+
+test_that("an unassessable seed is NA, not FALSE, in the complete performance table", {
+  perf <- tibble::tibble(
+    species = "Sfl", drug_label = "d", drug_or_class = "d", feature_type = "gene",
+    feature_subtype = "x", fit_penalty = "l1", fit_mixture = 1,
+    seed = rep(1:3, 2L), shuffled = rep(c(FALSE, TRUE), each = 3L),
+    mcc = c(0.9, NA, 0.8, 0.0, 0.1, -0.1), n_feat = 10L, n_feats_returned = 5L
+  )
+  top <- tibble::tibble(
+    species = "Sfl", drug_label = "d", drug_or_class = "d", feature_type = "gene",
+    feature_subtype = "x", seed = 1:3, shuffled = FALSE, Variable = "g1",
+    Importance = 1, Sign = "positive"
+  )
+  paths <- withr::local_tempfile(fileext = c(".parquet", ".parquet"))
+  arrow::write_parquet(perf, paths[[1]])
+  arrow::write_parquet(top, paths[[2]])
+  out <- .completeRescoring(paths[[1]], paths[[2]])$all_perf
+  real <- out[!out$shuffled, ]
+  expect_equal(real$above_background[order(real$seed)], c(TRUE, NA, TRUE))
+  expect_true(all(is.na(out$above_background[out$shuffled])))
+})
+
+test_that("a model with no usable importance is left out of scoring with a warning", {
+  p <- withr::local_tempfile(fileext = ".parquet")
+  t <- withr::local_tempfile(fileext = ".parquet")
+  key <- list(species = "Sfl", drug_label = "d", drug_or_class = "d", feature_type = "gene",
+              feature_subtype = "x")
+  arrow::write_parquet(tibble::tibble(
+    !!!key, fit_penalty = "l1", fit_mixture = 1, seed = 1:2, shuffled = FALSE,
+    mcc = 0.9, n_feat = 10L, n_feats_returned = 2L
+  ), p)
+  arrow::write_parquet(tibble::tibble(
+    !!!key, seed = c(1L, 1L, 2L), shuffled = FALSE, Variable = c("g1", "g2", "g1"),
+    Importance = c(0.6, 0.4, NA), Sign = "positive"
+  ), t)
+  expect_warning(
+    scored <- scoreFeaturesWithinSeed(t, filter_model = FALSE, all_performance_parquet = p),
+    "no valid total"
+  )
+  expect_equal(unique(scored$seed), 1L)
+})

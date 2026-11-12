@@ -238,7 +238,7 @@ filterOptimalModel <- function(all_performance_parquet,
   all_perf <- arrow::read_parquet(normalizePath(all_performance_parquet))
 
   if (!all(c(TRUE, FALSE) %in% unique(all_perf$shuffled))) {
-    stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingPipelineIntense() ")
+    stop("The 'shuffled' column must contain both TRUE and FALSE values. Run runModelingWorkflow() with labels = c(\"real\", \"shuffled\").")
   }
 
   direction <- match.arg(direction)
@@ -399,10 +399,19 @@ scoreFeaturesWithinSeed <- function(all_top_features_parquet,
     dplyr::ungroup() |>
     dplyr::select(-running_contrib)
 
-  # If a model has no usable total importance, the relative contribution
-  # of its features cannot be calculated
-  if (any(!is.finite(scored_top_features$contribution)))
-    stop("A fitted model has no valid total coefficient importance.", call. = FALSE)
+  # If a model has no usable total importance, the relative contribution of its features cannot
+  # be calculated. Leave such a model out, as the complete export does, and say so.
+  unusable <- !is.finite(scored_top_features$contribution)
+  if (any(unusable)) {
+    fit_cols <- c("species", "drug_label", "drug_or_class", "feature_type", "feature_subtype", "seed")
+    n_models <- nrow(dplyr::distinct(scored_top_features[unusable, fit_cols]))
+    rlang::warn(paste0(
+      n_models, " fitted model(s) have no valid total coefficient importance and were left out ",
+      "of feature scoring."
+    ))
+    bad <- dplyr::distinct(scored_top_features[unusable, fit_cols])
+    scored_top_features <- dplyr::anti_join(scored_top_features, bad, by = fit_cols)
+  }
 
   return(scored_top_features)
 }

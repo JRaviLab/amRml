@@ -58,8 +58,11 @@
 #'   Default `FALSE`. Conflicting explicit arguments are rejected. Model fitting
 #'   and cross-validation are unchanged; automatic rescoring is skipped.
 #' @param rescore Automatically run [rescoreFeatures()] after merged export when
-#'   at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+#'   at least `rescore_min_seeds` fitted real/shuffled seed pairs exist in a vanilla scope.
 #'   Default `TRUE`. Expected empty results are recorded without failing the run.
+#' @param rescore_min_seeds Minimum matched fitted real/shuffled seeds per vanilla drug, feature
+#'   type, and encoding for rescoring; passed to [rescoreFeatures()] as `min_seeds`. Default `3L`.
+#'   Rescoring runs after fitting, so it may differ when resuming.
 #'
 #' @return The `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
@@ -101,11 +104,13 @@ runModelingWorkflow <- function(orb_dir = NULL,
                                 min_mdr_label_genomes = 25,
                                 mdr_min_classes = 2,
                                 easy_mode = FALSE,
-                                rescore = TRUE) {
+                                rescore = TRUE,
+                                rescore_min_seeds = 3L) {
   call <- rlang::current_env()
   started <- Sys.time()
   .checkArgFlag(easy_mode, "easy_mode", call = call)
   .checkArgFlag(rescore, "rescore", call = call)
+  .checkArgCount(rescore_min_seeds, "rescore_min_seeds", call = call)
   if (easy_mode) {
     if ((!missing(feature_types) && !identical(feature_types, "quick")) ||
         (!missing(model_types) && !identical(model_types, "vanilla")) ||
@@ -368,7 +373,8 @@ runModelingWorkflow <- function(orb_dir = NULL,
 
   fit <- .rescoreWorkflow(fit, manifest_path, enabled = rescore && !easy_mode,
                           reason = if (easy_mode) "Easy mode does not run MAGIC rescoring." else
-                            "Feature rescoring was disabled with rescore = FALSE.")
+                            "Feature rescoring was disabled with rescore = FALSE.",
+                          min_seeds = rescore_min_seeds)
 
   if (!save_state) unlink(paths$state, recursive = TRUE)
 
