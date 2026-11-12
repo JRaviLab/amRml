@@ -961,10 +961,6 @@ runFeatureDyadDiscovery <- function(
       } else {
         NA_real_
       },
-      proportion_outperforming_shuffled = median(
-        MCC_diff > 0 | is.na(shuffled_MCC),
-        na.rm = TRUE
-      ),
       .groups = "drop"
     ) |>
     dplyr::arrange(

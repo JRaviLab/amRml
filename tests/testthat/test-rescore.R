@@ -1,11 +1,13 @@
 # Rescoring without a fit in memory: reopening completed runs from disk.
 
 # A completed run folder, as runModelingWorkflow() leaves it. Its matrices are relabelled as
-# vanilla so the run can be rescored; `workflow.rds` holds the built matrices.
+# vanilla so the run can be rescored. Like a run left by default, it has no `state/`.
 fxCompletedRun <- function(env = parent.frame()) {
   fit <- fxRunFit(fxFitTasks(env = env))
   fit$built$matrices$mode_id <- "vanilla"
-  saveRDS(list(settings = list(), built = fit$built), .runPaths(fit$built$out_dir)$workflow)
+  paths <- .runPaths(fit$built$out_dir)
+  .writeParquet(fit$built$matrices, paths$matrices)
+  unlink(paths$state, recursive = TRUE)
   fit
 }
 
@@ -19,6 +21,7 @@ test_that("a completed run folder is reopened as the fit that wrote it", {
   expect_equal(reopened$importance, fit$importance)
   expect_equal(reopened$built$out_dir, fit$built$out_dir)
   expect_true(.hasRescorableFits(reopened))
+  expect_false(dir.exists(.runPaths(fit$built$out_dir)$state))
 })
 
 test_that("a run folder that was moved is read from where it is now", {
@@ -32,7 +35,7 @@ test_that("a run folder that was moved is read from where it is now", {
 
 test_that("an unfinished run folder is refused with what is missing", {
   fit <- fxCompletedRun()
-  unlink(.runPaths(fit$built$out_dir)$completion)
+  unlink(.runPaths(fit$built$out_dir)$performance)
 
   expect_error(
     .readFitRun(fit$built$out_dir, rlang::current_env()),
@@ -42,6 +45,11 @@ test_that("an unfinished run folder is refused with what is missing", {
     .readFitRun(file.path(fit$built$out_dir, "nowhere"), rlang::current_env()),
     class = "amrml_invalid_argument"
   )
+})
+
+test_that("a run folder's ORB is the one it sits in", {
+  expect_equal(.runOrbDirectory("/data/orb/amRml/2026-01-01_000000"), "/data/orb")
+  expect_null(.runOrbDirectory("/data/elsewhere/2026-01-01_000000"))
 })
 
 test_that("MDR models do not count toward rescoring", {
@@ -62,8 +70,8 @@ test_that("the newest rescorable run in an ORB is found, skipping incomplete one
   }
   # The newest folder is unfinished.
   dir.create(runs[[3]])
-  dir.create(file.path(runs[[3]], "state"))
-  file.create(.runPaths(runs[[3]])$workflow)
+  dir.create(.runPaths(runs[[3]])$metadata)
+  file.create(.runPaths(runs[[3]])$matrices)
 
   found <- .findFitRun(orb, rlang::current_env())
   expect_equal(found$built$out_dir, normalizePath(runs[[2]], winslash = "/"))
@@ -75,7 +83,7 @@ test_that("an ORB without a rescorable run is an error", {
 
   # A completed run with no vanilla models is not rescorable.
   fit <- fxRunFit(fxFitTasks())
-  saveRDS(list(settings = list(), built = fit$built), .runPaths(fit$built$out_dir)$workflow)
+  .writeParquet(fit$built$matrices, .runPaths(fit$built$out_dir)$matrices)
   dir.create(file.path(orb, "amRml"))
   file.copy(fit$built$out_dir, file.path(orb, "amRml"), recursive = TRUE)
   expect_error(.findFitRun(orb, rlang::current_env()), class = "amrml_invalid_argument")

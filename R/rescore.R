@@ -9,16 +9,17 @@
   all(c("real", "shuffled") %in% vanilla$labels)
 }
 
-# A completed run folder, reopened as an `amr_fit` without refitting. A folder is complete
-# once the fit's results and completion receipt are written beside `workflow.rds`.
+# A completed run folder, reopened as an `amr_fit` without refitting. It reads only the files a
+# finished run keeps: `results/*.parquet` and `metadata/matrices.parquet`. `state/` is removed
+# after a run unless `save_state = TRUE`, so nothing here may depend on it.
 .readFitRun <- function(run_dir, call) {
   if (!rlang::is_string(run_dir) || !dir.exists(run_dir)) {
     .amrAbort("invalid_argument", "`run_dir` must be an existing amRml run folder.", call = call)
   }
   run_dir <- normalizePath(run_dir, winslash = "/", mustWork = TRUE)
   paths <- .runPaths(run_dir)
-  needed <- c(paths$workflow, paths$completion, paths$tasks, paths$performance,
-              paths$importance, paths$predictions)
+  needed <- c(paths$matrices, paths$tasks, paths$performance, paths$importance,
+              paths$predictions)
   missing <- needed[!file.exists(needed)]
   if (length(missing)) {
     .amrAbort(
@@ -27,16 +28,16 @@
         "Not a completed amRml run folder.",
         x = run_dir,
         x = paste0("Missing: ", paste(substring(missing, nchar(run_dir) + 2L), collapse = ", ")),
-        i = "Resume state is removed after a successful run unless `save_state = TRUE`."
+        i = "A completed run keeps `metadata/matrices.parquet` and `results/*.parquet`."
       ),
       call = call
     )
   }
 
-  built <- readRDS(paths$workflow)$built
-  # The folder may have moved since the run.
-  built$out_dir <- run_dir
   read <- function(path) arrow::read_parquet(path)
+  # Rescoring needs the matrices' identities, not their feature files. The folder may have
+  # moved since the run, so `out_dir` is where it is now.
+  built <- list(matrices = read(paths$matrices), out_dir = run_dir)
   structure(
     list(
       tasks = read(paths$tasks),
@@ -47,6 +48,12 @@
     ),
     class = "amr_fit"
   )
+}
+
+# The ORB directory a run folder sits in, or NULL if it is not at `<ORB>/amRml/<run>/`.
+.runOrbDirectory <- function(run_dir) {
+  parent <- dirname(run_dir)
+  if (identical(basename(parent), "amRml")) dirname(parent) else NULL
 }
 
 # The newest run under `<ORB>/amRml/` that is complete and can be rescored.
@@ -355,6 +362,8 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
     .checkArgClass(fit, "fit", "amr_fit", "fitModels()", call = call)
   } else if (!is.null(run_dir)) {
     fit <- .readFitRun(run_dir, call)
+    # A reopened run has no record of its ORB, but runs are kept at `<ORB>/amRml/<run>/`.
+    orb_directory <- .runOrbDirectory(fit$built$out_dir)
   } else {
     # No fit given: find the ORB (from the registry if need be), then its newest usable run.
     if (is.null(orb_dir)) orb_dir <- .selectORB(call, argument = "orb_dir")
@@ -429,7 +438,10 @@ rescoreFeatures <- function(fit = NULL, orb_dir = NULL, run_dir = NULL, ..., min
   if (length(orb_databases) != 1L) {
     .amrAbort(
       "invalid_argument",
-      "Expected exactly one Parquet-backed ORB DuckDB with a virtual `dyad_feature` view.",
+      c(
+        "Expected exactly one Parquet-backed ORB DuckDB with a virtual `dyad_feature` view.",
+        i = "A run reopened with `run_dir` must sit in `<ORB>/amRml/<run>/`."
+      ),
       call = call
     )
   }
