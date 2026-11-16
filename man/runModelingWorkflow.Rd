@@ -29,7 +29,8 @@ runModelingWorkflow(
   easy_mode = FALSE,
   rescore = TRUE,
   execution = c("fit", "prepare", "collect"),
-  n_chunks = 100L
+  n_chunks = 100L,
+  rescore_min_seeds = 3L
 )
 }
 \arguments{
@@ -44,7 +45,8 @@ Selected before matrices are planned or built; see \code{\link[=planMatrices]{pl
 \item{model_types}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
 
 \item{threads}{Number of parallel workers. Default \code{1} runs serially. Larger
-values use multicore workers on Unix and socket workers on Windows.}
+values use multicore workers on Unix, and socket workers on Windows or inside
+Positron or RStudio, which don't allow forking.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
@@ -91,7 +93,7 @@ Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
 and cross-validation are unchanged; automatic rescoring is skipped.}
 
 \item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
-at least three fitted real/shuffled seed pairs exist in a vanilla scope.
+at least \code{rescore_min_seeds} fitted real/shuffled seed pairs exist in a vanilla scope.
 Default \code{TRUE}. Expected empty results are recorded without failing the run.}
 
 \item{execution}{Advanced options for HPC job arrays. \code{"fit"} runs the full
@@ -102,13 +104,17 @@ gathers only completed checkpoints.}
 
 \item{n_chunks}{Maximum number of nonempty array chunks when preparing.
 Fewer chunks assign more fit groups to each worker; see \code{\link[=runTaskChunk]{runTaskChunk()}}.}
+
+\item{rescore_min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla drug, feature
+type, and encoding for rescoring; passed to \code{\link[=rescoreFeatures]{rescoreFeatures()}} as \code{min_seeds}. Default \code{3L}.
+Rescoring runs after fitting, so it may differ when resuming.}
 }
 \value{
 Preparation returns a plan with tasks, chunks and fit settings.
 Otherwise the \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
 reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
 the discovery result when available; \verb{$rescoring_status} records the outcome.
-Rescoring tables and \code{discovery.rds} are saved in \verb{results/rescoring/}, with
+MAGIC-ready tables are saved in \verb{results/} once rescoring has run, and the rescoring tables in \verb{results/rescoring/}, with
 provenance and skip/empty reasons in the manifest. This uses returned-feature
 ranking, not the separate candidate-aware scoring helper or network export.
 }

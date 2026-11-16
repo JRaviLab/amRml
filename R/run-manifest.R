@@ -16,6 +16,9 @@
     performance = file.path(out_dir, "results", "performance.parquet"),
     importance = file.path(out_dir, "results", "importance.parquet"),
     predictions = file.path(out_dir, "results", "predictions.parquet"),
+    magic_ready_performance = file.path(out_dir, "results", "magic_ready_performance.parquet"),
+    magic_ready_importance = file.path(out_dir, "results", "magic_ready_importance.parquet"),
+    rescoring = file.path(out_dir, "results", "rescoring"),
     notes = file.path(out_dir, "results", "notes.parquet"),
     models = file.path(out_dir, "results", "models"),
     merged = file.path(out_dir, "results", "merged")

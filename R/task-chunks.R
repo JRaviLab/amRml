@@ -134,9 +134,7 @@ runTaskChunk <- function(out_dir, chunk_id = Sys.getenv("SLURM_ARRAY_TASK_ID"), 
   }
   on.exit(unlink(lock, recursive = TRUE), add = TRUE)
   message("Array chunk ", id, ": ", length(groups), " fit groups assigned.")
-  backend <- if (threads == 1L) BiocParallel::SerialParam() else if (.Platform$OS.type == "windows") {
-    BiocParallel::SnowParam(workers = threads)
-  } else BiocParallel::MulticoreParam(workers = threads)
+  backend <- .threadsBPPARAM(threads)
   fitModels(plan$tasks, save_fits = plan$save_fits, save_state = plan$save_state,
             reuse_fits = plan$reuse_fits, resume = TRUE, BPPARAM = backend,
             execution = "worker", group_subset = groups)
@@ -154,9 +152,10 @@ runTaskChunk <- function(out_dir, chunk_id = Sys.getenv("SLURM_ARRAY_TASK_ID"), 
 collectTaskArray <- function(out_dir) {
   snapshot <- .runPaths(out_dir)$workflow
   if (file.exists(snapshot)) {
-    settings <- readRDS(snapshot)$settings
-    return(invisible(do.call(runModelingWorkflow, c(settings, list(
-      out_dir = out_dir, resume = TRUE, execution = "collect"
+    saved <- readRDS(snapshot)
+    return(invisible(do.call(runModelingWorkflow, c(saved$settings, list(
+      out_dir = out_dir, resume = TRUE, execution = "collect",
+      rescore_min_seeds = saved$rescore_min_seeds %||% 3L
     )))))
   }
   plan <- .readTaskArray(out_dir)
