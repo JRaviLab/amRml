@@ -119,11 +119,8 @@
     )
   }
 
-  # Every stage's output, so a run never mixes new matrices with earlier results.
-  outputs <- c(
-    "eligibility.parquet", "matrices", "matrices.parquet", "tasks.parquet", "results",
-    "run.json", "merged", "features", "matrix_index.rds", "fit-checkpoints", "workflow.rds"
-  )
+  # Every stage's outputs, updated for new directory structure
+  outputs <- c("metadata", "results", "state")
   existing <- file.exists(file.path(out_dir, outputs))
   if (any(existing) && !overwrite) {
     .amrAbort(

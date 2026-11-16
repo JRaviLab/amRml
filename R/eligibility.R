@@ -277,11 +277,9 @@
   single <- ifelse(multiclass, scopes$n_labels < 2, rarer == 0)
   # A scope with no resistant kept genome has no count (NA), so fewer than two too.
   one_class <- multiclass & !(!is.na(scopes$n_label_classes) & scopes$n_label_classes >= 2)
-  enough_for_cv <- if (has_test) {
-    rarer >= settings$n_fold
-  } else {
-    rarer * (1 - settings$holdout) >= settings$n_fold
-  }
+  training_minority <- if (has_test) rarer else floor(rarer * (1 - settings$holdout))
+  enough_for_cv <- floor(training_minority / settings$n_fold) >= settings$min_fold_minority &
+    training_minority - ceiling(training_minority / settings$n_fold) >= settings$min_analysis_minority
   test_ok <- !has_test | (
     scopes$test_n_genomes >= settings$min_test_genomes &
       (multiclass |
@@ -378,6 +376,8 @@
 #' @param n_fold Number of cross-validation folds.
 #' @param min_test_genomes Fewest genomes a separate test set needs.
 #' @param min_test_minority Fewest of the rarer phenotype a test set needs.
+#' @param min_fold_minority Minimum observations of each label in every CV assessment fold (default 2).
+#' @param min_analysis_minority Minimum observations of each label in every CV training split (default 8).
 #' @param min_mdr_label_genomes Fewest training genomes an MDR combination needs to
 #'   stay a label in a scope (old amRml's `min_n`).
 #'
@@ -402,7 +402,9 @@ eligibleScopes <- function(profile,
                            n_fold = 5,
                            min_test_genomes = 5,
                            min_test_minority = 2,
-                           min_mdr_label_genomes = 25) {
+                           min_mdr_label_genomes = 25,
+                           min_fold_minority = 2,
+                           min_analysis_minority = 8) {
   call <- rlang::current_env()
 
   # Check the arguments.
@@ -411,6 +413,8 @@ eligibleScopes <- function(profile,
   .checkArgCount(n_fold, "n_fold", min = 2, call = call)
   .checkArgCount(min_test_genomes, "min_test_genomes", call = call)
   .checkArgCount(min_test_minority, "min_test_minority", call = call)
+  .checkArgCount(min_fold_minority, "min_fold_minority", call = call)
+  .checkArgCount(min_analysis_minority, "min_analysis_minority", call = call)
   .checkArgCount(min_mdr_label_genomes, "min_mdr_label_genomes", call = call)
   modes <- modes %||% .MODES$mode_id
   .checkArgModes(modes, call = call)
@@ -421,6 +425,7 @@ eligibleScopes <- function(profile,
     min_test_genomes = min_test_genomes,
     min_test_minority = min_test_minority,
     min_mdr_label_genomes = min_mdr_label_genomes,
+    min_fold_minority = min_fold_minority, min_analysis_minority = min_analysis_minority,
     holdout = .CV_HOLDOUT
   )
 

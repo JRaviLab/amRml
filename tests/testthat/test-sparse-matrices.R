@@ -10,7 +10,7 @@ test_that("sparse storage keeps a labelled genome with no observed features", {
   row <- match("g020", store$genomes)
   expect_false(is.na(row))
   expect_equal(as.numeric(store$values[row, ]), rep(0, ncol(store$values)))
-  index <- readRDS(file.path(built$out_dir, "matrix_index.rds"))
+  index <- readRDS(.runPaths(built$out_dir)$matrix_index)
   expect_true(all(vapply(index$rows, function(rows) "g020" %in% rows$genome_id, logical(1))))
 })
 
