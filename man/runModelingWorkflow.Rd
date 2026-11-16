@@ -43,7 +43,8 @@ Selected before matrices are planned or built; see \code{\link[=planMatrices]{pl
 \item{model_types}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
 
 \item{threads}{Number of parallel workers. Default \code{1} runs serially. Larger
-values use multicore workers on Unix and socket workers on Windows.}
+values use multicore workers on Unix, and socket workers on Windows or inside
+Positron or RStudio, which don't allow forking.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}

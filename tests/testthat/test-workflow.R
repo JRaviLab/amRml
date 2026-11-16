@@ -39,3 +39,11 @@ test_that("resume without an ORB uses the saved one, or asks if it has moved", {
   expect_error(do.call(runModelingWorkflow, c(args, list(resume = TRUE))), class = "amrml_invalid_argument")
   expect_true(asked)
 })
+
+test_that("threads never fork inside Positron or RStudio", {
+  withr::local_envvar(POSITRON = "1", RSTUDIO = "")
+  expect_s4_class(.threadsBPPARAM(2L), "SnowParam")
+  withr::local_envvar(POSITRON = "", RSTUDIO = "1")
+  expect_s4_class(.threadsBPPARAM(2L), "SnowParam")
+  expect_s4_class(.threadsBPPARAM(1L), "SerialParam")
+})

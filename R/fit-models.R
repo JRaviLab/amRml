@@ -492,41 +492,6 @@
   result
 }
 
-# The run's settings and outcome, as written to run.json; vectors stay arrays (I()).
-.runRecord <- function(tasks, listed, started, save_fits, BPPARAM) {
-  eligibility <- tasks$built$eligibility
-  orb <- eligibility$profile$orb
-  stamp <- function(time) format(time, "%Y-%m-%d %H:%M:%S")
-
-  list(
-    amRml_version = as.character(utils::packageVersion("amRml")),
-    R_version = paste(R.version$major, R.version$minor, sep = "."),
-    started_at = stamp(started),
-    finished_at = stamp(Sys.time()),
-    orb = list(
-      directory = orb$directory,
-      dataset_id = orb$dataset_id,
-      dataset_label = orb$dataset_label,
-      manifest = basename(orb$manifest_path),
-      producer_run_id = orb$producer_run_id,
-      finished_at = orb$finished_at
-    ),
-    species = orb$dataset_id,
-    modes = I(eligibility$modes$mode_id),
-    eligibility = eligibility$settings,
-    seeds = I(tasks$settings$seeds),
-    labels = I(tasks$settings$labels),
-    save_fits = save_fits,
-    parallel = list(
-      backend = class(BPPARAM)[[1]],
-      workers = BiocParallel::bpnworkers(BPPARAM)
-    ),
-    n_tasks = nrow(listed),
-    n_fitted = sum(listed$status == "fitted"),
-    n_failed = sum(listed$status == "failed")
-  )
-}
-
 #' @export
 print.amr_fit <- function(x, ...) {
   orb <- x$built$eligibility$profile$orb

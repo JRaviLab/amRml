@@ -23,7 +23,8 @@
 #'   `<ORB>/amRml/<date-time>/`.
 #' @param model_types Mode IDs from [modelingModes()], or `NULL` for all of them.
 #' @param threads Number of parallel workers. Default `1` runs serially. Larger
-#'   values use multicore workers on Unix and socket workers on Windows.
+#'   values use multicore workers on Unix, and socket workers on Windows or inside
+#'   Positron or RStudio, which don't allow forking.
 #' @param feature_types Feature types to model: `"quick"`, `"standard"` (default),
 #'   `"full"`, or an explicit character vector of ORB feature types.
 #'   Selected before matrices are planned or built; see [planMatrices()].
@@ -134,11 +135,7 @@ runModelingWorkflow <- function(orb_dir = NULL,
   if (!is.null(BPPARAM) && !missing(threads)) {
     .amrAbort("invalid_argument", "Supply either `threads` or `BPPARAM`, not both.", call = call)
   }
-  if (is.null(BPPARAM)) {
-    BPPARAM <- if (threads == 1L) BiocParallel::SerialParam() else if (.Platform$OS.type == "windows") {
-      BiocParallel::SnowParam(workers = threads)
-    } else BiocParallel::MulticoreParam(workers = threads)
-  }
+  if (is.null(BPPARAM)) BPPARAM <- .threadsBPPARAM(threads)
   # Checked first, so a bad value doesn't surface after the matrices are built.
   .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
   .checkArgSeeds(seeds, call = call)
