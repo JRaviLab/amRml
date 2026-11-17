@@ -47,47 +47,25 @@
   penalty >= min(path) * (1 - 1e-10) & penalty <= max(path) * (1 + 1e-10)
 }
 
-# tune uses submodels to evaluate many penalties from one fitted path. Reject
-# configurations whose requested penalty was never reached in any one fold,
-# rather than allowing glmnet to silently substitute endpoint coefficients.
-.checkTuningPaths <- function(tuned) {
+# Keeping legacy endpoint prediction behavior observable without changing grid
+# or model selection
+.tuningPathNotes <- function(tuned) {
   extracted <- tryCatch(tune::collect_extracts(tuned), error = function(e) NULL)
   notes <- .emptyModelNotes()
-  if (is.null(extracted)) return(list(tuned = tuned, notes = notes))
-  invalid <- character()
+  if (is.null(extracted)) return(notes)
   ids <- grep("^id", names(extracted), value = TRUE)
   for (i in seq_len(nrow(extracted))) {
     path <- extracted$.extracts[[i]]$lambda
     if (!.penaltyCovered(path, extracted$penalty[i])) {
-      invalid <- c(invalid, extracted$.config[i])
       resample <- if (length(ids)) paste(unlist(extracted[i, ids]), collapse = "/") else NA_character_
       notes <- dplyr::bind_rows(notes, tibble::tibble(
         stage = "tune", resample = resample,
         location = paste0("mixture=", extracted$mixture[i],
                           ", penalty=", signif(extracted$penalty[i], 8)),
         type = "warning",
-        note = "Requested penalty is outside the fitted glmnet path; candidate excluded from selection.",
+        note = "Requested penalty is outside the fitted glmnet path; endpoint coefficients are used and the candidate remains eligible for compatibility.",
         n = 1L))
     }
   }
-  invalid <- unique(invalid)
-  if (length(invalid)) {
-    tuned$.metrics <- lapply(tuned$.metrics, function(metrics) {
-      metrics$.estimate[metrics$.config %in% invalid] <- NA_real_
-      metrics
-    })
-  }
-  list(tuned = tuned, notes = notes)
-}
-
-# Extend only a final path that misses the selected CV penalty. Dense bridge
-# points preserve warm starts; this is not a different search grid.
-.extendPenaltyPath <- function(path, penalty) {
-  if (!length(path) || any(!is.finite(path)) || any(path <= 0)) {
-    stop("Cannot extend an invalid glmnet penalty path.")
-  }
-  endpoint <- if (penalty < min(path)) min(path) else max(path)
-  n <- max(2L, ceiling(abs(log10(endpoint / penalty)) * 50) + 1L)
-  bridge <- 10^seq(log10(endpoint), log10(penalty), length.out = n)
-  sort(unique(signif(c(path, bridge, penalty), 14)), decreasing = TRUE)
+  notes
 }

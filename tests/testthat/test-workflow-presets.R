@@ -92,10 +92,10 @@ test_that("rescoring eligibility counts matched successful seeds per representat
     class = "amr_fit")
   fit$tasks$status[fit$tasks$matrix_id == "m2" & fit$tasks$seed == 3 &
                      fit$tasks$labels == "shuffled"] <- "failed"
-  expect_equal(.rescoreScopes(fit)$matrix_id, "m1")
+  expect_equal(.rescoreScopes(fit, min_seeds = 3L)$matrix_id, "m1")
   fit$tasks$status[fit$tasks$matrix_id == "m1" & fit$tasks$seed == 2 &
                      fit$tasks$labels == "real"] <- "failed"
-  expect_equal(nrow(.rescoreScopes(fit)), 0L)
+  expect_equal(nrow(.rescoreScopes(fit, min_seeds = 3L)), 0L)
   expect_error(rescoreFeatures(fit), "at least 3", class = "amrml_invalid_argument")
 })
 

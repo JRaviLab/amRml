@@ -107,14 +107,15 @@ test_that("MDR coefficients retain labels in native results and stay out of bina
   expect_identical(fit$importance, native)
   expect_equal(arrow::read_parquet(file.path(fit$built$out_dir, "results", "importance.parquet")), native)
 
-  # Native MDR rescoring accepts complete pairs while binary exports stay unchanged.
+  # Complete MDR pairs stay out of MAGIC, including legacy vanilla MDR results.
   paired <- expandTasks(fit$built, seeds = 1:3, labels = c("real", "shuffled"))
   fit$tasks <- paired$tasks
   fit$tasks$status <- "fitted"
-  expect_equal(nrow(.rescoreScopes(fit)), nrow(fit$built$matrices))
+  expect_equal(nrow(.rescoreScopes(fit, min_seeds = 3L)), 0L)
+  expect_error(rescoreFeatures(fit), "fitted vanilla real/shuffled", class = "amrml_invalid_argument")
   legacy <- fit
   legacy$built$matrices$mode_id <- "vanilla"
-  expect_equal(.rescoreScopes(legacy), .rescoreScopes(fit))
+  expect_equal(nrow(.rescoreScopes(legacy, min_seeds = 3L)), 0L)
 })
 
 

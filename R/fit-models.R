@@ -156,10 +156,8 @@
   # Scope these options to this model call; parent progress remains enabled.
   withr::local_options(list(cli.progress_handlers_only = character()))
   tuned <- .tuneModelFolds(workflow, resamples, .tuningGrid(), cv_workers)
-  checked <- .checkTuningPaths(tuned)
-  tuned <- checked$tuned
+  notes <- .tuningPathNotes(tuned)
   collected <- tune::collect_notes(tuned)
-  notes <- checked$notes
   if (nrow(collected)) {
     ids <- grep("^id", names(collected), value = TRUE)
     collected_notes <- tibble::tibble(
@@ -175,7 +173,7 @@
   tryCatch({
     metrics <- suppressWarnings(tune::collect_metrics(tuned))
     if (!any(is.finite(metrics$mean[metrics$.metric == "mcc"]))) {
-      stop("No tuning candidate has a defined MCC at a fitted penalty.")
+      stop("No tuning candidate has a defined MCC.")
     }
     best <- tune::select_best(tuned, metric = "mcc")
     fit <- withCallingHandlers(
@@ -191,25 +189,8 @@
     )
     engine <- parsnip::extract_fit_engine(fit)
     if (!.penaltyCovered(engine$lambda, best$penalty)) {
-      path <- .extendPenaltyPath(engine$lambda, best$penalty)
-      spec <- tune::finalize_model(.modelSpec(multi), best) |>
-        parsnip::set_engine("glmnet", path_values = path)
-      final_workflow <- tune::finalize_workflow(workflow, best) |>
-        workflows::update_model(spec)
-      notes <- dplyr::bind_rows(notes, .conditionModelNote(simpleMessage(
-        "Extended final glmnet path to fit the selected penalty exactly."), "final_fit"))
-      fit <- withCallingHandlers(parsnip::fit(final_workflow, data = data),
-        warning = function(w) {
-          notes <<- dplyr::bind_rows(notes, .conditionModelNote(w, "final_fit"))
-          invokeRestart("muffleWarning")
-        },
-        message = function(m) {
-          notes <<- dplyr::bind_rows(notes, .conditionModelNote(m, "final_fit"))
-          invokeRestart("muffleMessage")
-        })
-      if (!.penaltyCovered(parsnip::extract_fit_engine(fit)$lambda, best$penalty)) {
-        stop("The selected penalty was not reached by the final glmnet fit.")
-      }
+      notes <- dplyr::bind_rows(notes, .conditionModelNote(simpleWarning(
+        "Selected penalty is outside the final glmnet path; endpoint coefficients are used for compatibility."), "final_fit"))
     }
     list(fit = fit, penalty = best$penalty, mixture = best$mixture, notes = notes)
   }, error = function(e) {

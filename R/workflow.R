@@ -109,7 +109,8 @@
 #'   Default `FALSE`. Conflicting explicit arguments are rejected. Model fitting
 #'   and cross-validation are unchanged; automatic rescoring is skipped.
 #' @param rescore Automatically run [rescoreFeatures()] after merged export when
-#'   at least three fitted real/shuffled seed pairs exist in a vanilla or MDR scope.
+#'   at least three fitted real/shuffled seed pairs exist in a vanilla drug or
+#'   drug-class scope. MDR is excluded from rescoring.
 #'   Default `TRUE`. Expected empty results are recorded without failing the run.
 #'
 #' @return Preparation returns a plan with tasks, chunks and fit settings.

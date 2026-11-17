@@ -21,29 +21,23 @@ test_that("serial and socket CV conserve binary and multinomial fits", {
     expect_equal(predict(serial$fit, d), predict(sockets$fit, d))
     expect_equal(stats::coef(parsnip::extract_fit_engine(serial$fit), s = serial$penalty),
                  stats::coef(parsnip::extract_fit_engine(sockets$fit), s = sockets$penalty))
-    expect_true(.penaltyCovered(parsnip::extract_fit_engine(sockets$fit)$lambda,
-                                sockets$penalty))
   }
 })
 
-test_that("unfitted penalties cannot qualify through endpoint substitution", {
+test_that("penalty diagnostics preserve the full legacy tuning results and Ridge", {
   d <- cvTestData(FALSE, FALSE)
   w <- workflows::workflow() |>
     workflows::add_recipe(.buildRecipe(d)) |>
     workflows::add_model(.modelSpec())
   folds <- rsample::vfold_cv(d, v = 2, strata = phenotype)
-  grid <- tibble::tibble(penalty = c(1e-12, .1), mixture = 1)
-  tuned <- .tuneModelFolds(w, folds, grid)
-  checked <- .checkTuningPaths(tuned)
-  expect_true(any(grepl("outside the fitted", checked$notes$note)))
-  for (metrics in checked$tuned$.metrics) {
-    expect_true(all(is.na(metrics$.estimate[metrics$penalty == 1e-12])))
-  }
-  expect_equal(tune::select_best(checked$tuned, metric = "mcc")$penalty, .1)
-  expect_false(.penaltyCovered(c(10, 1), .1))
-  path <- .extendPenaltyPath(c(10, 1), .1)
-  expect_true(.penaltyCovered(path, .1))
-  expect_true(all(c(10, 1, .1) %in% path))
+  tuned <- .tuneModelFolds(w, folds, .tuningGrid())
+  before <- tune::collect_metrics(tuned)
+  notes <- .tuningPathNotes(tuned)
+  expect_true(any(grepl("outside the fitted", notes$note)))
+  expect_identical(tune::collect_metrics(tuned), before)
+  expect_equal(nrow(before), 60L)
+  expect_equal(sum(before$mixture == 0 & is.finite(before$mean)), 10L)
+  expect_true(all(is.finite(before$mean)))
 })
 
 test_that("CV parallelism is off by default and rejects non-boolean flags", {
@@ -80,10 +74,25 @@ test_that("prepared arrays retain the CV toggle and collect equivalent results",
   expect_equal(fxComparableFit(serial), fxComparableFit(collected))
 })
 
-test_that("an entirely unsupported penalty grid fails instead of selecting a clamped fit", {
+test_that("below-path penalties retain legacy endpoint coefficients in the final fit", {
   local_mocked_bindings(.tuningGrid = function() {
-    tibble::tibble(penalty = 1e-12, mixture = 1)
+    tibble::tibble(penalty = 1e-12, mixture = 0)
   })
-  expect_error(.fitModel(cvTestData(FALSE, FALSE), 2),
-               "No tuning candidate has a defined MCC at a fitted penalty")
+  d <- cvTestData(FALSE, FALSE)
+  result <- withr::with_seed(123, .fitModel(d, 2))
+  legacy <- workflows::workflow() |>
+    workflows::add_recipe(.buildRecipe(d)) |>
+    workflows::add_model(tune::finalize_model(.modelSpec(),
+      tibble::tibble(penalty = 1e-12, mixture = 0))) |>
+    parsnip::fit(data = d)
+  expect_equal(result$penalty, 1e-12)
+  expect_equal(result$mixture, 0)
+  expect_false(.penaltyCovered(parsnip::extract_fit_engine(result$fit)$lambda,
+                              result$penalty))
+  expect_equal(stats::coef(parsnip::extract_fit_engine(result$fit), s = result$penalty),
+               stats::coef(parsnip::extract_fit_engine(legacy), s = result$penalty))
+  expect_equal(predict(result$fit, d), predict(legacy, d))
+  expect_true(any(result$notes$stage == "tune"))
+  expect_true(any(result$notes$stage == "final_fit"))
+  expect_true(all(grepl("compatibility", result$notes$note)))
 })

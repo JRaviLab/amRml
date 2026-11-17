@@ -303,8 +303,7 @@
 #' task's test genomes.
 #'
 #' @details
-#' Penalties outside a fitted glmnet path are recorded in `notes` and cannot
-#' enter model selection. The selected penalty is also checked in the final fit.
+#' Penalties outside a fitted glmnet path are recorded in `notes`.
 #'
 #' Cross-drug tasks with exactly matching training inputs reuse one fitted model;
 #' set `reuse_fits = FALSE` to disable reuse for comparison. Reused tasks'

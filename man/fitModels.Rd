@@ -92,8 +92,7 @@ stratified \code{n_fold} cross-validation and chosen by MCC, then scored on the
 task's test genomes.
 }
 \details{
-Penalties outside a fitted glmnet path are recorded in \code{notes} and cannot
-enter model selection. The selected penalty is also checked in the final fit.
+Penalties outside a fitted glmnet path are recorded in \code{notes}.
 
 Cross-drug tasks with exactly matching training inputs reuse one fitted model;
 set \code{reuse_fits = FALSE} to disable reuse for comparison. Reused tasks'

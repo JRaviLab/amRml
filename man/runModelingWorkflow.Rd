@@ -130,7 +130,8 @@ Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
 and cross-validation are unchanged; automatic rescoring is skipped.}
 
 \item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
-at least three fitted real/shuffled seed pairs exist in a vanilla or MDR scope.
+at least three fitted real/shuffled seed pairs exist in a vanilla drug or
+drug-class scope. MDR is excluded from rescoring.
 Default \code{TRUE}. Expected empty results are recorded without failing the run.}
 
 \item{execution}{Advanced options for HPC job arrays. \code{"fit"} runs the full
