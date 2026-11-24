@@ -45,12 +45,12 @@
 
 # Throw an error unless `modes` holds mode IDs from modelingModes().
 .checkArgModes <- function(modes, call = rlang::caller_env()) {
-  unknown <- if (is.character(modes)) setdiff(modes, .MODES$mode_id) else character()
+  unknown <- if (is.character(modes)) setdiff(modes, c(.MODES$mode_id, "complete")) else character()
 
   if (!is.character(modes) || anyNA(modes) || length(unknown)) {
     .amrAbort(
       "invalid_argument",
-      c("`modes` must be mode IDs from modelingModes().", .bullets(unknown)),
+      c("`modes` must be mode IDs from modelingModes() or complete.", .bullets(unknown)),
       observed = list(unknown = unknown),
       call = call
     )

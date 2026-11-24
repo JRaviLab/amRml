@@ -177,7 +177,10 @@ exportNetwork <- function(run_dir, orb_dir, out_dir,
   }
 
   scored <- .scoreNetworkTasks(importance, metadata, core_threshold)
-  if (dplyr::n_distinct(scored$task_id) != nrow(metadata)) {
+  missing_ids <- setdiff(metadata$task_id, scored$task_id)
+  if (length(missing_ids) && (!"n_feats_returned" %in% names(performance) ||
+      any(is.na(performance$n_feats_returned[match(missing_ids, performance$task_id)]) |
+          performance$n_feats_returned[match(missing_ids, performance$task_id)] != 0L))) {
     stop("A fitted task has no usable returned coefficient importance.", call. = FALSE)
   }
   if (any(abs((scored |>

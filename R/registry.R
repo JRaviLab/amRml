@@ -27,7 +27,9 @@
   ~mode_id,             ~grouping, ~LOO,  ~cross_test, ~supported,
   ~description,
   "vanilla",            "none",    FALSE, FALSE,       TRUE,
-  "Each drug or class, with internal cross-validation.",
+  "Each drug or drug class, with internal cross-validation.",
+  "mdr",                "none",    FALSE, FALSE,       TRUE,
+  "Binary MDR and resistance-combination targets, with internal cross-validation.",
   "stratified_year",    "year",    FALSE, FALSE,       TRUE,
   "Each drug or class within each year bin.",
   "stratified_country", "country", FALSE, FALSE,       TRUE,
@@ -51,7 +53,9 @@
 #' The kinds of model amRml can build, from the amRml v1 design. `LOO` modes
 #' train on every group but one and test on the held-out group; `cross_test`
 #' modes train on one group and test on another. Modes with `supported = FALSE`
-#' can't run yet.
+#' can't run yet. `"vanilla"` selects drug and drug-class targets; `"mdr"`
+#' selects the binary MDR and resistance-combination targets. `"complete"`
+#' is a selection alias for all supported modes, rather than a fitted mode.
 #'
 #' @return A tibble with one row per mode: `mode_id`, `grouping` (`"none"`,
 #'   `"year"`, `"country"` or `"drug"`), `LOO`, `cross_test`, `supported` and
@@ -62,4 +66,14 @@
 #' @export
 modelingModes <- function() {
   .MODES
+}
+
+# Expand the user-facing complete selection before building or filtering scopes.
+.resolveModes <- function(modes, call = rlang::caller_env()) {
+  if (is.null(modes)) return(.MODES$mode_id)
+  .checkArgModes(modes, call = call)
+  if ("complete" %in% modes) {
+    modes <- c(setdiff(modes, "complete"), .MODES$mode_id[.MODES$supported])
+  }
+  unique(modes)
 }

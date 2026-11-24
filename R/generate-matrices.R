@@ -121,8 +121,8 @@
 .resolveFeatureTypes <- function(feature_types, available, call) {
   presets <- list(
     quick = c("gene", "protein", "Pfam"),
-    standard = c("gene", "protein", "Pfam", "COG", "AMRFinder"),
-    full = c("gene", "protein", "Pfam", "COG", "AMRFinder", "struct", "DefenseCas")
+    standard = c("gene", "protein", "Pfam", "COG", "AMRFinder", "DefenseCas"),
+    full = c("gene", "protein", "Pfam", "COG", "AMRFinder", "DefenseCas", "struct")
   )
 
   if (!is.character(feature_types) || !length(feature_types) ||
@@ -162,12 +162,13 @@
 #' Feature types are selected before their tables are scanned or matrices built.
 #'
 #' @param eligibility An `amr_eligibility` from [eligibleScopes()].
-#' @param modes Mode IDs from [modelingModes()] to plan matrices for, or `NULL` for
+#' @param modes Mode IDs from [modelingModes()] to plan matrices for,
+#'   `"complete"` for all supported modes, or `NULL` for
 #'   every mode in `eligibility`.
 #' @param feature_types A preset (`"quick"`, `"standard"`, or `"full"`) or an
 #'   explicit character vector of feature types. Default `"standard"`.
 #'   Quick uses gene, protein, and Pfam; Standard also includes COG and
-#'   AMRFinder; Full additionally includes struct and DefenseCas. Presets use
+#'   AMRFinder and DefenseCas; Full additionally includes only struct. Presets use
 #'   only tables present in the ORB. Explicit selections require exact names.
 #'
 #' @return An `amr_matrix_plan` list:
@@ -197,7 +198,7 @@ planMatrices <- function(eligibility, modes = NULL, feature_types = "standard") 
   call <- rlang::current_env()
   .checkArgClass(eligibility, "eligibility", "amr_eligibility", "eligibleScopes()", call = call)
   if (!is.null(modes)) {
-    .checkArgModes(modes, call = call)
+    modes <- .resolveModes(modes, call = call)
     # Members of the modes left out would have no planned scope when building.
     eligibility$members <- eligibility$members[eligibility$members$mode_id %in% modes, , drop = FALSE]
   }

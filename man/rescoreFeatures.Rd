@@ -44,6 +44,9 @@ chosen from those amRdata registered, as in \code{\link[=readORB]{readORB()}} (t
 interactive session). The newest completed run in the ORB's \verb{amRml/} folder with
 fitted vanilla models on both real and shuffled labels is then reopened from disk
 and rescored. The run used is reported.
+
+MDR targets are excluded from MAGIC rescoring; label-specific coefficients
+remain available in the native importance results.
 }
 \section{Output files}{
 

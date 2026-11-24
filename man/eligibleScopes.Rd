@@ -19,7 +19,8 @@ eligibleScopes(
 \arguments{
 \item{profile}{An \code{amr_orb_profile} from \code{\link[=profileORB]{profileORB()}}.}
 
-\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
+\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, \code{"complete"} for all supported
+modes, or \code{NULL} to consider every registered mode.}
 
 \item{min_genomes}{Fewest genomes a scope needs, before any holdout.}
 
@@ -55,6 +56,11 @@ can, records whether it has enough data to model, or why not. Nothing is
 built or fitted.
 }
 \details{
+Both MDR targets (\code{mdr} and \code{resistant_classes}) run only in \code{mdr} mode,
+with the usual holdout and cross-validation. \code{vanilla} and the grouped modes
+consider only drugs and drug classes. Use \code{modes = c("vanilla", "mdr")}
+for both whole-dataset suites, or \code{"complete"} for all supported modes.
+
 Counts are of genomes, each with one phenotype. In the MDR combination target
 (\code{resistant_classes}), each combination is a label: a scope keeps the labels
 with at least \code{min_mdr_label_genomes} training genomes and drops the genomes,

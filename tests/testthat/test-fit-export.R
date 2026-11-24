@@ -143,7 +143,7 @@ test_that("workflow resume finishes a failed export without refitting", {
   expect_equal(fit$built$out_dir, normalizePath("run"))
   expect_true(all(file.exists(file.path("run", "results", "merged",
                      c("all_perf.parquet", "all_top_features.parquet")))))
-  expect_setequal(list.files("run"), c("manifest.json", "metadata", "results"))
+  expect_setequal(list.files("run"), c("diagnostics", "manifest.json", "metadata", "results"))
   manifest <- jsonlite::read_json(file.path("run", "manifest.json"), simplifyVector = FALSE)
   expect_identical(manifest$manifest_type, "amR_ml")
   matrix_stage <- Filter(
