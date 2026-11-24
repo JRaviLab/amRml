@@ -4,18 +4,39 @@ _referenced with modifications from [pycytominer](https://github.com/cytomining/
 # Description
 
 <!--
-Thank you so much for your contribution to <NewPackage>!
+Thank you for your contribution to amRml!
 
-Please _succinctly_ summarize your proposed change.
-Namely, consider addressing the following questions:
-
-- What motivated you to open this pull request?
-- Were there any special adjustments you had to make to complete the work?
-- Are there any issues which are related to this pull request (you may used a `#<digit>` to reference GitHub issues as links within this description)?
-
-Also, if you haven't already, please use `pre-commit run --all-files` to help check your files using this project's pre-commit configuration.
-Pre-commit checks will automatically run as part of opening this pull request and we seek to ensure all checks pass before merging changes.
+Please _succinctly_ summarize your proposed change: what motivated it, anything
+special you had to do, and related issues (`#<number>` links them).
 -->
+
+## Pipeline stage
+
+<!-- Which stage of the amRml pipeline this changes, e.g. "reading the ORB",
+"eligibility gate", "matrix build", "fit", "consolidation". -->
+
+## v1.0 requirement served
+
+<!-- Which requirement from the amRml v1.0 design this addresses. -->
+
+## Contract
+
+<!-- What this stage takes in, what it produces (files, columns), and the errors
+it raises, with the rule_id of each. -->
+
+## Differences from amRml
+
+<!-- Anything that behaves differently from the current amRml, and why. -->
+
+## Decisions for collaborators
+
+<!-- Open questions this PR needs answered, each phrased with options. -->
+
+## How to try it
+
+```r
+# A few lines a reviewer can run.
+```
 
 ## What kind of change(s) are included?
 
@@ -29,9 +50,11 @@ Pre-commit checks will automatically run as part of opening this pull request an
 Please ensure that all boxes are checked before indicating that this pull request is ready for review.
 
 - [ ] I have read and followed the [CONTRIBUTING.md](CONTRIBUTING.md) guidelines.
-- [ ] I have searched for existing content to ensure this is not a duplicate.
+- [ ] I have searched for existing content to ensure this is not a duplicate. I have deduplicated my codebase.
 - [ ] I have performed a self-review of these additions (including spelling, grammar, and related).
+- [ ] I have implemented basic code linting, styling, and indentation (e.g., with lintr, styler).
 - [ ] I have added comments to my code to help provide understanding.
 - [ ] I have added a test which covers the code changes found within this PR.
-- [ ] I have deleted all non-relevant text in this pull request template.
+- [ ] Every new error uses a `rule_id` declared in `.RULES`, and its test asserts the class, not the message.
+- [ ] I have added necessary data (or sample data) to test run these scripts.
 - [ ] **Reviewer assignment**: Tag a relevant team member to review and approve the changes.

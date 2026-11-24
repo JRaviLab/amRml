@@ -1,0 +1,154 @@
+# Tests for fitting the MDR combination target, whose labels aren't Resistant and Susceptible.
+
+# `n` genomes per label, tested on DRA (class CLX) and DRB (class CLY): resistant to CLX only,
+# to both, or to neither. geneX marks CLX resistance, geneY CLY resistance, and geneN alternates
+# with no signal.
+fxLabelled <- function(n) {
+  genomes <- sprintf("g%03d", seq_len(3 * n))
+  label <- rep(c("x", "xy", "s"), each = n)
+  metadata <- fxMetadataRows(
+    genome = rep(genomes, each = 2),
+    drug = rep(c("DRA", "DRB"), 3 * n),
+    class = rep(c("CLX", "CLY"), 3 * n),
+    phenotype = ifelse(
+      c(rbind(label %in% c("x", "xy"), label == "xy")), "Resistant", "Susceptible"
+    )
+  )
+  genes <- tibble::tibble(
+    genome_id = rep(genomes, 3),
+    gene = rep(c("geneX", "geneY", "geneN"), each = 3 * n),
+    value = c(
+      as.integer(label %in% c("x", "xy")), as.integer(label == "xy"), rep_len(0:1, 3 * n)
+    )
+  )
+  list(metadata = metadata, parquets = list(gene_count = genes))
+}
+
+# The combination target's matrices from `fxLabelled(n)`, built and fitted.
+fxCombinationFit <- function(n = 20, env = parent.frame()) {
+  data <- fxLabelled(n)
+  eligibility <- fxEligibility(
+    data$metadata, modes = "mdr", parquets = data$parquets,
+    min_genomes = n, n_fold = 2, min_mdr_label_genomes = n, env = env
+  )
+  eligibility$scopes <- eligibility$scopes[eligibility$scopes$target == "resistant_classes", ]
+  eligibility$members <- eligibility$members[eligibility$members$target == "resistant_classes", ]
+  plan <- planMatrices(eligibility)
+  built <- buildMatrices(plan, withr::local_tempdir(.local_envir = env))
+  fitModels(expandTasks(built), BPPARAM = BiocParallel::SerialParam())
+}
+
+test_that("only the declared MDR combination target is multi-class", {
+  expect_equal(
+    .isMulticlass(c("mdr", "mdr", "drug", "drug_class"), c("resistant_classes", "mdr", "DRA", "CLX")),
+    c(TRUE, FALSE, FALSE, FALSE)
+  )
+})
+
+test_that("folds are assigned for every label, not only Resistant and Susceptible", {
+  phenotype <- factor(rep(c("CLX", "CLX_CLY", "Susceptible"), each = 4))
+  fold <- withr::with_seed(1, .stratifiedFolds(phenotype, 2))
+
+  expect_true(all(fold %in% 1:2))
+  expect_equal(as.vector(table(phenotype, fold)), rep(2, 6))
+})
+
+test_that("Resistant and Susceptible fold assignment is unchanged", {
+  phenotype <- factor(rep(c("Resistant", "Susceptible"), c(5, 7)), levels = .PHENOTYPES)
+  fold <- withr::with_seed(1, .stratifiedFolds(phenotype, 3))
+
+  expected <- withr::with_seed(1, {
+    expected <- integer(12)
+    expected[1:5] <- sample(rep_len(1:3, 5))
+    expected[6:12] <- sample(rep_len(1:3, 7))
+    expected
+  })
+  expect_equal(fold, expected)
+})
+
+test_that("the combination target is fitted by multinomial regression, one task per matrix", {
+  fit <- fxCombinationFit()
+
+  expect_equal(fit$tasks$status, rep("fitted", nrow(fit$tasks)))
+  expect_true(all(is.na(fit$tasks$rule_id)))
+  expect_equal(unique(fit$performance$n_labels), 3)
+  expect_false(anyNA(fit$performance$mcc))
+  expect_true(all(is.na(fit$performance$res_prop)))
+  expect_true(all(is.na(fit$performance$auprc)))
+})
+
+test_that("importance is per label, and predictions carry the predicted label's probability", {
+  fit <- fxCombinationFit()
+
+  expect_true(all(fit$importance$label %in% c("CLX", "CLX_CLY", "Susceptible")))
+  expect_true("geneX" %in% fit$importance$Variable)
+  expect_equal(fit$performance$n_feats_returned,
+    dplyr::n_distinct(fit$importance$Variable))
+  expect_gt(nrow(fit$importance), fit$performance$n_feats_returned)
+  expect_true(all(is.na(fit$predictions$prob_resistant)))
+  expect_true(all(fit$predictions$prob_predicted >= 1 / 3 & fit$predictions$prob_predicted <= 1))
+  expect_true(all(fit$predictions$truth %in% c("CLX", "CLX_CLY", "Susceptible")))
+})
+
+test_that("the print counts tasks by drug, drug class and MDR", {
+  fit <- fxCombinationFit()
+
+  expect_output(print(fit), "by target: 0 drug, 0 drug class, 1 MDR")
+})
+
+
+test_that("MDR coefficients retain labels in native results and stay out of binary exports", {
+  fit <- fxCombinationFit()
+  native <- fit$importance
+  expect_true("label" %in% names(.emptyFitResults()$importance))
+  expect_true(all(native$label %in% c("CLX", "CLX_CLY", "Susceptible")))
+  written <- exportMergedResults(fit)
+  expect_length(written, 0L)
+  expect_identical(fit$importance, native)
+  expect_equal(arrow::read_parquet(file.path(fit$built$out_dir, "results", "importance.parquet")), native)
+
+  # Complete MDR pairs stay out of MAGIC, including legacy vanilla MDR results.
+  paired <- expandTasks(fit$built, seeds = 1:3, labels = c("real", "shuffled"))
+  fit$tasks <- paired$tasks
+  fit$tasks$status <- "fitted"
+  expect_equal(nrow(.rescoreScopes(fit, min_seeds = 3L)), 0L)
+  expect_error(rescoreFeatures(fit), class = "amrml_invalid_argument")
+  legacy <- fit
+  legacy$built$matrices$mode_id <- "vanilla"
+  expect_equal(nrow(.rescoreScopes(legacy, min_seeds = 3L)), 0L)
+})
+
+
+test_that("multiclass diagnostics do not report binary confusion counts or expected metric gaps", {
+  scored <- tibble::tibble(
+    phenotype = factor(c("CLX", "CLX_CLY", "Susceptible")),
+    .pred_class = factor(rep("CLX", 3))
+  )
+  metrics <- tibble::tibble(mcc = 0, nmcc = 0.5, auprc = NA_real_)
+  diagnostics <- .taskDiagnostics(scored, metrics, multi = TRUE)
+  expect_false(diagnostics$metric_undefined)
+  expect_true(diagnostics$collapsed_model)
+  expect_equal(diagnostics$collapse_class, "CLX")
+  expect_equal(diagnostics$prediction_behavior, "constant_class")
+  expect_true(all(is.na(diagnostics[c("tp", "tn", "fp", "fn", "n_pred_resistant",
+                                       "n_pred_susceptible", "pred_resistant_fraction",
+                                       "actual_resistant_fraction")])))
+})
+
+test_that("a mixed workflow array preserves general CV parallelism through collection", {
+  local_mocked_bindings(.registerManifest = function(path) path)
+  data <- fxLabelled(20)
+  orb <- fxOrb(metadata = data$metadata, parquets = data$parquets)
+  out <- file.path(withr::local_tempdir(), "parallel-cv-array")
+  runModelingWorkflowHPC("prep", out_dir = out, orb_dir = orb,
+    model_types = c("vanilla", "mdr"), feature_types = "gene", seeds = 123L, labels = "real",
+    min_genomes = 20, min_mdr_label_genomes = 20, n_fold = 2, n_chunks = 1,
+    rescore = FALSE, save_state = TRUE, parallel_cv = TRUE)
+  expect_true(.readTaskArray(out)$parallel_cv)
+  expect_true(readRDS(.runPaths(out)$workflow)$parallel_cv)
+  withr::local_envvar(SLURM_CPUS_PER_TASK = "2")
+  suppressWarnings(runTaskChunk(out, 1, threads = 2))
+  fit <- collectTaskArray(out)
+  expect_true(all(fit$tasks$status == "fitted"))
+  expect_true(any(fit$performance$n_labels == 3))
+})

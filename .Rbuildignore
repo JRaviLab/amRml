@@ -8,3 +8,5 @@
 ^doc$
 ^Meta$
 ^results$
+^design$
+^CONTRIBUTING\.md$

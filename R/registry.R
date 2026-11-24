@@ -1,0 +1,79 @@
+# The registry of what amRml can model: the strata, and the modeling modes.
+
+# Strata, as amRml names them, and the genome-level amRdata column holding each.
+.STRATA <- c(year = "year_bin", country = "country_abbr")
+
+# The MDR target labelling each genome with its combination of resistant classes, as
+# amRdata's `resistant_classes` does.
+.MDR_COMBINATION <- "resistant_classes"
+
+# Targets whose phenotype is one label among several, not Resistant or Susceptible.
+# Eligibility counts their labels, and fitting uses multinomial regression. Every other
+# target is Resistant/Susceptible.
+.MULTICLASS_TARGETS <- tibble::tribble(
+  ~unit, ~target,          ~description,
+  "mdr", .MDR_COMBINATION, "Each genome's combination of resistant classes."
+)
+
+# Whether each `unit` and `target` pair is a multi-class target.
+.isMulticlass <- function(unit, target) {
+  paste(unit, target, sep = "\r") %in%
+    paste(.MULTICLASS_TARGETS$unit, .MULTICLASS_TARGETS$target, sep = "\r")
+}
+
+# The modeling modes of the amRml v1 design. `grouping` is what a mode splits genomes
+# by: a stratum, drugs, or nothing.
+.MODES <- tibble::tribble(
+  ~mode_id,             ~grouping, ~LOO,  ~cross_test, ~supported,
+  ~description,
+  "vanilla",            "none",    FALSE, FALSE,       TRUE,
+  "Each drug or drug class, with internal cross-validation.",
+  "mdr",                "none",    FALSE, FALSE,       TRUE,
+  "Binary MDR and resistance-combination targets, with internal cross-validation.",
+  "stratified_year",    "year",    FALSE, FALSE,       TRUE,
+  "Each drug or class within each year bin.",
+  "stratified_country", "country", FALSE, FALSE,       TRUE,
+  "Each drug or class within each country.",
+  "cross_year",         "year",    FALSE, TRUE,        TRUE,
+  "Trained on one year bin, tested on another.",
+  "cross_country",      "country", FALSE, TRUE,        TRUE,
+  "Trained on one country, tested on another.",
+  "cross_drug",         "drug",    FALSE, TRUE,        TRUE,
+  "Trained on one drug, tested on another drug's other genomes.",
+  "loto",               "year",    TRUE,  FALSE,       TRUE,
+  "Trained on all year bins but one, tested on the held-out bin.",
+  "logo",               "country", TRUE,  FALSE,       TRUE,
+  "Trained on all countries but one, tested on the held-out country.",
+  "lodo",               "drug",    TRUE,  FALSE,       FALSE,
+  "Trained on all drugs but one, tested on the held-out drug."
+)
+
+#' Modeling modes
+#'
+#' The kinds of model amRml can build, from the amRml v1 design. `LOO` modes
+#' train on every group but one and test on the held-out group; `cross_test`
+#' modes train on one group and test on another. Modes with `supported = FALSE`
+#' can't run yet. `"vanilla"` selects drug and drug-class targets; `"mdr"`
+#' selects the binary MDR and resistance-combination targets. `"complete"`
+#' is a selection alias for all supported modes, rather than a fitted mode.
+#'
+#' @return A tibble with one row per mode: `mode_id`, `grouping` (`"none"`,
+#'   `"year"`, `"country"` or `"drug"`), `LOO`, `cross_test`, `supported` and
+#'   `description`.
+#'
+#' @examples
+#' modelingModes()
+#' @export
+modelingModes <- function() {
+  .MODES
+}
+
+# Expand the user-facing complete selection before building or filtering scopes.
+.resolveModes <- function(modes, call = rlang::caller_env()) {
+  if (is.null(modes)) return(.MODES$mode_id)
+  .checkArgModes(modes, call = call)
+  if ("complete" %in% modes) {
+    modes <- c(setdiff(modes, "complete"), .MODES$mode_id[.MODES$supported])
+  }
+  unique(modes)
+}

@@ -5,7 +5,3 @@
 .DS_Store
 .quarto
 inst/doc
-# docs
-docs
-# Rmd/qmd artifacts
-inst/notebooks/*.html

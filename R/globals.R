@@ -1,148 +1,50 @@
-# Global variables declaration to avoid R CMD check NOTEs for NSE
-# (non-standard evaluation) variables used with dplyr/tidyr/ggplot2
+# Package-level documentation.
 
-# Package-level imports for packages used with :: notation
-#' @importFrom jsonlite fromJSON write_json
-#' @importFrom glmnet glmnet
-#' @importFrom grDevices colorRampPalette
-#' @importFrom stats median
-#' @importFrom stats reorder
-#' @importFrom stats sd
 #' @keywords internal
+#' @importFrom rlang .data
+#' @importFrom glmnet glmnet
+#' @importFrom stats median quantile sd
+#' @importFrom utils head
 "_PACKAGE"
 
+# Column names used in feature rescoring's dplyr code (R/feature-rescoring.R).
 utils::globalVariables(c(
-  # Prediction columns from tidymodels
-  ".estimate",
-  ".pred_Resistant",
-  ".pred_Susceptible",
-  ".pred_class",
+  "contribution", "contribution_cutoff", "cum_contrib", "drug_label", "drug_or_class", "dyad",
+  "dyad_median_contribution", "dyad_median_rank_score", "dyad_score_cutoff", "feature",
+  "feature_subtype", "feature_type", "feature_type_subtype", "fit_mixture", "fit_penalty",
+  "frequency", "median_prior_cum_contrib", "paired", "n_paired_seeds",
+  "importance", "Importance", "in_core", "in_core_consistent", "mcc", "MCC_diff",
+  "mean_rank_score", "median_contribution", "median_cum_contrib", "median_MCC_diff",
+  "median_nonshuffled_MCC", "median_rank_score", "model", "n_drug_or_class", "n_feat",
+  "n_feats_returned", "n_feature_types", "n_features", "n_seeds", "nonshuffled_MCC",
+  "overall_dyad_median_rank_score", "overall_median_contribution", "overall_median_rank_score",
+  "rank_score", "rank_score_cutoff", "rank_score_cv", "rank_score_sd", "running_contrib", "seed",
+  "seed_ratio", "shuffled", "shuffled_FALSE", "shuffled_MCC", "shuffled_TRUE", "Sign",
+  "sign_consistent", "sign_consistent_across_models", "species", "subtype_csv",
+  "total_frequency", "variable", "Variable", "variables_csv"
+))
 
-  # Variable importance columns
-  "Importance",
-  "Sign",
-  "Variable",
-  "coefficient",
-  "cum_imp",
+# Additional columns used by model reliability and network evidence summaries.
+utils::globalVariables(c(
+  "above_background", "annotation_key", "assessable_pair", "direct_score", "encoding",
+  "dyad_reliability_supported", "dyad_robust75", "dyad_type", "evidence_status",
+  "gene_cluster", "gene_representation_supported", "gene_robust75",
+  "has_real", "has_shuffled", "high_priority", "legacy_key", "matrix_id", "mcc_adjusted",
+  "mcc_for_reliability", "mcc_real", "mcc_shuffled", "mean_returned_contribution",
+  "mean_shuffled_mcc", "mode_id", "n_core_seeds", "n_eligible_seeds", "n_fitted_seeds",
+  "n_missing", "n_paired_assessable", "n_predicted", "n_returned_features",
+  "n_returned_seeds", "n_shuffled_defined", "n_supported_seeds", "n_true", "node_id",
+  "pair_reliability_supported", "pair_robust75", "predicted", "priority_under_reliability",
+  "protein_cluster", "protein_representation_supported", "protein_robust75",
+  "reproducibly_important", "returned", "returned_nonzero", "sd_shuffled_mcc",
+  "shuffled_dyad_reliability_supported", "shuffled_dyad_robust75",
+  "shuffled_pair_reliability_supported", "shuffled_pair_robust75", "shuffled_upper", "status",
+  "supported", "target", "task_id", "truth", "unit",
+  "stage", "resample", "location", "type", "note"
+))
 
-  # Data columns
-  "abs_imp",
-  "adj_p_value",
-  "antibiotic",
-  "bal_acc",
-  "category",
-  "class_abbr",
-  "cluster",
-  "contribution",
-  "diff_top2",
-  "drug",
-  "drug_abbr",
-  "drug_class",
-  "drug_label",
-  "drug_or_class",
-  "feature",
-  "feature_id",
-  "feature_subtype",
-  "feature_type",
-  "filename",
-  "fit_min_n",
-  "fit_mixture",
-  "fit_mtry",
-  "fit_trees",
-  "fname",
-  "gene",
-  "genome_drug.antibiotic",
-  "genome.genome_id",
-  "genome_drug.resistant_phenotype",
-  "genome_id",
-  "i_sparse",
-  "i_strat",
-  "idx_cross",
-  "idx_leaveout",
-  "idx_sparse",
-  "idx_strat",
-  "label",
-  "model",
-  "neg_log10_adj_p",
-  "mcc",
-  "mean_margin",
-  "median_mcc",
-  "n_feat_types",
-  "nmcc",
-  "num_obs",
-  "seed",
-  "sens",
-  "spec",
-  "output_prefix",
-  "p_value",
-  "pair_id",
-  "parts",
-  "phenotype",
-  "proteinName",
-  "precision",
-  "prefix",
-  "prefix_key",
-  "prop",
-  "recall",
-  "ref_drug",
-  "ref_file",
-  "res_prop",
-  "resistant_classes",
-  "run_time_sec",
-  "shuffled",
-  "shuffled_label",
-  "sig_after_bh",
-  "significance",
-  "strat_value",
-  "strat_value_test",
-  "stratification",
-  "test_country",
-  "test_drug",
-  "test_file",
-  "test_year",
-  "tested_on",
-  "total",
-  "train_country",
-  "train_prop",
-  "train_year",
-  "value",
-
-  # feature_rescoring.R (computeFeatureScore / computeFeatureImprovement)
-  "best_rank",
-  "contrib_score",
-  "coverage_boost",
-  "delta_rank",
-  "delta_score",
-  "denom",
-  "expected_types",
-  "feature_cluster_parquet",
-  "fully_realized_scales",
-  "good_feature",
-  "improvement",
-  "max_imp",
-  "mean_rank",
-  "mean_rank_nonshuffle",
-  "mean_rank_score",
-  "mean_rank_shuffle",
-  "median_contribution",
-  "median_datatype",
-  "median_drug_or_class",
-  "median_rank",
-  "min_imp",
-  "n_features",
-  "n_scales",
-  "observed_types_csv",
-  "partially_realized_scales",
-  "range_imp",
-  "rank_score",
-  "realization_score",
-  "scale_factor",
-  "scale_realization",
-  "sign_consistent",
-  "species",
-  "stability_score",
-
-  # Base R functions that need explicit import
-  "barplot",
-  "reformulate"
+# Columns used by the network evidence summaries.
+utils::globalVariables(c(
+  "dyad_type", "dyad_robust75", "dyad_reliability_supported",
+  "shuffled_dyad_robust75", "shuffled_dyad_reliability_supported"
 ))
