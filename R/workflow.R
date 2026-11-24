@@ -54,9 +54,10 @@
 #'   [modelingModes()] for the mode registry and [eligibleScopes()] for the
 #'   data requirements.
 #' @param threads Number of outer workers for ordinary tasks. Default `1` fits
-#'   them serially. Larger values use multicore workers on Unix and socket
-#'   workers on Windows. With `parallel_cv = TRUE`, these workers fit the folds
-#'   of one model at a time instead of fitting independent model tasks.
+#'   them serially. Larger values use multicore workers on Unix, and socket
+#'   workers on Windows or inside Positron or RStudio, which don't allow forking.
+#'   With `parallel_cv = TRUE`, these workers fit the folds of one model at a
+#'   time instead of fitting independent model tasks.
 #' @param feature_types Which ORB feature types to model. Choose a preset or
 #'   supply exact feature IDs, such as `c("gene", "DefenseCas")`:
 #'   * `"quick"`: `gene`, `protein`, and `Pfam`.
@@ -109,18 +110,19 @@
 #'   Default `FALSE`. Conflicting explicit arguments are rejected. Model fitting
 #'   and cross-validation are unchanged; automatic rescoring is skipped.
 #' @param rescore Automatically run [rescoreFeatures()] after merged export when
-#'   at least three fitted real/shuffled seed pairs exist in a vanilla drug or
+#'   at least `rescore_min_seeds` fitted real/shuffled seed pairs exist in a vanilla drug or
 #'   drug-class scope. MDR is excluded from rescoring.
 #'   Default `TRUE`. Expected empty results are recorded without failing the run.
+#' @param rescore_min_seeds Minimum matched fitted real/shuffled seeds per vanilla drug, feature
+#'   type, and encoding for rescoring; passed to [rescoreFeatures()] as `min_seeds`. Default `3L`.
+#'   Rescoring runs after fitting, so it may differ when resuming.
 #'
 #' @return Preparation returns a plan with tasks, chunks and fit settings.
 #'   Otherwise the `amr_fit` from [fitModels()]; every earlier stage's result can be
 #'   reached from it (`$built`, `$built$eligibility`, ...). `$rescoring` contains
 #'   the discovery result when available; `$rescoring_status` records the outcome.
-#'   Rescoring tables and `discovery.rds` are saved in `results/rescoring/`, with
-#'   provenance and skip/empty reasons in the manifest. Binary MDR and individual
-#'   resistance-combination labels are included. Cross-target tables compare
-#'   shared MDR, drug and class feature/dyad memberships. This uses returned-feature
+#'   MAGIC-ready tables are saved in `results/` once rescoring has run, and the rescoring tables in `results/rescoring/`, with
+#'   provenance and skip/empty reasons in the manifest. This uses returned-feature
 #'   ranking, not the separate candidate-aware scoring helper or network export.
 #'
 #' @section Errors:
@@ -158,13 +160,15 @@ runModelingWorkflow <- function(orb_dir = NULL,
                                 easy_mode = FALSE,
                                 rescore = TRUE,
                                 execution = c("fit", "prepare", "collect"),
-                                n_chunks = 100L, parallel_cv = FALSE, verbose = FALSE) {
+                                n_chunks = 100L, parallel_cv = FALSE, verbose = FALSE,
+                                rescore_min_seeds = 3L) {
   call <- rlang::current_env()
   started <- Sys.time()
   .checkArgFlag(parallel_cv, "parallel_cv", call = call)
   .checkArgFlag(verbose, "verbose", call = call)
   .checkArgFlag(easy_mode, "easy_mode", call = call)
   .checkArgFlag(rescore, "rescore", call = call)
+  .checkArgCount(rescore_min_seeds, "rescore_min_seeds", call = call)
   if (easy_mode) {
     if ((!missing(feature_types) && !identical(feature_types, "quick")) ||
         (!missing(model_types) && !identical(model_types, "vanilla")) ||
@@ -188,11 +192,7 @@ runModelingWorkflow <- function(orb_dir = NULL,
   if (!is.null(BPPARAM) && !missing(threads)) {
     .amrAbort("invalid_argument", "Supply either `threads` or `BPPARAM`, not both.", call = call)
   }
-  if (is.null(BPPARAM)) {
-    BPPARAM <- if (threads == 1L) BiocParallel::SerialParam() else if (.Platform$OS.type == "windows") {
-      BiocParallel::SnowParam(workers = threads)
-    } else BiocParallel::MulticoreParam(workers = threads)
-  }
+  if (is.null(BPPARAM)) BPPARAM <- .threadsBPPARAM(threads)
   # Checked first, so a bad value doesn't surface after the matrices are built.
   .checkArgCount(mdr_min_classes, "mdr_min_classes", min = 2, call = call)
   .checkArgSeeds(seeds, call = call)
@@ -226,7 +226,11 @@ runModelingWorkflow <- function(orb_dir = NULL,
     # The normal default changed from one seed to three. Reuse the saved seeds
     # when the caller omits them, including for legacy interrupted workflows.
     if (missing(seeds) && !easy_mode) seeds <- saved$settings$seeds
-    if (is.null(orb_dir)) orb_dir <- saved$settings$orb_dir
+    if (is.null(orb_dir)) {
+      orb_dir <- saved$settings$orb_dir
+      # The saved ORB has moved: ask for one instead.
+      if (!rlang::is_string(orb_dir) || !dir.exists(orb_dir)) orb_dir <- NULL
+    }
   }
   if (is.null(orb_dir)) orb_dir <- .selectORB(call, argument = "orb_dir")
 
@@ -361,7 +365,9 @@ runModelingWorkflow <- function(orb_dir = NULL,
     # Save the original task inputs so an interrupted run can be resumed without
     # rebuilding matrices or reassigning its genome splits.
     .saveFitCheckpoint(
-      list(settings = settings, built = built, parallel_cv = parallel_cv, verbose = verbose), paths$workflow
+      list(settings = settings, built = built, parallel_cv = parallel_cv, verbose = verbose,
+           rescore_min_seeds = rescore_min_seeds),
+      paths$workflow
     )
   }
 
@@ -439,7 +445,8 @@ runModelingWorkflow <- function(orb_dir = NULL,
 
   fit <- .rescoreWorkflow(fit, manifest_path, enabled = rescore && !easy_mode,
                           reason = if (easy_mode) "Easy mode does not run MAGIC rescoring." else
-                            "Feature rescoring was disabled with rescore = FALSE.")
+                            "Feature rescoring was disabled with rescore = FALSE.",
+                          min_seeds = rescore_min_seeds)
 
   if (!save_state) unlink(paths$state, recursive = TRUE)
 
@@ -451,12 +458,21 @@ runModelingWorkflow <- function(orb_dir = NULL,
       source_orb_manifest = orb$manifest_path,
       metadata = list(eligibility = "metadata/eligibility.parquet",
                       matrices = "metadata/matrices.parquet"),
-      results = list(tasks = "results/tasks.parquet",
-                     performance = "results/performance.parquet",
-                     importance = "results/importance.parquet",
-                     predictions = "results/predictions.parquet",
-                     notes = "results/notes.parquet",
-                     merged = "results/merged"),
+      results = c(
+        list(tasks = "results/tasks.parquet",
+             performance = "results/performance.parquet",
+             importance = "results/importance.parquet",
+             predictions = "results/predictions.parquet",
+             notes = "results/notes.parquet",
+             merged = "results/merged"),
+        # Written by rescoring, so listed only when it ran far enough to write them.
+        if (file.exists(paths$magic_ready_performance)) {
+          list(magic_ready_performance = "results/magic_ready_performance.parquet")
+        },
+        if (file.exists(paths$magic_ready_importance)) {
+          list(magic_ready_importance = "results/magic_ready_importance.parquet")
+        }
+      ),
       models = if (save_fits) "results/models" else NULL,
       modes = I(eligibility$modes$mode_id), seeds = I(as.integer(seeds)), labels = I(labels),
       feature_types = I(unique(built$matrices$feature_type)),

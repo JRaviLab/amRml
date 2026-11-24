@@ -31,7 +31,8 @@ runModelingWorkflow(
   execution = c("fit", "prepare", "collect"),
   n_chunks = 100L,
   parallel_cv = FALSE,
-  verbose = FALSE
+  verbose = FALSE,
+  rescore_min_seeds = 3L
 )
 }
 \arguments{
@@ -81,9 +82,10 @@ and seed. Use \code{labels = "real"} to fit only real-label models. See
 data requirements.}
 
 \item{threads}{Number of outer workers for ordinary tasks. Default \code{1} fits
-them serially. Larger values use multicore workers on Unix and socket
-workers on Windows. With \code{parallel_cv = TRUE}, these workers fit the folds
-of one model at a time instead of fitting independent model tasks.}
+them serially. Larger values use multicore workers on Unix, and socket
+workers on Windows or inside Positron or RStudio, which don't allow forking.
+With \code{parallel_cv = TRUE}, these workers fit the folds of one model at a
+time instead of fitting independent model tasks.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
@@ -130,7 +132,7 @@ Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
 and cross-validation are unchanged; automatic rescoring is skipped.}
 
 \item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
-at least three fitted real/shuffled seed pairs exist in a vanilla drug or
+at least \code{rescore_min_seeds} fitted real/shuffled seed pairs exist in a vanilla drug or
 drug-class scope. MDR is excluded from rescoring.
 Default \code{TRUE}. Expected empty results are recorded without failing the run.}
 
@@ -148,16 +150,18 @@ all models; default FALSE. Passed to \code{\link[=fitModels]{fitModels()}}. Uses
 
 \item{verbose}{Print per-group and worker setup diagnostics. Default FALSE
 retains completion progress and final summaries. Passed to \code{\link[=fitModels]{fitModels()}}.}
+
+\item{rescore_min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla drug, feature
+type, and encoding for rescoring; passed to \code{\link[=rescoreFeatures]{rescoreFeatures()}} as \code{min_seeds}. Default \code{3L}.
+Rescoring runs after fitting, so it may differ when resuming.}
 }
 \value{
 Preparation returns a plan with tasks, chunks and fit settings.
 Otherwise the \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
 reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
 the discovery result when available; \verb{$rescoring_status} records the outcome.
-Rescoring tables and \code{discovery.rds} are saved in \verb{results/rescoring/}, with
-provenance and skip/empty reasons in the manifest. Binary MDR and individual
-resistance-combination labels are included. Cross-target tables compare
-shared MDR, drug and class feature/dyad memberships. This uses returned-feature
+MAGIC-ready tables are saved in \verb{results/} once rescoring has run, and the rescoring tables in \verb{results/rescoring/}, with
+provenance and skip/empty reasons in the manifest. This uses returned-feature
 ranking, not the separate candidate-aware scoring helper or network export.
 }
 \description{

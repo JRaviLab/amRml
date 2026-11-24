@@ -27,3 +27,12 @@
   }
   param
 }
+
+# `threads` workers; fresh R processes on Windows and in Positron or RStudio, which refuse forking.
+.threadsBPPARAM <- function(threads) {
+  if (threads == 1L) return(BiocParallel::SerialParam())
+  no_fork <- .Platform$OS.type == "windows" ||
+    nzchar(Sys.getenv("POSITRON")) || nzchar(Sys.getenv("RSTUDIO"))
+  if (no_fork) return(BiocParallel::SnowParam(workers = threads))
+  BiocParallel::MulticoreParam(workers = threads)
+}

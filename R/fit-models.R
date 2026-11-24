@@ -491,8 +491,6 @@
   result
 }
 
-## .runRecord block functionality has been folded into run-manifest.R.
-
 #' @export
 print.amr_fit <- function(x, ...) {
   orb <- x$built$eligibility$profile$orb

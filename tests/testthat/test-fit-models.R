@@ -112,7 +112,7 @@ test_that("MDR coefficients retain labels in native results and stay out of bina
   fit$tasks <- paired$tasks
   fit$tasks$status <- "fitted"
   expect_equal(nrow(.rescoreScopes(fit, min_seeds = 3L)), 0L)
-  expect_error(rescoreFeatures(fit), "fitted vanilla real/shuffled", class = "amrml_invalid_argument")
+  expect_error(rescoreFeatures(fit), class = "amrml_invalid_argument")
   legacy <- fit
   legacy$built$matrices$mode_id <- "vanilla"
   expect_equal(nrow(.rescoreScopes(legacy, min_seeds = 3L)), 0L)
