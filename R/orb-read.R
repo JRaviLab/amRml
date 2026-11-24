@@ -419,11 +419,11 @@ listORBs <- function(root = NULL) {
 
 # The ORB directory to read when `readORB()` gets no path: the registry's only usable
 # ORB, or the user's pick from a menu.
-.selectORB <- function(call) {
+.selectORB <- function(call, argument = "path") {
   if (!rlang::is_interactive()) {
     .amrAbort(
       "invalid_argument",
-      "`path` must be supplied in non-interactive sessions.",
+      paste0("`", argument, "` must be supplied in non-interactive sessions."),
       call = call
     )
   }
@@ -434,7 +434,8 @@ listORBs <- function(root = NULL) {
   if (!nrow(orbs)) {
     .amrAbort(
       "no_orbs_found",
-      c("No usable ORB is registered.", i = "Run amRdata first, or supply `path`."),
+      c("No usable ORB is registered.",
+        i = paste0("Run amRdata first, or supply `", argument, "`.")),
       call = call
     )
   }
@@ -445,10 +446,7 @@ listORBs <- function(root = NULL) {
   }
 
   pick <- utils::menu(
-    paste0(
-      orbs$dataset_label, " [", orbs$dataset_id, "], finished ", orbs$finished_at,
-      ", ", orbs$directory
-    ),
+    paste0(orbs$dataset_label, " [", orbs$dataset_id, "]"),
     title = "Select an ORB to read:"
   )
 

@@ -15,6 +15,7 @@
 #'
 #' @return An `amr_tasks` list:
 #'   * `built`: the built matrices the tasks use.
+#'   * `settings`: the `seeds` and `labels` asked for.
 #'   * `tasks`: one row per task: `task_id`, `matrix_id`, `labels`, `seed`, and
 #'     the `n_fold` and `holdout` from eligibility's settings.
 #'
@@ -51,7 +52,10 @@ expandTasks <- function(built, seeds = 123L, labels = "real") {
     holdout = settings$holdout
   )
 
-  structure(list(built = built, tasks = tasks), class = "amr_tasks")
+  structure(
+    list(built = built, settings = list(seeds = as.integer(seeds), labels = labels), tasks = tasks),
+    class = "amr_tasks"
+  )
 }
 
 

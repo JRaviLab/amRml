@@ -2,7 +2,9 @@
 fxFitTasks <- function(sparse = FALSE, labels = c("real", "shuffled"),
                        env = parent.frame()) {
   out <- withr::local_tempdir("fit-run", .local_envir = env)
-  dir.create(file.path(out, "features"))
+  paths <- .runPaths(out)
+  dir.create(paths$features, recursive = TRUE)
+  dir.create(paths$metadata, recursive = TRUE)
   genomes <- sprintf("g%03d", seq_len(40))
   phenotype <- rep(c("Resistant", "Susceptible"), 20)
   values <- withr::with_seed(817, {
@@ -15,7 +17,7 @@ fxFitTasks <- function(sparse = FALSE, labels = c("real", "shuffled"),
   })
   store <- list(values = as(Matrix::Matrix(values, sparse = TRUE), "dgCMatrix"),
                 genomes = genomes, features = paste0("feature", seq_len(ncol(values))))
-  saveRDS(store, file.path(out, "features", "0001.rds"))
+  saveRDS(store, file.path(paths$features, "0001.rds"))
   rows <- lapply(list(33:36, 37:40), function(test) {
     i <- c(1:32, test)
     tibble::tibble(genome_id = genomes[i], role = c(rep("train", 32), rep("test", 4)),
@@ -25,12 +27,12 @@ fxFitTasks <- function(sparse = FALSE, labels = c("real", "shuffled"),
     matrix_id = c("m1", "m2"), mode_id = "cross_drug", unit = "DRA", target = "drug",
     train_group = "DRA", test_group = c("DRB", "DRC"), feature_type = "gene",
     encoding = "counts", n_train = 32L, n_test = 4L, status = "built",
-    rule_id = NA_character_, n_features = ncol(values), file = "features/0001.rds"
+    rule_id = NA_character_, n_features = ncol(values), file = "state/features/0001.rds"
   )
   saveRDS(list(rows = rows, matrix_scopes = 1:2,
                columns = rep(list(seq_len(ncol(values))), 2)),
-          file.path(out, "matrix_index.rds"))
-  arrow::write_parquet(matrices, file.path(out, "matrices.parquet"))
+          paths$matrix_index)
+  .writeParquet(matrices, paths$matrices)
   orb <- list(directory = "/synthetic-orb", dataset_id = "Tst",
               dataset_label = "Synthetic", manifest_path = "/synthetic-orb/manifest.json",
               producer_run_id = "fixture", finished_at = "2026-01-01 00:00:00")
@@ -49,7 +51,7 @@ fxComparableFit <- function(fit) {
 }
 
 fxFitOptions <- function() {
-  if ("save_fits" %in% names(formals(fitModels))) list(save_fits = TRUE) else list()
+  list(save_fits = TRUE, save_state = TRUE)
 }
 
 fxRunFit <- function(tasks, ...) {

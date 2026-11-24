@@ -15,7 +15,9 @@ A tibble with one row per mode: \code{mode_id}, \code{grouping} (\code{"none"},
 The kinds of model amRml can build, from the amRml v1 design. \code{LOO} modes
 train on every group but one and test on the held-out group; \code{cross_test}
 modes train on one group and test on another. Modes with \code{supported = FALSE}
-can't run yet.
+can't run yet. \code{"vanilla"} selects drug and drug-class targets; \code{"mdr"}
+selects the binary MDR and resistance-combination targets. \code{"complete"}
+is a selection alias for all supported modes, rather than a fitted mode.
 }
 \examples{
 modelingModes()

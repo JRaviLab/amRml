@@ -215,7 +215,10 @@ fxEligibility <- function(metadata = fxMetadata(), ..., parquets = NULL, env = p
     parquets <- fxDefaultParquets(unique(metadata$genome.genome_id))
   }
   orb <- readORB(fxOrb(env = env, metadata = metadata, parquets = parquets))
-  eligibleScopes(profileORB(orb), ...)
+  args <- list(...)
+  if (is.null(args$min_fold_minority)) args$min_fold_minority <- 1
+  if (is.null(args$min_analysis_minority)) args$min_analysis_minority <- 1
+  do.call(eligibleScopes, c(list(profile = profileORB(orb)), args))
 }
 
 # A gene table for `n_r` Resistant then `n_s` Susceptible genomes, numbered as fxRows() does.

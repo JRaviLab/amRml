@@ -10,7 +10,7 @@ test_that("sparse storage keeps a labelled genome with no observed features", {
   row <- match("g020", store$genomes)
   expect_false(is.na(row))
   expect_equal(as.numeric(store$values[row, ]), rep(0, ncol(store$values)))
-  index <- readRDS(file.path(built$out_dir, "matrix_index.rds"))
+  index <- readRDS(.runPaths(built$out_dir)$matrix_index)
   expect_true(all(vapply(index$rows, function(rows) "g020" %in% rows$genome_id, logical(1))))
 })
 
@@ -23,4 +23,16 @@ test_that("feature presets select available tables and explicit names stay stric
   explicit <- planMatrices(eligibility, feature_types = "widget")
   expect_equal(unique(explicit$matrices$feature_type), "widget")
   expect_error(planMatrices(eligibility, feature_types = "typo"), class = "amrml_invalid_argument")
+})
+
+test_that("standard includes DefenseCas and full adds only struct", {
+  available <- c("gene", "protein", "Pfam", "COG", "AMRFinder", "DefenseCas", "struct")
+  resolve <- function(preset, types = available) {
+    .resolveFeatureTypes(preset, types, call = rlang::current_env())
+  }
+  expect_equal(resolve("quick"), c("gene", "protein", "Pfam"))
+  expect_equal(resolve("standard"), setdiff(available, "struct"))
+  expect_equal(resolve("full"), available)
+  expect_equal(setdiff(resolve("full"), resolve("standard")), "struct")
+  expect_equal(resolve("standard", c("gene", "DefenseCas")), c("gene", "DefenseCas"))
 })

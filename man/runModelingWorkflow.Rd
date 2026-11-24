@@ -5,64 +5,164 @@
 \title{Run the modeling workflow}
 \usage{
 runModelingWorkflow(
-  orb_dir,
+  orb_dir = NULL,
+  feature_types = "standard",
+  model_types = NULL,
+  threads = 1L,
   out_dir = NULL,
-  modes = NULL,
-  seeds = 123L,
+  seeds = c(123L, 456L, 789L),
   labels = c("real", "shuffled"),
+  save_fits = FALSE,
+  save_state = FALSE,
   min_genomes = 40,
   n_fold = 5,
   min_test_genomes = 5,
   min_test_minority = 2,
+  overwrite = FALSE,
+  reuse_fits = TRUE,
+  resume = FALSE,
+  BPPARAM = NULL,
+  min_fold_minority = 2,
+  min_analysis_minority = 8,
   min_mdr_label_genomes = 25,
   mdr_min_classes = 2,
-  overwrite = FALSE,
-  BPPARAM = BiocParallel::SnowParam(workers = 8L, tasks = 128L),
-  reuse_fits = TRUE,
-  feature_types = "standard",
-  resume = FALSE
+  easy_mode = FALSE,
+  rescore = TRUE,
+  execution = c("fit", "prepare", "collect"),
+  n_chunks = 100L,
+  parallel_cv = FALSE,
+  verbose = FALSE,
+  rescore_min_seeds = 3L
 )
 }
 \arguments{
-\item{orb_dir}{An amRdata ORB directory.}
+\item{orb_dir}{An amRdata ORB directory. If \code{NULL}, discover registered ORBs
+interactively: use the only usable ORB, or prompt to select among several.
+Required in non-interactive sessions.}
+
+\item{feature_types}{Which ORB feature types to model. Choose a preset or
+supply exact feature IDs, such as \code{c("gene", "DefenseCas")}:
+\itemize{
+\item \code{"quick"}: \code{gene}, \code{protein}, and \code{Pfam}.
+\item \code{"standard"} (default): quick plus \code{COG}, \code{AMRFinder}, and
+\code{DefenseCas} (defense and CRISPR/Cas annotations).
+\item \code{"full"}: standard plus \code{struct}, the only additional feature type.
+}
+
+Presets select only tables available in the ORB; explicit IDs must match
+available tables exactly. Selection happens before matrices are planned
+or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+
+\item{model_types}{Which modeling modes to run. Supply one mode ID or a
+character vector, such as \code{"vanilla"} or
+\code{c("vanilla", "cross_country", "logo")}. \code{NULL} (the default) considers
+all modes; only eligible, supported models are fitted. Available IDs are:
+\itemize{
+\item \code{"vanilla"}: the standard models for individual drugs and drug classes.
+\item \code{"mdr"}: multidrug-resistance models only: binary \code{mdr} (resistant
+to at least \code{mdr_min_classes} classes) and \code{resistant_classes} (the
+combination of resistant classes). Use \code{c("vanilla", "mdr")} for both
+whole-dataset suites.
+\item \code{"complete"}: all supported modes, including vanilla, MDR, stratified,
+cross-test, and leave-one-out models.
+\item \code{"stratified_year"}, \code{"stratified_country"}: separate drug and
+drug-class models within each year bin or country.
+\item \code{"cross_year"}, \code{"cross_country"}, \code{"cross_drug"}: cross-test models,
+trained on one year bin, country, or drug and tested on another.
+\item \code{"loto"}, \code{"logo"}: leave-one-year-bin-out and leave-one-country-out
+models, trained on all other groups and tested on the held-out group.
+\item \code{"lodo"}: leave-one-drug-out is registered but not yet supported;
+it is recorded as excluded.
+}
+
+Matched shuffled-label baseline tasks are selected separately through
+\code{labels = c("real", "shuffled")} (the default), for every requested mode
+and seed. Use \code{labels = "real"} to fit only real-label models. See
+\code{\link[=modelingModes]{modelingModes()}} for the mode registry and \code{\link[=eligibleScopes]{eligibleScopes()}} for the
+data requirements.}
+
+\item{threads}{Number of outer workers for ordinary tasks. Default \code{1} fits
+them serially. Larger values use multicore workers on Unix, and socket
+workers on Windows or inside Positron or RStudio, which don't allow forking.
+With \code{parallel_cv = TRUE}, these workers fit the folds of one model at a
+time instead of fitting independent model tasks.}
 
 \item{out_dir}{Folder to write to. By default a new run folder,
 \verb{<ORB>/amRml/<date-time>/}.}
 
-\item{modes}{Mode IDs from \code{\link[=modelingModes]{modelingModes()}}, or \code{NULL} for all of them.}
-
-\item{seeds}{Passed to \code{\link[=expandTasks]{expandTasks()}}.}
+\item{seeds}{Seeds passed to \code{\link[=expandTasks]{expandTasks()}}. Normal mode defaults to
+\code{c(123L, 456L, 789L)}; easy mode defaults to \code{123L}.}
 
 \item{labels}{\code{"real"}, \code{"shuffled"} or both (the default), passed to
 \code{\link[=expandTasks]{expandTasks()}}.}
 
-\item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_mdr_label_genomes}{Passed to
-\code{\link[=eligibleScopes]{eligibleScopes()}}.}
+\item{save_fits}{Retain fitted model RDS files. Default \code{FALSE}.}
 
-\item{mdr_min_classes}{Passed to \code{\link[=profileORB]{profileORB()}}: fewest drug classes a genome
-must be Resistant in to be MDR; at least 2.}
+\item{save_state}{Retain internal RDS matrix stores and resume state after a
+successful workflow. Default \code{FALSE}; failed or interrupted workflows keep
+state so they can be resumed. Both flags must match when resuming.}
+
+\item{min_genomes, n_fold, min_test_genomes, min_test_minority, min_fold_minority, min_analysis_minority}{Passed to
+\code{\link[=eligibleScopes]{eligibleScopes()}}.}
 
 \item{overwrite}{Replace an earlier run's matrices and results in \code{out_dir};
 if \code{FALSE}, an \code{out_dir} holding earlier output is refused. The default run
 folder is always new.}
 
-\item{BPPARAM}{Passed to \code{\link[=fitModels]{fitModels()}}. May be changed when resuming.}
-
-\item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug fits.}
-
-\item{feature_types}{Feature types to model: \code{"quick"}, \code{"standard"} (default),
-\code{"full"}, or an explicit character vector of ORB feature types.
-Selected before matrices are planned or built; see \code{\link[=planMatrices]{planMatrices()}}.}
+\item{reuse_fits}{Passed to \code{\link[=fitModels]{fitModels()}}; reuse compatible cross-drug,
+cross-year, and cross-country fits.}
 
 \item{resume}{Resume interrupted model fitting in an existing \code{out_dir},
 using its saved matrices and completed task groups, or reopen unchanged
 completed results. Supply the same modeling arguments and the exact run
 folder (e.g. \verb{<ORB>/amRml/<date-time>/}); \code{BPPARAM} may be changed.
+If \code{orb_dir} is omitted, it is taken from the saved workflow.
 \code{overwrite} must be \code{FALSE}.}
+
+\item{BPPARAM}{Optional advanced BiocParallel backend, passed to \code{\link[=fitModels]{fitModels()}}.
+Supply either \code{threads} or \code{BPPARAM}. May be changed when resuming.}
+
+\item{min_mdr_label_genomes}{Minimum training genomes per MDR combination label, passed to \code{\link[=eligibleScopes]{eligibleScopes()}}.}
+
+\item{mdr_min_classes}{Minimum resistant classes for MDR, passed to \code{\link[=profileORB]{profileORB()}}.}
+
+\item{easy_mode}{Run a preview with vanilla models, the \code{"quick"} feature
+preset (available gene, protein, Pfam tables), real labels, and one seed.
+Default \code{FALSE}. Conflicting explicit arguments are rejected. Model fitting
+and cross-validation are unchanged; automatic rescoring is skipped.}
+
+\item{rescore}{Automatically run \code{\link[=rescoreFeatures]{rescoreFeatures()}} after merged export when
+at least \code{rescore_min_seeds} fitted real/shuffled seed pairs exist in a vanilla drug or
+drug-class scope. MDR is excluded from rescoring.
+Default \code{TRUE}. Expected empty results are recorded without failing the run.}
+
+\item{execution}{Advanced options for HPC job arrays. \code{"fit"} runs the full
+workflow normally (default). \code{"prepare"} builds shared matrices and an array
+plan without fitting. Run \code{\link[=runTaskChunk]{runTaskChunk()}} for each saved chunk, then
+\code{\link[=collectTaskArray]{collectTaskArray()}} to finish exports. \code{"collect"} with \code{resume = TRUE}
+gathers only completed checkpoints.}
+
+\item{n_chunks}{Maximum number of nonempty array chunks when preparing.
+Fewer chunks assign more fit groups to each worker; see \code{\link[=runTaskChunk]{runTaskChunk()}}.}
+
+\item{parallel_cv}{Split CV folds across the existing worker allocation for
+all models; default FALSE. Passed to \code{\link[=fitModels]{fitModels()}}. Uses more memory per model.}
+
+\item{verbose}{Print per-group and worker setup diagnostics. Default FALSE
+retains completion progress and final summaries. Passed to \code{\link[=fitModels]{fitModels()}}.}
+
+\item{rescore_min_seeds}{Minimum matched fitted real/shuffled seeds per vanilla drug, feature
+type, and encoding for rescoring; passed to \code{\link[=rescoreFeatures]{rescoreFeatures()}} as \code{min_seeds}. Default \code{3L}.
+Rescoring runs after fitting, so it may differ when resuming.}
 }
 \value{
-The \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
-reached from it (\verb{$built}, \verb{$built$eligibility}, ...).
+Preparation returns a plan with tasks, chunks and fit settings.
+Otherwise the \code{amr_fit} from \code{\link[=fitModels]{fitModels()}}; every earlier stage's result can be
+reached from it (\verb{$built}, \verb{$built$eligibility}, ...). \verb{$rescoring} contains
+the discovery result when available; \verb{$rescoring_status} records the outcome.
+MAGIC-ready tables are saved in \verb{results/} once rescoring has run, and the rescoring tables in \verb{results/rescoring/}, with
+provenance and skip/empty reasons in the manifest. This uses returned-feature
+ranking, not the separate candidate-aware scoring helper or network export.
 }
 \description{
 Runs every stage on an ORB: \code{\link[=readORB]{readORB()}}, \code{\link[=profileORB]{profileORB()}}, \code{\link[=eligibleScopes]{eligibleScopes()}},
@@ -71,9 +171,19 @@ can also be called on its own. By default every task is fitted on both the real
 and the shuffled labels; \code{labels = "real"} skips the shuffled controls.
 }
 \details{
-Everything goes to \code{out_dir}: \code{eligibility.parquet}, \code{matrices.parquet},
-\verb{features/}, \code{matrix_index.rds}, \code{workflow.rds}, \code{tasks.parquet} and \verb{results/}.
-amRdata's files are only read.
+The default \code{execution = "fit"} runs the complete workflow locally using
+\code{threads} or \code{BPPARAM}. SLURM arrays are an opt-in advanced workflow: explicitly
+prepare a run, invoke \code{\link[=runTaskChunk]{runTaskChunk()}} from user-managed batch jobs, then call
+\code{\link[=collectTaskArray]{collectTaskArray()}}. SLURM environment variables do not change the default
+execution path, and the package does not submit scheduler jobs.
+
+Everything goes to \code{out_dir}: \code{manifest.json}, planning tables in \verb{metadata/},
+and durable model outputs in \verb{results/} (including \verb{models/} when
+\code{save_fits = TRUE} and \verb{merged/} from \code{\link[=exportMergedResults]{exportMergedResults()}}). Sparse stores
+and resume files are temporary in \verb{state/}; successful workflows remove them
+unless \code{save_state = TRUE}. amRdata's files are only read.
+Live progress reports completed task counts and elapsed minutes:seconds.
+Progress and completion counts are also recorded as manifest events.
 }
 \section{Errors}{
 
@@ -83,7 +193,8 @@ settings, propagate to the caller.
 
 \examples{
 \dontrun{
-fit <- runModelingWorkflow("path/to/amRdata/output", "path/to/output")
+fit <- runModelingWorkflow("path/to/amRdata/output/orb", feature_types = "standard",
+                           threads = 8, out_dir = "path/to/output")
 fit$performance
 }
 }

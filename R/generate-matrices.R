@@ -121,8 +121,8 @@
 .resolveFeatureTypes <- function(feature_types, available, call) {
   presets <- list(
     quick = c("gene", "protein", "Pfam"),
-    standard = c("gene", "protein", "Pfam", "COG", "AMRFinder"),
-    full = c("gene", "protein", "Pfam", "COG", "AMRFinder", "struct", "DefenseCas")
+    standard = c("gene", "protein", "Pfam", "COG", "AMRFinder", "DefenseCas"),
+    full = c("gene", "protein", "Pfam", "COG", "AMRFinder", "DefenseCas", "struct")
   )
 
   if (!is.character(feature_types) || !length(feature_types) ||
@@ -162,12 +162,13 @@
 #' Feature types are selected before their tables are scanned or matrices built.
 #'
 #' @param eligibility An `amr_eligibility` from [eligibleScopes()].
-#' @param modes Mode IDs from [modelingModes()] to plan matrices for, or `NULL` for
+#' @param modes Mode IDs from [modelingModes()] to plan matrices for,
+#'   `"complete"` for all supported modes, or `NULL` for
 #'   every mode in `eligibility`.
 #' @param feature_types A preset (`"quick"`, `"standard"`, or `"full"`) or an
 #'   explicit character vector of feature types. Default `"standard"`.
 #'   Quick uses gene, protein, and Pfam; Standard also includes COG and
-#'   AMRFinder; Full additionally includes struct and DefenseCas. Presets use
+#'   AMRFinder and DefenseCas; Full additionally includes only struct. Presets use
 #'   only tables present in the ORB. Explicit selections require exact names.
 #'
 #' @return An `amr_matrix_plan` list:
@@ -197,7 +198,7 @@ planMatrices <- function(eligibility, modes = NULL, feature_types = "standard") 
   call <- rlang::current_env()
   .checkArgClass(eligibility, "eligibility", "amr_eligibility", "eligibleScopes()", call = call)
   if (!is.null(modes)) {
-    .checkArgModes(modes, call = call)
+    modes <- .resolveModes(modes, call = call)
     # Members of the modes left out would have no planned scope when building.
     eligibility$members <- eligibility$members[eligibility$members$mode_id %in% modes, , drop = FALSE]
   }
@@ -229,7 +230,7 @@ planMatrices <- function(eligibility, modes = NULL, feature_types = "standard") 
 
 #' Build the planned matrices
 #'
-#' Writes each sparse count matrix per feature type in `features/`.
+#' Writes each sparse count matrix per feature type in `state/features/`.
 #' Binary encoding and scope-specific feature selection are indexed without
 #' materializing matrices for speed. amRdata's files in the ORB are only read.
 #'
@@ -239,7 +240,7 @@ planMatrices <- function(eligibility, modes = NULL, feature_types = "standard") 
 #'
 #' @return An `amr_matrices` list: `eligibility`, `out_dir`, `matrices`, and
 #'   `storage = "shared_sparse"`. The `file` column points to a shared feature
-#'   store rather than a scope-specific Parquet file. `matrix_index.rds` records
+#'   store rather than a scope-specific Parquet file. `state/matrix_index.rds` records
 #'   membership rows and selected feature column indices per matrix
 #'
 #' @section Errors:
@@ -260,7 +261,9 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
 
   # Preserve outputs until the new index and feature stores exist
   staging <- tempfile(".matrices-building-", tmpdir = out_dir)
-  dir.create(file.path(staging, "features"), recursive = TRUE)
+  stage_paths <- .runPaths(staging)
+  dir.create(stage_paths$features, recursive = TRUE)
+  dir.create(stage_paths$metadata, recursive = TRUE)
   on.exit(unlink(staging, recursive = TRUE), add = TRUE)
 
   matrices <- plan$matrices
@@ -281,7 +284,7 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
     store <- .featureStore(table, genomes)
     rm(table)
 
-    file <- file.path("features", sprintf("%04d.rds", j))
+    file <- file.path("state", "features", sprintf("%04d.rds", j))
     saveRDS(store, file.path(staging, file), compress = FALSE)
     for (i in which(matrices$feature_type == feature_type)) {
       rows <- scopes$rows[[scopes$matrix_scopes[[i]]]]
@@ -303,13 +306,16 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
 
   saveRDS(
     list(rows = scopes$rows, matrix_scopes = scopes$matrix_scopes, columns = columns),
-    file.path(staging, "matrix_index.rds"), compress = FALSE
+    stage_paths$matrix_index, compress = FALSE
   )
-  arrow::write_parquet(matrices, file.path(staging, "matrices.parquet"))
+  .writeParquet(matrices, stage_paths$matrices)
 
   # Move the previous output
-  previous <- c("matrices", "features", "matrices.parquet", "matrix_index.rds")
-  produced <- c("features", "matrices.parquet", "matrix_index.rds")
+  previous <- c(
+    file.path("state", "features"), file.path("state", "matrix_index.rds"),
+    file.path("metadata", "matrices.parquet")
+  )
+  produced <- previous
   if (!overwrite && any(file.exists(file.path(out_dir, previous)))) {
     .amrAbort("invalid_argument", "Matrix outputs already exist; set `overwrite = TRUE`.", call = call)
   }
@@ -320,6 +326,7 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
   tryCatch({
     for (name in previous) {
       if (file.exists(file.path(out_dir, name))) {
+        dir.create(dirname(file.path(backup, name)), recursive = TRUE, showWarnings = FALSE)
         if (!file.rename(file.path(out_dir, name), file.path(backup, name))) {
           stop("Could not move previous matrix output: ", name)
         }
@@ -327,6 +334,7 @@ buildMatrices <- function(plan, out_dir = NULL, overwrite = FALSE) {
       }
     }
     for (name in produced) {
+      dir.create(dirname(file.path(out_dir, name)), recursive = TRUE, showWarnings = FALSE)
       if (!file.rename(file.path(staging, name), file.path(out_dir, name))) {
         stop("Could not install new matrix output: ", name)
       }
