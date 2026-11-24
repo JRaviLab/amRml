@@ -95,6 +95,8 @@
   # Fitting models: fitModels()
   "fit_failed",                 "fit",         "task",
   "Fitting the task's model stopped with an error.",
+  "fit_oom",                    "fit",         "task",
+  "Fitting the task's model stopped with an R memory allocation error.",
   "metrics_undefined",          "fit",         "task",
   "Some test metrics are undefined, e.g. when one class is predicted for every genome.",
 )

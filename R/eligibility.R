@@ -164,6 +164,10 @@
 
 # A mode's `members`, one row per scope, genome and role; `too_few`, the targets without scopes.
 .buildScopes <- function(mode, profile) {
+  keep <- if (mode$mode_id == "mdr") profile$phenotypes$unit == "mdr" else
+    profile$phenotypes$unit != "mdr"
+  profile$phenotypes <- profile$phenotypes[keep, , drop = FALSE]
+
   if (mode$grouping == "drug") {
     if (!mode$cross_test) {
       rlang::abort(
@@ -352,6 +356,11 @@
 #' built or fitted.
 #'
 #' @details
+#' Both MDR targets (`mdr` and `resistant_classes`) run only in `mdr` mode,
+#' with the usual holdout and cross-validation. `vanilla` and the grouped modes
+#' consider only drugs and drug classes. Use `modes = c("vanilla", "mdr")`
+#' for both whole-dataset suites, or `"complete"` for all supported modes.
+#'
 #' Counts are of genomes, each with one phenotype. In the MDR combination target
 #' (`resistant_classes`), each combination is a label: a scope keeps the labels
 #' with at least `min_mdr_label_genomes` training genomes and drops the genomes,
@@ -371,7 +380,8 @@
 #' threshold is not a finite whole number of at least 1 (2 for `n_fold`).
 #'
 #' @param profile An `amr_orb_profile` from [profileORB()].
-#' @param modes Mode IDs from [modelingModes()], or `NULL` for all of them.
+#' @param modes Mode IDs from [modelingModes()], `"complete"` for all supported
+#'   modes, or `NULL` to consider every registered mode.
 #' @param min_genomes Fewest genomes a scope needs, before any holdout.
 #' @param n_fold Number of cross-validation folds.
 #' @param min_test_genomes Fewest genomes a separate test set needs.
@@ -416,8 +426,7 @@ eligibleScopes <- function(profile,
   .checkArgCount(min_fold_minority, "min_fold_minority", call = call)
   .checkArgCount(min_analysis_minority, "min_analysis_minority", call = call)
   .checkArgCount(min_mdr_label_genomes, "min_mdr_label_genomes", call = call)
-  modes <- modes %||% .MODES$mode_id
-  .checkArgModes(modes, call = call)
+  modes <- .resolveModes(modes, call = call)
 
   settings <- list(
     min_genomes = min_genomes,

@@ -278,6 +278,10 @@
 #'   drug, feature type, and encoding. Default `3L`.
 #' @param ... Feature rescoring's thresholds, passed to [runFeatureDyadDiscovery()].
 #'
+#' @details
+#' MDR targets are excluded from MAGIC rescoring; label-specific coefficients
+#' remain available in the native importance results.
+#'
 #' @return The `feature_dyad_discovery` list from [runFeatureDyadDiscovery()]. Its
 #'   `"output_dir"` attribute is the folder the results were written to.
 #'

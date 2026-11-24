@@ -95,10 +95,10 @@ test_that("rescoring eligibility counts matched successful seeds per representat
     class = "amr_fit")
   fit$tasks$status[fit$tasks$matrix_id == "m2" & fit$tasks$seed == 3 &
                      fit$tasks$labels == "shuffled"] <- "failed"
-  expect_equal(.rescoreScopes(fit, 3L)$matrix_id, "m1")
+  expect_equal(.rescoreScopes(fit, min_seeds = 3L)$matrix_id, "m1")
   fit$tasks$status[fit$tasks$matrix_id == "m1" & fit$tasks$seed == 2 &
                      fit$tasks$labels == "real"] <- "failed"
-  expect_equal(nrow(.rescoreScopes(fit, 3L)), 0L)
+  expect_equal(nrow(.rescoreScopes(fit, min_seeds = 3L)), 0L)
   expect_error(rescoreFeatures(fit), "at least 3", class = "amrml_invalid_argument")
 })
 
@@ -131,6 +131,35 @@ test_that("dominant features cross the cumulative cutoff and seed counts precede
                "No model fits passed", class = "amrml_no_rescoring_evidence")
   expect_error(runFeatureDyadDiscovery(t, p, con),
                "No features passed", class = "amrml_no_rescoring_evidence")
+})
+
+
+test_that("array collection runs automatic rescoring with saved three-seed settings", {
+  local_mocked_bindings(.tuningGrid = fxSmallGrid)
+  orb <- fxRescoringOrb()
+  out <- file.path(withr::local_tempdir(), "run")
+  args <- fxWorkflowArgs(orb, out)
+  plan <- do.call(runModelingWorkflow, c(args, list(execution = "prepare", n_chunks = 2)))
+  expect_setequal(unique(plan$tasks$tasks$seed), c(123L, 456L, 789L))
+  expect_false(dir.exists(file.path(out, "results", "rescoring")))
+  for (id in seq_along(plan$chunks)) runTaskChunk(out, id)
+  local_mocked_bindings(.fitModel = function(...) stop("collection must not refit"))
+  fit <- collectTaskArray(out)
+  expect_identical(fit$rescoring_status$status, "success")
+  expect_s3_class(fit$rescoring, "feature_dyad_discovery")
+  expect_true("geneA" %in% fit$rescoring$features$top$variable)
+  expect_true(file.exists(file.path(out, "results", "rescoring", "parameters.json")))
+})
+
+test_that("array collection rescores with the minimum saved at preparation", {
+  local_mocked_bindings(.tuningGrid = fxSmallGrid)
+  out <- file.path(withr::local_tempdir(), "run")
+  args <- c(fxWorkflowArgs(fxRescoringOrb(), out), list(rescore_min_seeds = 4L))
+  plan <- do.call(runModelingWorkflow, c(args, list(execution = "prepare", n_chunks = 2)))
+  for (id in seq_along(plan$chunks)) runTaskChunk(out, id)
+  fit <- collectTaskArray(out)
+  expect_identical(fit$rescoring_status$status, "skipped")
+  expect_match(fit$rescoring_status$reason, "at least 4")
 })
 
 test_that("magic-ready tables keep every original column and add the per-seed calculations", {

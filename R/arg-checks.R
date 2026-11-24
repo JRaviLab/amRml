@@ -45,12 +45,12 @@
 
 # Throw an error unless `modes` holds mode IDs from modelingModes().
 .checkArgModes <- function(modes, call = rlang::caller_env()) {
-  unknown <- if (is.character(modes)) setdiff(modes, .MODES$mode_id) else character()
+  unknown <- if (is.character(modes)) setdiff(modes, c(.MODES$mode_id, "complete")) else character()
 
   if (!is.character(modes) || anyNA(modes) || length(unknown)) {
     .amrAbort(
       "invalid_argument",
-      c("`modes` must be mode IDs from modelingModes().", .bullets(unknown)),
+      c("`modes` must be mode IDs from modelingModes() or complete.", .bullets(unknown)),
       observed = list(unknown = unknown),
       call = call
     )
@@ -166,4 +166,17 @@
   }
 
   invisible(TRUE)
+}
+
+# Worker groups have to be finite and non-zero integer indices
+.checkArgGroupSubset <- function(group_subset, call) {
+  if (is.null(group_subset)) return(invisible(NULL))
+  if (!is.numeric(group_subset) || !length(group_subset) ||
+      any(!is.finite(group_subset)) || any(group_subset < 1) ||
+      any(group_subset > .Machine$integer.max) ||
+      any(group_subset != round(group_subset))) {
+    .amrAbort("invalid_argument",
+              "`group_subset` must be NULL or positive integer group indices.", call = call)
+  }
+  invisible(NULL)
 }

@@ -51,8 +51,8 @@ test_that("grouped modes need 2 groups, and leave-one-out needs 3", {
   expect_equal(modes$rule_id, c(NA, NA, "too_few_groups"))
   expect_equal(modes$n_groups, c(2, 2, 2))
   # Feasible modes can still have no eligible scope: Y1 is all Resistant, Y2 all Susceptible.
-  # DRA, its class and the MDR combination target each get a scope per year.
-  expect_equal(modes$n_scopes, c(6, 6, NA))
+  # DRA and its class each get a scope per year; MDR has its own mode.
+  expect_equal(modes$n_scopes, c(4, 4, NA))
   expect_equal(modes$n_eligible, c(0, 0, NA))
 
   one_drug <- fxEligibility(metadata, modes = "cross_drug")$modes
@@ -79,8 +79,9 @@ test_that("every supported mode finds an eligible scope on an ORB with enough da
 
   modes <- eligibility$modes[eligibility$modes$feasible, ]
   scopes <- eligibility$scopes
-  expect_equal(modes$n_scopes, as.vector(table(scopes$mode_id)[modes$mode_id]))
-  expect_equal(modes$n_eligible, as.vector(table(scopes$mode_id[scopes$eligible])[modes$mode_id]))
+  expect_equal(modes$n_scopes, as.vector(table(factor(scopes$mode_id, levels = modes$mode_id))))
+  expect_equal(modes$n_eligible, as.vector(table(factor(
+    scopes$mode_id[scopes$eligible], levels = modes$mode_id))))
 })
 
 # Whether each drug or class can run in a mode
@@ -130,20 +131,15 @@ test_that("a drug tested in one group gets no stratified or cross scope of its o
 
 # Scopes without a separate test set
 
-test_that("vanilla scopes are the profile's whole-dataset counts", {
+test_that("vanilla scopes contain only whole-dataset drug and class targets", {
   profile <- profileORB(readORB(fxOrb()))
   scopes <- fxScopes(eligibleScopes(profile, modes = "vanilla"), "vanilla")
-  whole <- profile$targets[is.na(profile$targets$stratum), ]
+  whole <- profile$targets[is.na(profile$targets$stratum) & profile$targets$unit != "mdr", ]
   expect_equal(scopes$target, whole$target)
+  expect_equal(scopes$n_genomes, whole$n_genomes)
+  expect_equal(scopes$n_resistant, whole$n_resistant)
   expect_true(all(is.na(scopes$test_n_genomes)))
-
-  # The MDR combination target counts only the genomes its label filter keeps: here none,
-  # since its one label has 5 genomes, under min_mdr_label_genomes.
-  combination <- scopes$target == "resistant_classes"
-  expect_equal(scopes$n_genomes[!combination], whole$n_genomes[!combination])
-  expect_equal(scopes$n_resistant[!combination], whole$n_resistant[!combination])
-  expect_equal(scopes$n_genomes[combination], 0)
-  expect_equal(scopes$n_dropped[combination], 5)
+  expect_false(any(scopes$unit == "mdr"))
 })
 
 test_that("stratified scopes are per value, leaving out genomes without one", {
@@ -387,9 +383,9 @@ fxCombinationScopes <- function(eligibility, mode_id) {
 test_that("a combination scope drops labels with too few training genomes, and their genomes", {
   eligibility <- fxEligibility(
     fxCombinations(4, 3, 2),
-    modes = "vanilla", min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3
+    modes = "mdr", min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3
   )
-  scope <- fxCombinationScopes(eligibility, "vanilla")
+  scope <- fxCombinationScopes(eligibility, "mdr")
 
   expect_equal(scope$n_genomes, 7)
   expect_equal(scope$n_labels, 2)
@@ -403,9 +399,9 @@ test_that("a combination scope drops labels with too few training genomes, and t
 test_that("a combination scope with one label left is single_phenotype", {
   eligibility <- fxEligibility(
     fxCombinations(4, 1, 1),
-    modes = "vanilla", min_genomes = 2, n_fold = 2, min_mdr_label_genomes = 3
+    modes = "mdr", min_genomes = 2, n_fold = 2, min_mdr_label_genomes = 3
   )
-  scope <- fxCombinationScopes(eligibility, "vanilla")
+  scope <- fxCombinationScopes(eligibility, "mdr")
 
   expect_equal(scope$n_labels, 1)
   expect_equal(scope$rule_id, "single_phenotype")
@@ -416,9 +412,9 @@ test_that("a combination scope whose labels involve one class is skipped", {
   # CLX-only and Susceptible genomes: the labels are CLX and Susceptible, the CLX model again.
   one_class <- fxEligibility(
     fxCombinations(4, 0, 4),
-    modes = "vanilla", min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3
+    modes = "mdr", min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3
   )
-  scope <- fxCombinationScopes(one_class, "vanilla")
+  scope <- fxCombinationScopes(one_class, "mdr")
 
   expect_equal(scope$n_labels, 2)
   expect_equal(scope$rule_id, "single_class_labels")
@@ -426,36 +422,49 @@ test_that("a combination scope whose labels involve one class is skipped", {
 
   # A whole dataset tested on one class: no combination model, and no yes/no MDR model either.
   metadata <- rbind(fxRows(40, 40, drug = "DRA"), fxRows(40, 40, drug = "DRB"))
-  eligibility <- fxEligibility(metadata, modes = "vanilla", min_mdr_label_genomes = 25)
-  scopes <- fxScopes(eligibility, "vanilla")
+  eligibility <- fxEligibility(metadata, modes = "mdr", min_mdr_label_genomes = 25)
+  scopes <- fxScopes(eligibility, "mdr")
 
   expect_equal(scopes$rule_id[scopes$target == "resistant_classes"], "single_class_labels")
   expect_false("mdr" %in% scopes$target)
 })
 
-test_that("a cross test set drops genomes whose label the training set doesn't keep", {
-  metadata <- rbind(
-    fxCombinations(3, 3, 0, from = 1, year_bin = "Y1"),
-    fxCombinations(2, 0, 2, from = 7, year_bin = "Y2")
-  )
-  eligibility <- fxEligibility(
-    metadata,
-    modes = "cross_year", min_genomes = 4, n_fold = 2, min_test_genomes = 2,
-    min_mdr_label_genomes = 3
-  )
-  scopes <- fxCombinationScopes(eligibility, "cross_year")
-  y1_to_y2 <- scopes[scopes$train_group == "Y1", ]
+test_that("MDR is a separate mode and complete selects every supported mode", {
+  metadata <- do.call(rbind, lapply(1:3, function(i) {
+    rows <- fxCombinations(6, 6, 6, from = 18 * (i - 1) + 1, year_bin = paste0("Y", i))
+    rows$country_abbr <- paste0("C", i)
+    rows
+  }))
+  eligibility <- fxEligibility(metadata, min_genomes = 4, n_fold = 2,
+    min_mdr_label_genomes = 3)
+  mdr <- eligibility$scopes[eligibility$scopes$unit == "mdr", ]
+  expect_setequal(mdr$target, c("mdr", "resistant_classes"))
+  expect_true(all(mdr$eligible))
+  expect_true(all(mdr$mode_id == "mdr"))
+  expect_true(all(eligibility$members$mode_id[eligibility$members$unit == "mdr"] == "mdr"))
 
-  # Y2's two Susceptible genomes have a label Y1 never trained on.
-  expect_equal(y1_to_y2$test_n_genomes, 2)
-  expect_equal(y1_to_y2$test_n_dropped, 2)
-  expect_true(y1_to_y2$eligible)
-  expect_equal(
-    fxMemberIds(eligibility, "cross_year", "resistant_classes", "Y1", "Y2", "test"),
-    c("g007", "g008")
-  )
-  # Y2 has no label with 3 training genomes, so nothing trains on it.
-  expect_equal(scopes$rule_id[scopes$train_group == "Y2"], "single_phenotype")
+  only_mdr <- eligibleScopes(eligibility$profile, modes = "mdr",
+    min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3,
+    min_fold_minority = 1, min_analysis_minority = 1)
+  expect_equal(mdr, only_mdr$scopes)
+  expect_true(all(only_mdr$members$unit == "mdr"))
+
+  vanilla <- eligibleScopes(eligibility$profile, modes = "vanilla",
+    min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3)
+  expect_false(any(vanilla$scopes$unit == "mdr"))
+  grouped <- eligibleScopes(eligibility$profile,
+    modes = setdiff(modelingModes()$mode_id, c("vanilla", "mdr")),
+    min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3)
+  expect_false(any(grouped$scopes$unit == "mdr"))
+  expect_false(any(grouped$members$unit == "mdr"))
+
+  complete <- eligibleScopes(eligibility$profile, modes = "complete",
+    min_genomes = 4, n_fold = 2, min_mdr_label_genomes = 3,
+    min_fold_minority = 1, min_analysis_minority = 1)
+  expect_setequal(complete$modes$mode_id, modelingModes()$mode_id[modelingModes()$supported])
+  expect_equal(complete$scopes, eligibility$scopes)
+  expect_equal(complete$members, eligibility$members)
+  expect_identical(.resolveModes(c("vanilla", "complete")), .resolveModes("complete"))
 })
 
 # The result
@@ -519,7 +528,7 @@ test_that("the print shows each mode's result", {
   eligibility <- fxEligibility(modes = c("vanilla", "stratified_year", "lodo"))
 
   expect_output(print(eligibility), "40 training genomes, 5 folds")
-  expect_output(print(eligibility), "vanilla +: 0 of 4 eligible")
+  expect_output(print(eligibility), "vanilla +: 0 of 3 eligible")
   expect_output(print(eligibility), "stratified_year +: not run \\(too_few_groups\\)")
   expect_output(print(eligibility), "lodo +: not run \\(mode_not_supported\\)")
 })

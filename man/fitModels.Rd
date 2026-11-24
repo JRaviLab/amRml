@@ -11,7 +11,12 @@ fitModels(
   BPPARAM = .defaultBPPARAM(),
   overwrite = FALSE,
   reuse_fits = TRUE,
-  resume = FALSE
+  resume = FALSE,
+  group_subset = NULL,
+  execution = c("fit", "prepare", "worker", "collect"),
+  n_chunks = 100L,
+  parallel_cv = FALSE,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -41,9 +46,32 @@ cross-country tasks with identical training inputs, seeds, and fold settings.}
 unchanged completed fit. The task plan, matrix files and \code{reuse_fits}
 setting must match the original run.
 \code{save_fits} and \code{save_state} must also match.}
+
+\item{group_subset}{Group indices; required only for \code{execution = "worker"}.
+Use the saved chunk map rather than recomputing group numbers.}
+
+\item{execution}{Execution phase: \code{"fit"} (default), \code{"prepare"} to save an
+array plan, \code{"worker"} to checkpoint selected groups only, or \code{"collect"}
+to publish results after every group has finished. Workers and collection
+require \code{resume = TRUE}. See \code{\link[=runTaskChunk]{runTaskChunk()}} and \code{\link[=collectTaskArray]{collectTaskArray()}}.}
+
+\item{n_chunks}{Maximum number of array chunks when preparing.
+Fewer chunks assign more fit groups to each worker; see \code{\link[=runTaskChunk]{runTaskChunk()}}.}
+
+\item{parallel_cv}{Split cross-validation folds across the workers in
+\code{BPPARAM}, for every model family. Default FALSE parallelizes independent
+model tasks instead. TRUE runs one model task at a time and uses portable
+socket workers for its folds, up to the smaller of the fold and worker counts.
+Each fold needs its own memory. There is no nested task/fold parallelism.}
+
+\item{verbose}{Print per-group task IDs, heap use, worker setup, and diagnostic
+summaries. Default FALSE keeps completion progress and the final summary.
+Detailed worker diagnostics are always saved to \verb{diagnostics/}.}
 }
 \value{
-An \code{amr_fit} list, also written to the output folder: \code{tasks} (with
+Preparation invisibly returns a plan (\code{tasks}, \code{chunks}, and fit
+settings); workers return a list of group IDs. Otherwise an \code{amr_fit} list,
+also written to the output folder: \code{tasks} (with
 \code{status}, \code{rule_id} and \code{message}; \code{results/tasks.parquet}), \code{performance},
 \code{importance}, \code{predictions}, and \code{notes} (\verb{results/}), and the \code{built} matrices.
 Notes retain tuning diagnostics and task warnings/messages, with task IDs,
@@ -64,6 +92,8 @@ stratified \code{n_fold} cross-validation and chosen by MCC, then scored on the
 task's test genomes.
 }
 \details{
+Penalties outside a fitted glmnet path are recorded in \code{notes}.
+
 Cross-drug tasks with exactly matching training inputs reuse one fitted model;
 set \code{reuse_fits = FALSE} to disable reuse for comparison. Reused tasks'
 \code{run_time_sec} excludes shared training time for follower tasks; the first
@@ -72,9 +102,9 @@ Each completed task group is saved in \verb{state/fit-checkpoints/} so it can be
 after an interruption. Checkpoints are removed after results are written.
 Use \code{resume = TRUE} with the same tasks and output directory to reuse them.
 Each task runs under its own seed. A task that errors is recorded as
-\code{fit_failed}, and one with undefined metrics as \code{metrics_undefined}; the rest
-carry on. A shuffled task permutes the training matrix's labels before the
-split.
+\code{fit_failed} or \code{fit_oom} for memory pressure errors, and one with undefined
+metrics as \code{metrics_undefined}; the rest carry on. A shuffled task permutes
+the training matrix's labels before the split.
 Progress is reported by the parent process as checkpointed task groups return.
 Counts include failed tasks and recovered checkpoints; the final summary lists
 fitted and failed tasks separately. Elapsed time covers the current invocation.
